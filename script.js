@@ -1074,9 +1074,10 @@ class DimensionModule {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         ctx.font = textFont;
-        const textWidth = ctx.measureText(text).width;
-        const unitTextWidth = ctx.measureText(unitText).width;
-        const canvasWidth = textWidth + unitTextWidth + padding * 3;
+        const dimensionValue = parseFloat(text);
+        const displayText = (dimensionValue * 100).toFixed(0) + unitText;
+        const textWidth = ctx.measureText(displayText).width;
+        const canvasWidth = textWidth + padding * 2;
         const canvasHeight = boxHeight;
         canvas.width = canvasWidth * pixelRatio;
         canvas.height = canvasHeight * pixelRatio;
@@ -1085,7 +1086,7 @@ class DimensionModule {
         ctx.fillStyle = this.app.cssVars.colorDimensionText;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(text * 100 + unitText, canvasWidth / 2, canvasHeight / 2);
+        ctx.fillText(displayText, canvasWidth / 2, canvasHeight / 2);
         const texture = new THREE.CanvasTexture(canvas);
         texture.needsUpdate = true;
         const textSpriteMaterial = new THREE.SpriteMaterial({
