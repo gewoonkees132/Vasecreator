@@ -579,7 +579,7 @@ ul {
   }
 
   .form-group input[type="range"] {
-    height: 12px; /* Thicker track for easier touch */
+    height: 20px;
   }
 
   .range-thumb-common {

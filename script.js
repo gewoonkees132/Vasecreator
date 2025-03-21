@@ -678,7 +678,17 @@ class FlowerpotApp {
     createControlPointMeshes() {
         this.state.controlPointsGroup.clear();
         this.state.controlPointMeshes = [];
-        const controlPointGeometry = new this.THREE.SphereGeometry(0.03, 16, 16);
+
+        // 1. Check viewport width and set sphereRadius
+        let sphereRadius;
+        if (window.innerWidth <= 767) {
+            sphereRadius = 0.05; // Mobile radius
+        } else {
+            sphereRadius = 0.03; // Default radius
+        }
+        // 4. Create SphereGeometry with dynamic radius
+        const controlPointGeometry = new this.THREE.SphereGeometry(sphereRadius, 16, 16);
+
         this.state.controlPoints.forEach((point, index) => {
             const mesh = new this.THREE.Mesh(controlPointGeometry, this.config.materials.controlPoint);
             mesh.position.set(this.scaleX(point.x), point.y, 0);
@@ -775,6 +785,12 @@ class FlowerpotApp {
             this.state.controlPoints.pop();
             this.generateFlowerpot();
         }
+    }
+
+    // Modified handleResize in FlowerpotApp to call generateFlowerpot
+    handleResize() {
+        this.sceneManager.handleResize(); // Call the original handleResize in SceneManager
+        this.generateFlowerpot(); // Regenerate flowerpot to update dimension handles and control points sizes
     }
 }
 
@@ -957,7 +973,7 @@ class GeometryModule extends ModuleBase {
             const bottomOuterB = nextJ;
             const bottomHoleA = basePointCount + j;
             const bottomHoleB = basePointCount + nextJ;
-    
+
             // Corrected winding order:  Swap bottomHoleA and bottomOuterB in *one* of the triangles.
             faces.push(bottomOuterA, bottomOuterB, bottomHoleA,  bottomHoleA, bottomOuterB, bottomHoleB);
         }
@@ -1047,7 +1063,16 @@ class DimensionModule {
     }
 
     createDimensionHandle(position, type) {
-        const handleGeometry = new THREE.CylinderGeometry(0, 0.02, 0.04, 8);
+        // 1. Check viewport width and set handleRadius
+        let handleRadius;
+        if (window.innerWidth <= 767) {
+            handleRadius = 0.05; // Mobile radius
+        } else {
+            handleRadius = 0.03; // Default radius
+        }
+        const handleHeight = handleRadius * 2; // Keep height proportional to radius
+
+        const handleGeometry = new THREE.CylinderGeometry(0, handleRadius, handleHeight, 8);
         const handleMesh = new THREE.Mesh(handleGeometry, this.config.materials.dimensionHandle || this.config.materials.controlPoint);
         handleMesh.position.copy(position);
         const [dimensionType, handlePosition] = type.split('-');
