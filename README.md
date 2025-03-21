@@ -12,7 +12,7 @@ Flowerpot Configurator is an interactive 3D web application built by Kees Leemei
 * **Dynamic Background:** A visually appealing gradient background that responds to mouse or touch movement.
 * **Touchscreen Support:** Fully functional on mobile devices with touch-optimized controls.
 
-## Technologies Used
+## Libraries used
 
 * **Three.js:** For 3D rendering and scene management.
 * **OrbitControls:** For camera controls in the 3D viewer.
