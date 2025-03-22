@@ -689,11 +689,12 @@ textarea:focus {
     padding: var(--space-xs);
     margin: var(--space-xs);
     height: 60px;
+    align-items: center;
   }
   
   .top-bar-left {
     gap: var(--space-xs);
-    align-items: left;
+    align-items: center;
     margin-bottom: var(--space-xs);
     width: 100%;
     height: fit-content;
@@ -756,12 +757,12 @@ textarea:focus {
   /* Button Positioning */
   #download-button {
     right: var(--space-xs);
-    top: 100px;
+    top: 70px;
   }
   
   #settings-button {
     left: var(--space-xs);
-    top: 100px;
+    top: 70px;
   }
   
   /* Increase button sizes for touch */
@@ -786,8 +787,8 @@ textarea:focus {
   
   /* Intro Modal Adjustments */
   .intro-text {
-    width: 95%;
-    max-height: 90vh;
+    width: 98%;
+    max-height: 98vh;
   }
   
   .intro-content {
@@ -810,7 +811,7 @@ textarea:focus {
 /* Medium screens (e.g., tablets) */
 @media (min-width: 768px) and (max-width: 1023px) {
   .top-bar {
-    max-height: 60px;
+
     padding: var(--space-sm) var(--space-lg);
   }
   
