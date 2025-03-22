@@ -810,7 +810,7 @@ textarea:focus {
 /* Medium screens (e.g., tablets) */
 @media (min-width: 768px) and (max-width: 1023px) {
   .top-bar {
-
+    max-height: 60px;
     padding: var(--space-sm) var(--space-lg);
   }
   
