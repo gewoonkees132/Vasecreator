@@ -688,7 +688,7 @@ textarea:focus {
   .top-bar {
     padding: var(--space-xs);
     margin: var(--space-xs);
-    height: 90px;
+    height: 60px;
   }
   
   .top-bar-left {
