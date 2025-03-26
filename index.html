@@ -1,168 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Create and customize your own 3D printable vases with our free online vase designer. Design unique flowerpots and vases with interactive controls, then download for 3D printing - no design skills needed!" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Create and customize your own 3D printable vases with our free online vase designer.">
     <title>Vase Creator | Design & 3D Print Your Own Unique Vases Online</title>
-
-    <!-- SEO Meta Tags -->
-    <meta name="keywords" content="custom vase designer, 3D printable vases, flowerpot generator, create your own vase, 3D print vase, vase configurator, custom flowerpot creator" />    <meta property="og:title" content="Design & 3D Print Your Own Unique Vases Online" />
-    <meta property="og:description" content="Create beautiful custom vases with our free 3D vase designer. Design, customize, and download ready-to-print 3D vase models instantly." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://vasecreator.com" />
-    <meta property="og:image" content="https://vasecreator.com/vase-creator-preview.jpg" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="robots" content="index, follow" />
-    <link rel="canonical" href="https://vasecreator.com" />
-
-    <!-- Favicon -->
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 255.76 238.85' class='flowerpot-logo'%3E%3Cg%3E%3Cpath class='cls-1' d='M200.15,115.53c-8.06.77-1.97.85-11.24,1.23-10.37.49-20.9-.5-29.11-6.15-13.2-10.13-14-27.46-6.96-40.43,3.63-7.35,10.49-12.16,17.73-16.35,6.78-3.76,12.7-4.79,19.62-8.05,3.33-1.45,2.06-4.68-4.65-7.47-5.67-1.75-11.57-.68-17.2.44-13.74,3.05-26.26,11.54-34.22,22.63-7.18,10.17-11.81,22.04-10.96,34.39.85,25.04,23.67,36.14,47.19,35.91,7.81.09,15.36-.76,21.52-1.86,9.39-2.02,15.63-2.43,20.44-9.7l.07-.14c2.55-5.44-5.06-5.15-12.25-4.46Z'/%3E%3Cpath class='cls-1' d='M108.63,156.98l.14-.06c3.28-1.36,5.76-6.87,7.22-10.52,1.34-3.25,2.84-6.48,4.49-9.54,2.4-4.71,4.25-8.69.25-7.71-8.26,3.08-16.26,11.88-17.95,19.74-1.11,3.78.89,9.89,5.85,8.1Z'/%3E%3Cpath class='cls-1' d='M255.56,76.83c-.51-1.8-3.37-3.79-5.74-4.9-2.94-1.43-6.37-2.73-9.82-4.03-21.5-8.73-53.64-12-67.32-2.79-3.06,1.88-5.65,4.37-7.64,7.5-2.21,3.42-2.8,7.45,2.67,6.23,2.22-.43,5.13-1.58,7.95-2.59,10.43-3.73,21.63-6.1,32.81-6.3,2.22-.15,17.66.38,17.49,2.41-3.3,1.36-8.56,1.15-12.34,1.93-14.19,2.14-27.28,8.37-37.94,16.45-2.34,1.9-5.87,4.75-5.13,7.88,2.52,6.82,26.98,5.75,33.46,4.87l.2-.03c11.48-1.52,23.47-6.14,34.06-11.61,4.81-2.88,19.37-9.19,17.29-15.03Z'/%3E%3Cpath class='cls-1' d='M145.72,155.69c-2.7-1.51-5.74-1.39-8.77-1.42-3.28,0-8.05,0-13.4,0,.89-1.06,1.78-2.1,2.7-3.1,3.49-3.98,6.26-7.38,2.13-7.41-7,.77-14.73,5.12-19.38,10.51-.26,0-.51,0-.77,0-2.04-6.14-6.01-12.13-10.11-15.79-2.42-2.02-5.26-4.49-7.32-2.47-1.81,2.72-.04,11.89,1.39,18.27-2.72,0-5.4,0-8.09,0-4.09.03-6.75-.14-9.4.88l-.12.05c-3.39,1.36-6.27,5.36-7.25,9.23-1,4.53.13,8.69.64,13.34.67,4.96,1.56,11.55,2.47,18.33.94,6.97,1.9,14.12,2.68,19.9,1.46,7.51.31,14.5,6.07,19.62,6.27,5.14,15.1,2.6,22.93,2.66,8.64-.34,17.57.02,26.14.5,6.45.52,13.41-2.21,15.59-8.44,1.06-2.95,1.23-5.95,1.91-10.68,1.5-11.41,3.42-25.67,4.99-37.55.58-5.22,1.88-11.63,1.54-15.59-.36-4.27-2.92-8.63-6.59-10.82Z'/%3E%3Cpath class='cls-1' d='M43.51,81.15c5.51,3.58,13.08,6.59,11.67-3.37-3.77-20.68-10.89-41.78-26.13-55.98-.63-.68-4.61-4.3-2.38-4.02,17.46,7.89,28.82,25.91,38.09,43.68,1.05,1.83,2.42,5.33,4.16,6,.31.04.54-.14.69-.41.74-1.16.62-5.2.23-8.75-.67-6.58-2.24-13.38-4.72-19.42l-.08-.19C55.59,15.56,31.07-.82,5.16.03-.51.79-.54,6.59.57,11.1c6.24,28.3,20.72,56.3,42.94,70.06Z'/%3E%3Cpath class='cls-1' d='M86.92,132.58l2.93-2.93c2.13-4.99,1.71-5.34,3.46-11.05.57-2.22,1.2-4.78,1.7-7.16,2.58-14.35,3.4-25.13,3.07-34.87-.26-7.9-.52-16.56-3.52-27.56,0,0-5.02-18.45-20.22-33.87-.99-1.01-3.64-3.63-6.13-3.01-.28.07-.98.26-1.47.91-1.02,1.35-.42,3.73.35,5.41,3.5,8.03,6.93,17.87,9,29.51,1.98,10.55,2.44,23.29,1.38,33.58-.41,4.24-.88,10.5-2.18,13.97-5.14,11.41-29.07-.74-42.08-11.39-8.18-7.02-15.52-14.79-25.68-19.01-1.16-.42-2.43-.89-3.56-.66-2.78.97,2.27,7.24,3.15,8.95,3.46,5.33,6.61,9.96,10.51,14.58,11.07,12.9,32.56,32.28,47.63,40.01,5.59,2.36,15.43,7.52,21.66,4.6Z'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml" />
-
-    <!-- Stylesheet -->
-    <link rel="stylesheet" href="style.css" />
-
-    <!-- Fluent UI Icons -->
-    <link rel="stylesheet" href="https://unpkg.com/fluentui-system-icons@1.1.209/fluentui-system-icons.css" />
-
-    <!-- Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter&family=Playfair+Display:wght@700&display=swap" rel="stylesheet" />
-
-    <!-- Three.js Import Map -->
+    <meta name="keywords" content="custom vase designer, 3D printable vases, flowerpot generator">
+    <meta property="og:title" content="Design & 3D Print Your Own Unique Vases Online">
+    <meta property="og:description" content="Create beautiful custom vases with our free 3D vase designer.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://vasecreator.com">
+    <meta property="og:image" content="https://vasecreator.com/vase-creator-preview.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 255.76 238.85' class='flowerpot-logo'%3E%3Cg%3E%3Cpath class='cls-1' d='M200.15,115.53c-8.06.77-1.97.85-11.24,1.23-10.37.49-20.9-.5-29.11-6.15-13.2-10.13-14-27.46-6.96-40.43,3.63-7.35,10.49-12.16,17.73-16.35,6.78-3.76,12.7-4.79,19.62-8.05,3.33-1.45,2.06-4.68-4.65-7.47-5.67-1.75-11.57-.68-17.2.44-13.74,3.05-26.26,11.54-34.22,22.63-7.18,10.17-11.81,22.04-10.96,34.39.85,25.04,23.67,36.14,47.19,35.91,7.81.09,15.36-.76,21.52-1.86,9.39-2.02,15.63-2.43,20.44-9.7l.07-.14c2.55-5.44-5.06-5.15-12.25-4.46Z'/%3E%3Cpath class='cls-1' d='M108.63,156.98l.14-.06c3.28-1.36,5.76-6.87,7.22-10.52,1.34-3.25,2.84-6.48,4.49-9.54,2.4-4.71,4.25-8.69.25-7.71-8.26,3.08-16.26,11.88-17.95,19.74-1.11,3.78.89,9.89,5.85,8.1Z'/%3E%3Cpath class='cls-1' d='M255.56,76.83c-.51-1.8-3.37-3.79-5.74-4.9-2.94-1.43-6.37-2.73-9.82-4.03-21.5-8.73-53.64-12-67.32-2.79-3.06,1.88-5.65,4.37-7.64,7.5-2.21,3.42-2.8,7.45,2.67,6.23,2.22-.43,5.13-1.58,7.95-2.59,10.43-3.73,21.63-6.1,32.81-6.3,2.22-.15,17.66.38,17.49,2.41-3.3,1.36-8.56,1.15-12.34,1.93-14.19,2.14-27.28,8.37-37.94,16.45-2.34,1.9-5.87,4.75-5.13,7.88,2.52,6.82,26.98,5.75,33.46,4.87l.2-.03c11.48-1.52,23.47-6.14,34.06-11.61,4.81-2.88,19.37-9.19,17.29-15.03Z'/%3E%3Cpath class='cls-1' d='M145.72,155.69c-2.7-1.51-5.74-1.39-8.77-1.42-3.28,0-8.05,0-13.4,0,.89-1.06,1.78-2.1,2.7-3.1,3.49-3.98,6.26-7.38,2.13-7.41-7,.77-14.73,5.12-19.38,10.51-.26,0-.51,0-.77,0-2.04-6.14-6.01-12.13-10.11-15.79-2.42-2.02-5.26-4.49-7.32-2.47-1.81,2.72-.04,11.89,1.39,18.27-2.72,0-5.4,0-8.09,0-4.09.03-6.75-.14-9.4.88l-.12.05c-3.39,1.36-6.27,5.36-7.25,9.23-1,4.53.13,8.69.64,13.34.67,4.96,1.56,11.55,2.47,18.33.94,6.97,1.9,14.12,2.68,19.9,1.46,7.51.31,14.5,6.07,19.62,6.27,5.14,15.1,2.6,22.93,2.66,8.64-.34,17.57.02,26.14.5,6.45.52,13.41-2.21,15.59-8.44,1.06-2.95,1.23-5.95,1.91-10.68,1.5-11.41,3.42-25.67,4.99-37.55.58-5.22,1.88-11.63,1.54-15.59-.36-4.27-2.92-8.63-6.59-10.82Z'/%3E%3Cpath class='cls-1' d='M43.51,81.15c5.51,3.58,13.08,6.59,11.67-3.37-3.77-20.68-10.89-41.78-26.13-55.98-.63-.68-4.61-4.3-2.38-4.02,17.46,7.89,28.82,25.91,38.09,43.68,1.05,1.83,2.42,5.33,4.16,6,.31.04.54-.14.69-.41.74-1.16.62-5.2.23-8.75-.67-6.58-2.24-13.38-4.72-19.42l-.08-.19C55.59,15.56,31.07-.82,5.16.03-.51.79-.54,6.59.57,11.1c6.24,28.3,20.72,56.3,42.94,70.06Z'/%3E%3Cpath class='cls-1' d='M86.92,132.58l2.93-2.93c2.13-4.99,1.71-5.34,3.46-11.05.57-2.22,1.2-4.78,1.7-7.16,2.58-14.35,3.4-25.13,3.07-34.87-.26-7.9-.52-16.56-3.52-27.56,0,0-5.02-18.45-20.22-33.87-.99-1.01-3.64-3.63-6.13-3.01-.28.07-.98.26-1.47.91-1.02,1.35-.42,3.73.35,5.41,3.5,8.03,6.93,17.87,9,29.51,1.98,10.55,2.44,23.29,1.38,33.58-.41,4.24-.88,10.5-2.18,13.97-5.14,11.41-29.07-.74-42.08-11.39-8.18-7.02-15.52-14.79-25.68-19.01-1.16-.42-2.43-.89-3.56-.66-2.78.97,2.27,7.24,3.15,8.95,3.46,5.33,6.61,9.96,10.51,14.58,11.07,12.9,32.56,32.28,47.63,40.01,5.59,2.36,15.43,7.52,21.66,4.6Z'/%3E%3C/g%3E%3C/svg%3E" type="image/svg+xml">
+    <link rel="canonical" href="https://vasecreator.com">
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@700&family=Rajdhani&display=swap" rel="stylesheet">
     <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.148.0/build/three.module.js",
-          "OrbitControls": "https://cdn.jsdelivr.net/npm/three@0.148.0/examples/jsm/controls/OrbitControls.js",
-          "OBJExporter": "https://cdn.jsdelivr.net/npm/three@0.148.0/examples/jsm/exporters/OBJExporter.js"
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.148.0/build/three.module.js",
+                "OrbitControls": "https://cdn.jsdelivr.net/npm/three@0.148.0/examples/jsm/controls/OrbitControls.js",
+                "OBJExporter": "https://cdn.jsdelivr.net/npm/three@0.148.0/examples/jsm/exporters/OBJExporter.js"
+            }
         }
-      }
     </script>
-
-    <!-- Structured Data -->
     <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "WebApplication",
-        "name": "Custom Vase Creator",
-        "url": "https://vasecreator.com",
-        "description": "Create and customize your own 3D printable vases with our free online vase designer. Design unique flowerpots and vases with interactive controls.",
-        "applicationCategory": "DesignApplication",
-        "operatingSystem": "Any",
-        "screenshot": "https://vasecreator.com/vase-creator-preview.jpg"
-      }
+        {
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            "name": "Custom Vase Creator",
+            "url": "https://vasecreator.com",
+            "description": "Create and customize your own 3D printable vases.",
+            "applicationCategory": "DesignApplication",
+            "operatingSystem": "Any",
+            "screenshot": "https://vasecreator.com/vase-creator-preview.jpg"
+        }
     </script>
 </head>
 <body>
-    <!-- Header -->
+        <div id="gradient-background"></div>
     <header class="top-bar" role="banner">
-      <div class="top-bar-left">
-          <button id="logo-button" class="logo-button" aria-label="Toggle Introduction Text" aria-controls="intro-text" aria-expanded="true">
-              <figure class="logo-container">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 255.76 238.85" class="flowerpot-logo" aria-label="Vase Creator Logo">
-                      <g>
-                            <path class="cls-1" d="M200.15,115.53c-8.06.77-1.97.85-11.24,1.23-10.37.49-20.9-.5-29.11-6.15-13.2-10.13-14-27.46-6.96-40.43,3.63-7.35,10.49-12.16,17.73-16.35,6.78-3.76,12.7-4.79,19.62-8.05,3.33-1.45,2.06-4.68-4.65-7.47-5.67-1.75-11.57-.68-17.2.44-13.74,3.05-26.26,11.54-34.22,22.63-7.18,10.17-11.81,22.04-10.96,34.39.85,25.04,23.67,36.14,47.19,35.91,7.81.09,15.36-.76,21.52-1.86,9.39-2.02,15.63-2.43,20.44-9.7l.07-.14c2.55-5.44-5.06-5.15-12.25-4.46Z" />
-                            <path class="cls-1" d="M108.63,156.98l.14-.06c3.28-1.36,5.76-6.87,7.22-10.52,1.34-3.25,2.84-6.48,4.49-9.54,2.4-4.71,4.25-8.69.25-7.71-8.26,3.08-16.26,11.88-17.95,19.74-1.11,3.78.89,9.89,5.85,8.1Z" />
-                            <path class="cls-1" d="M255.56,76.83c-.51-1.8-3.37-3.79-5.74-4.9-2.94-1.43-6.37-2.73-9.82-4.03-21.5-8.73-53.64-12-67.32-2.79-3.06,1.88-5.65,4.37-7.64,7.5-2.21,3.42-2.8,7.45,2.67,6.23,2.22-.43,5.13-1.58,7.95-2.59,10.43-3.73,21.63-6.1,32.81-6.3,2.22-.15,17.66.38,17.49,2.41-3.3,1.36-8.56,1.15-12.34,1.93-14.19,2.14-27.28,8.37-37.94,16.45-2.34,1.9-5.87,4.75-5.13,7.88,2.52,6.82,26.98,5.75,33.46,4.87l.2-.03c11.48-1.52,23.47-6.14,34.06-11.61,4.81-2.88,19.37-9.19,17.29-15.03Z" />
-                            <path class="cls-1" d="M145.72,155.69c-2.7-1.51-5.74-1.39-8.77-1.42-3.28,0-8.05,0-13.4,0,.89-1.06,1.78-2.1,2.7-3.1,3.49-3.98,6.26-7.38,2.13-7.41-7,.77-14.73,5.12-19.38,10.51-.26,0-.51,0-.77,0-2.04-6.14-6.01-12.13-10.11-15.79-2.42-2.02-5.26-4.49-7.32-2.47-1.81,2.72-.04,11.89,1.39,18.27-2.72,0-5.4,0-8.09,0-4.09.03-6.75-.14-9.4.88l-.12.05c-3.39,1.36-6.27,5.36-7.25,9.23-1,4.53.13,8.69.64,13.34.67,4.96,1.56,11.55,2.47,18.33.94,6.97,1.9,14.12,2.68,19.9,1.46,7.51.31,14.5,6.07,19.62,6.27,5.14,15.1,2.6,22.93,2.66,8.64-.34,17.57.02,26.14.5,6.45.52,13.41-2.21,15.59-8.44,1.06-2.95,1.23-5.95,1.91-10.68,1.5-11.41,3.42-25.67,4.99-37.55.58-5.22,1.88-11.63,1.54-15.59-.36-4.27-2.92-8.63-6.59-10.82Z" />
-                            <path class="cls-1" d="M43.51,81.15c5.51,3.58,13.08,6.59,11.67-3.37-3.77-20.68-10.89-41.78-26.13-55.98-.63-.68-4.61-4.3-2.38-4.02,17.46,7.89,28.82,25.91,38.09,43.68,1.05,1.83,2.42,5.33,4.16,6,.31.04.54-.14.69-.41.74-1.16.62-5.2.23-8.75-.67-6.58-2.24-13.38-4.72-19.42l-.08-.19C55.59,15.56,31.07-.82,5.16.03-.51.79-.54,6.59.57,11.1c6.24,28.3,20.72,56.3,42.94,70.06Z" />
-                            <path class="cls-1" d="M86.92,132.58l2.93-2.93c2.13-4.99,1.71-5.34,3.46-11.05.57-2.22,1.2-4.78,1.7-7.16,2.58-14.35,3.4-25.13,3.07-34.87-.26-7.9-.52-16.56-3.52-27.56,0,0-5.02-18.45-20.22-33.87-.99-1.01-3.64-3.63-6.13-3.01-.28.07-.98.26-1.47.91-1.02,1.35-.42,3.73.35,5.41,3.5,8.03,6.93,17.87,9,29.51,1.98,10.55,2.44,23.29,1.38,33.58-.41,4.24-.88,10.5-2.18,13.97-5.14,11.41-29.07-.74-42.08-11.39-8.18-7.02-15.52-14.79-25.68-19.01-1.16-.42-2.43-.89-3.56-.66-2.78.97,2.27,7.24,3.15,8.95,3.46,5.33,6.61,9.96,10.51,14.58,11.07,12.9,32.56,32.28,47.63,40.01,5.59,2.36,15.43,7.52,21.66,4.6Z" />
-                          </g>
-                        </svg>
-                    </figure>
-                </button>
-                <h1 class="app-title">Vase Creator</h1>
-                <h2 class="app-subtitle"><span id="subtitle">Design & 3D Print Your Own Vases</span></h2>
-            </div>
-            <div class="top-bar-right">
-                <p>Created with
-                    <svg class="heart-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                    </svg> by<a href="https://gewoonkees132.github.io/gewoonkees132/" target="_blank">Kees Leemeijer</a> 
-                </p>
-            </div>
-        </header>
+        <button id="logo-button" class="logo-button" aria-label="Toggle Introduction Text" aria-controls="intro-text" aria-expanded="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="40" viewBox="0 0 255.76 238.85" class="flowerpot-logo" aria-label="Vase Creator Logo">
+                <g>
+                      <path class="cls-1" d="M200.15,115.53c-8.06.77-1.97.85-11.24,1.23-10.37.49-20.9-.5-29.11-6.15-13.2-10.13-14-27.46-6.96-40.43,3.63-7.35,10.49-12.16,17.73-16.35,6.78-3.76,12.7-4.79,19.62-8.05,3.33-1.45,2.06-4.68-4.65-7.47-5.67-1.75-11.57-.68-17.2.44-13.74,3.05-26.26,11.54-34.22,22.63-7.18,10.17-11.81,22.04-10.96,34.39.85,25.04,23.67,36.14,47.19,35.91,7.81.09,15.36-.76,21.52-1.86,9.39-2.02,15.63-2.43,20.44-9.7l.07-.14c2.55-5.44-5.06-5.15-12.25-4.46Z"></path>
+                      <path class="cls-1" d="M108.63,156.98l.14-.06c3.28-1.36,5.76-6.87,7.22-10.52,1.34-3.25,2.84-6.48,4.49-9.54,2.4-4.71,4.25-8.69.25-7.71-8.26,3.08-16.26,11.88-17.95,19.74-1.11,3.78.89,9.89,5.85,8.1Z"></path>
+                      <path class="cls-1" d="M255.56,76.83c-.51-1.8-3.37-3.79-5.74-4.9-2.94-1.43-6.37-2.73-9.82-4.03-21.5-8.73-53.64-12-67.32-2.79-3.06,1.88-5.65,4.37-7.64,7.5-2.21,3.42-2.8,7.45,2.67,6.23,2.22-.43,5.13-1.58,7.95-2.59,10.43-3.73,21.63-6.1,32.81-6.3,2.22-.15,17.66.38,17.49,2.41-3.3,1.36-8.56,1.15-12.34,1.93-14.19,2.14-27.28,8.37-37.94,16.45-2.34,1.9-5.87,4.75-5.13,7.88,2.52,6.82,26.98,5.75,33.46,4.87l.2-.03c11.48-1.52,23.47-6.14,34.06-11.61,4.81-2.88,19.37-9.19,17.29-15.03Z"></path>
+                      <path class="cls-1" d="M145.72,155.69c-2.7-1.51-5.74-1.39-8.77-1.42-3.28,0-8.05,0-13.4,0,.89-1.06,1.78-2.1,2.7-3.1,3.49-3.98,6.26-7.38,2.13-7.41-7,.77-14.73,5.12-19.38,10.51-.26,0-.51,0-.77,0-2.04-6.14-6.01-12.13-10.11-15.79-2.42-2.02-5.26-4.49-7.32-2.47-1.81,2.72-.04,11.89,1.39,18.27-2.72,0-5.4,0-8.09,0-4.09.03-6.75-.14-9.4.88l-.12.05c-3.39,1.36-6.27,5.36-7.25,9.23-1,4.53.13,8.69.64,13.34.67,4.96,1.56,11.55,2.47,18.33.94,6.97,1.9,14.12,2.68,19.9,1.46,7.51.31,14.5,6.07,19.62,6.27,5.14,15.1,2.6,22.93,2.66,8.64-.34,17.57.02,26.14.5,6.45.52,13.41-2.21,15.59-8.44,1.06-2.95,1.23-5.95,1.91-10.68,1.5-11.41,3.42-25.67,4.99-37.55.58-5.22,1.88-11.63,1.54-15.59-.36-4.27-2.92-8.63-6.59-10.82Z"></path>
+                      <path class="cls-1" d="M43.51,81.15c5.51,3.58,13.08,6.59,11.67-3.37-3.77-20.68-10.89-41.78-26.13-55.98-.63-.68-4.61-4.3-2.38-4.02,17.46,7.89,28.82,25.91,38.09,43.68,1.05,1.83,2.42,5.33,4.16,6,.31.04.54-.14.69-.41.74-1.16.62-5.2.23-8.75-.67-6.58-2.24-13.38-4.72-19.42l-.08-.19C55.59,15.56,31.07-.82,5.16.03-.51.79-.54,6.59.57,11.1c6.24,28.3,20.72,56.3,42.94,70.06Z"></path>
+                      <path class="cls-1" d="M86.92,132.58l2.93-2.93c2.13-4.99,1.71-5.34,3.46-11.05.57-2.22,1.2-4.78,1.7-7.16,2.58-14.35,3.4-25.13,3.07-34.87-.26-7.9-.52-16.56-3.52-27.56,0,0-5.02-18.45-20.22-33.87-.99-1.01-3.64-3.63-6.13-3.01-.28.07-.98.26-1.47.91-1.02,1.35-.42,3.73.35,5.41,3.5,8.03,6.93,17.87,9,29.51,1.98,10.55,2.44,23.29,1.38,33.58-.41,4.24-.88,10.5-2.18,13.97-5.14,11.41-29.07-.74-42.08-11.39-8.18-7.02-15.52-14.79-25.68-19.01-1.16-.42-2.43-.89-3.56-.66-2.78.97,2.27,7.24,3.15,8.95,3.46,5.33,6.61,9.96,10.51,14.58,11.07,12.9,32.56,32.28,47.63,40.01,5.59,2.36,15.43,7.52,21.66,4.6Z"></path>
+                    </g>
+                  </svg>
+        </button>
+        <h1 class="app-title">Vase Creator</h1>
+        <h2 class="app-subtitle"><span id="subtitle" aria-live="polite">Design & 3D Print Your Own Vases</span></h2>
+        <p class="creator-credit"> Created with
+            <svg class="heart-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg> by <a href="https://gewoonkees132.github.io/gewoonkees132/" target="_blank" rel="noopener noreferrer">Kees Leemeijer</a>
+        </p>
+    </header>
 
-    <!-- Main Content -->
     <main class="main-container">
-      <section id="intro-text" class="intro-text" role="dialog" aria-modal="true" aria-labelledby="intro-heading">
-        <button class="close-intro" aria-label="Close Introduction">×</button>
-        <div class="intro-content">
-            <h2 id="intro-heading">Design Your Vase</h2>
-            <p class="intro-description">
-                Create unique, custom vases with our easy-to-use online designer. Customize the shape, size, and details, then download your creation for 3D printing.
-            </p>
-    
-            <div class="how-it-works-intro">
-                <div class="step-item">
-                    <div class="step-number">1</div>
-                    <div class="step-content">
-                        <p class="step-title">Customize</p>
-                        <p class="step-description">Adjust controls to shape your vase</p>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-number">2</div>
-                    <div class="step-content">
-                        <p class="step-title">Preview</p>
-                        <p class="step-description">View in real-time 3D</p>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-number">3</div>
-                    <div class="step-content">
-                        <p class="step-title">Download</p>
-                        <p class="step-description">Export as a print-ready file</p>
-                    </div>
-                </div>
-                <div class="step-item">
-                    <div class="step-number">4</div>
-                    <div class="step-content">
-                        <p class="step-title">Print</p>
-                        <p class="step-description">Bring your vase to life</p>
-                    </div>
-                </div>
+        <section id="intro-text" class="intro-text" role="dialog" aria-labelledby="intro-heading">
+            <button class="close-intro" aria-label="Close Introduction">×</button>
+            <div class="intro-content">
+                <h2 id="intro-heading">Design Your Vase</h2>
+                <p class="intro-description">Create unique, custom vases with our easy-to-use online designer. Customize the shape, size, and details, then download your creation for 3D printing.</p>
+                <ol class="how-it-works-intro" aria-label="How It Works Steps">
+                    <li class="step-item"><span class="step-number">1</span><div class="step-content"><h3 class="step-title">Customize</h3><p class="step-description">Adjust controls to shape your vase</p></div></li>
+                    <li class="step-item"><span class="step-number">2</span><div class="step-content"><h3 class="step-title">Preview</h3><p class="step-description">View in real-time 3D</p></div></li>
+                    <li class="step-item"><span class="step-number">3</span><div class="step-content"><h3 class="step-title">Download</h3><p class="step-description">Export as a print-ready file</p></div></li>
+                    <li class="step-item"><span class="step-number">4</span><div class="step-content"><h3 class="step-title">Print</h3><p class="step-description">Bring your vase to life</p></div></li>
+                </ol>
+                <button class="cta-button"><span class="cta-text">Start Creating</span><svg class="cta-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             </div>
-            <button class="cta-button">
-                <span class="cta-text">Start Creating</span>
-                <svg class="cta-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M5 12H19M19 12L12 5M19 12L12 19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            </button>
-        </div>
-    </section>
+        </section>
 
-        <!-- Sidebar -->
         <aside class="sidebar" aria-label="Vase Design Controls" aria-hidden="true">
             <div class="sidebar-content">
                 <section class="control-panel">
                     <h2 class="control-section-title">Base Settings</h2>
                     <div class="form-group">
-                        <label for="base-fillet-radius">Base Fillet Radius</label>
-                        <input class="form-control form-element-base" type="range" id="base-fillet-radius" min="0" max="1" step="0.01" value="0.1" aria-describedby="base-fillet-description" />
+                        <label for="base-fillet-radius">Base Fillet Radius: <span id="base-fillet-radius-value">0.1</span></label>
+                        <input class="form-control" type="range" id="base-fillet-radius" min="0" max="1" step="0.01" value="0.1" aria-describedby="base-fillet-description">
                         <div id="base-fillet-description" class="sr-only">Adjust the radius of the rounded corners at the base of your vase.</div>
                     </div>
                     <div class="form-group">
-                        <label for="wall-thickness-slider">Wall Thickness</label>
-                        <input class="form-control form-element-base" type="range" id="wall-thickness-slider" min="0.01" max="0.1" step="0.01" value="0.04" aria-describedby="wall-thickness-description" />
+                        <label for="wall-thickness-slider">Wall Thickness: <span id="wall-thickness-value">0.04</span></label>
+                        <input class="form-control" type="range" id="wall-thickness-slider" min="0.01" max="0.1" step="0.01" value="0.04" aria-describedby="wall-thickness-description">
                         <div id="wall-thickness-description" class="sr-only">Adjust wall thickness of your vase for optimal 3D printing.</div>
                     </div>
                     <div class="form-group">
-                        <label for="drainage-hole-scale-slider">Drainage Hole Scale</label>
-                        <input class="form-control form-element-base" type="range" id="drainage-hole-scale-slider" min="0.0" max="0.9" step="0.01" value="0.5" aria-describedby="drainage-hole-description" />
+                        <label for="drainage-hole-scale-slider">Drainage Hole Scale: <span id="drainage-hole-scale-value">0.5</span></label>
+                        <input class="form-control" type="range" id="drainage-hole-scale-slider" min="0.0" max="0.9" step="0.01" value="0.5" aria-describedby="drainage-hole-description">
                         <div id="drainage-hole-description" class="sr-only">Adjust drainage hole size for your flowerpot or vase.</div>
                     </div>
                     <h2 class="control-section-title">Vase Dimensions</h2>
                     <div class="form-group">
-                        <label for="width-slider">Width</label>
-                        <input class="form-control form-element-base" type="range" id="width-slider" min="1" max="2" step="0.1" value="0.6" aria-describedby="width-description" />
+                        <label for="width-slider">Width: <span id="width-value">1</span></label>
+                        <input class="form-control" type="range" id="width-slider" min="0.2" max="2.4" step="0.05" value="0.5" aria-describedby="width-description">
                         <div id="width-description" class="sr-only">Adjust vase width.</div>
                     </div>
                     <div class="form-group">
-                        <label for="depth-slider">Depth</label>
-                        <input class="form-control form-element-base" type="range" id="depth-slider" min="1" max="2" step="0.1" value="0.4" aria-describedby="depth-description" />
+                        <label for="depth-slider">Depth: <span id="depth-value">1</span></label>
+                        <input class="form-control" type="range" id="depth-slider" min="0.2" max="2.4" step="0.05"  value="0.5" aria-describedby="depth-description">
                         <div id="depth-description" class="sr-only">Adjust vase depth.</div>
                     </div>
                 </section>
@@ -170,28 +115,28 @@
                     <h2 class="control-section-title">Vase Profile Shape</h2>
                     <div class="form-group">
                         <label for="curve-type">Curve Type</label>
-                        <select class="form-control form-element-base" id="curve-type" aria-describedby="curve-type-description">
-                            <option value="spline">Spline (Smooth Curves)</option>
-                            <option value="polyline">Polyline (Angular Design)</option>
+                        <select class="form-control" id="curve-type" aria-describedby="curve-type-description">
+                            <option value="spline">Spline (Smooth Design)</option>
+                            <option value="polyline">Polyline (Creative Design)</option>
                         </select>
                         <div id="curve-type-description" class="sr-only">Select vase profile curve type for custom shape.</div>
                     </div>
                     <div class="form-group">
-                        <label for="tension-slider">Tension: <span id="tension-value">0.50</span></label>
-                        <input class="form-control form-element-base" type="range" id="tension-slider" min="0" max="1" step="0.01" value="0.5" aria-describedby="tension-description" />
+                        <label for="tension-slider">Tension: <span id="tension-value">0.50</span> (-)</label>
+                        <input class="form-control" type="range" id="tension-slider" min="0" max="1" step="0.01" value="0.5" aria-describedby="tension-description">
                         <div id="tension-description" class="sr-only">Adjust spline tension for your custom vase profile.</div>
                     </div>
                     <div class="form-group" id="fillet-controls" style="display: none">
-                        <label for="fillet-radius">Fillet Radius</label>
-                        <input class="form-control form-element-base" type="range" id="fillet-radius" min="0" max="0.3" step="0.01" value="0.1" aria-describedby="fillet-radius-description" />
+                        <label for="fillet-radius">Fillet Radius: <span id="fillet-radius-value">0.1</span> (-)</label>
+                        <input class="form-control" type="range" id="fillet-radius" min="0" max="0.3" step="0.01" value="0.1" aria-describedby="fillet-radius-description">
                         <div id="fillet-radius-description" class="sr-only">Adjust polyline fillet radius for your vase design.</div>
                     </div>
                     <h2 class="control-section-title">Custom Profile Controls</h2>
                     <div class="button-group">
-                        <button id="add-point-button" class="fluent-button button-base button-interaction" aria-label="Add Control Point to Vase Profile">
+                        <button id="add-point-button" class="fluent-button button-base" aria-label="Add Control Point to Vase Profile">
                             <i class="fluentui-system-icons:i-add-circle-regular" aria-hidden="true"></i> Add Point
                         </button>
-                        <button id="remove-point-button" class="fluent-button button-base button-interaction" aria-label="Remove Control Point from Vase Profile">
+                        <button id="remove-point-button" class="fluent-button button-base" aria-label="Remove Control Point from Vase Profile">
                             <i class="fluentui-system-icons:i-subtract-circle-regular" aria-hidden="true"></i> Remove Point
                         </button>
                     </div>
@@ -199,13 +144,12 @@
             </div>
         </aside>
 
-        <!-- Canvas Wrapper -->
         <div class="canvas-wrapper">
-            <button id="settings-button" class="button-base button-interaction" aria-label="Toggle Vase Design Controls">
+            <button id="settings-button" class="button-base" aria-label="Toggle Vase Design Controls">
                 <i class="fluentui-system-icons:i-sidebar-left-regular" aria-hidden="true"></i> Design Controls
             </button>
-            <button id="download-button" class="fluent-button button-base button-interaction primary" aria-label="Download 3D Printable Vase OBJ File">
-                <i class="fluentui-system-icons:i-arrow-download-regular" aria-hidden="true"></i> Download for 3D Printing
+            <button id="download-button" class="fluent-button button-base primary" aria-label="Download 3D Printable Vase OBJ File">
+                <i class="fluentui-system-icons:i-arrow-download-regular" aria-hidden="true"></i> Download OBJ
             </button>
             <section class="canvas-area" role="main">
                 <div id="canvas-container">
@@ -214,59 +158,6 @@
             </section>
         </div>
     </main>
-
-   <!-- Scripts -->
-   <script type="module">
-    document.addEventListener("DOMContentLoaded", () => {
-      try {
-        import("./script.js").catch((err) => console.error("Failed to load script.js", err));
-
-        // Sidebar toggle
-        const toggleSidebarButton = document.getElementById("settings-button");
-        const sidebar = document.querySelector(".sidebar");
-        if (toggleSidebarButton && sidebar) {
-          toggleSidebarButton.addEventListener("click", () => {
-            const isHidden = sidebar.getAttribute("aria-hidden") === "true";
-            sidebar.setAttribute("aria-hidden", !isHidden);
-          });
-        } else {
-          console.error("Sidebar toggle elements not found.");
-        }
-
-        // Intro text toggle
-        const logoButton = document.getElementById("logo-button");
-        const introText = document.getElementById("intro-text");
-        const closeIntroButton = document.querySelector(".close-intro");
-        const ctaButton = document.querySelector(".cta-button");
-
-        if (logoButton && introText && ctaButton) {
-          logoButton.setAttribute("aria-expanded", "true");
-
-          // Define the toggle function
-          function toggleIntroText() {
-            const isHidden = introText.classList.contains("hidden");
-            introText.classList.toggle("hidden");
-            logoButton.setAttribute("aria-expanded", isHidden ? "true" : "false");
-          }
-
-          // Attach event listeners to both buttons
-          logoButton.addEventListener("click", toggleIntroText);
-          ctaButton.addEventListener("click", toggleIntroText);
-
-          // Close button logic (hides intro text only)
-          if (closeIntroButton) {
-            closeIntroButton.addEventListener("click", () => {
-              introText.classList.add("hidden");
-              logoButton.setAttribute("aria-expanded", "false");
-            });
-          }
-        } else {
-          console.error("Logo button, intro text, or CTA button not found.");
-        }
-      } catch (error) {
-        console.error("Error during DOMContentLoaded:", error);
-      }
-    });
-  </script>
+    <script type="module" src="script.js"></script>
 </body>
 </html>

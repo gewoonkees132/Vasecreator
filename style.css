@@ -1,72 +1,64 @@
-/* style.css (Footer Removed and Integrated into Header) */
-
-/* 1. Custom Properties (Variables) */
 :root {
-  /* Colors */
-  --color-primary: rgba(139, 197, 193, 1);
-  --color-primary-light: rgba(93, 138, 139, 1);
-  --color-primary-dark: rgba(26, 47, 48, 1);
-  --color-background: rgba(255, 255, 255, 0.8);
-  --color-surface: rgba(248, 248, 248, 0.7);
-  --color-border: rgba(0, 0, 0, 0.1);
-  --color-text: rgba(18, 18, 18, 1);
-  --color-text-secondary: rgba(85, 85, 85, 1);
+  /* Core color palette */
+  --color-primary: rgba(139, 197, 193, 1);        /* Primary color for branding */
+  --color-primary-light: rgba(93, 138, 139, 1);   /* Lighter variant for hover states */
+  --color-primary-dark: rgba(26, 47, 48, 1);      /* Darker variant for contrast */
+  --color-surface: rgba(248, 248, 248, 0.8);      /* Background surface color with transparency */
+  --color-border: rgba(0, 0, 0, 0.1);             /* Subtle border color */
+  --color-text: rgb(18, 47, 45);                  /* Main text color */
 
-  /* Shadows */
-  --shadow-subtle: rgba(0, 0, 0, 0.05);
-  --shadow-medium: rgba(0, 0, 0, 0.08);
-  --shadow-large: rgba(0, 0, 0, 0.12);
+  /* Shadow definitions for depth */
+  --shadow-subtle: rgba(0, 0, 0, 0.05);           /* Light shadow for minimal elevation */
+  --shadow-medium: rgba(0, 0, 0, 0.08);           /* Medium shadow for interactive elements */
+  --shadow-large: rgba(0, 0, 0, 0.12);            /* Larger shadow for prominent elements */
 
-  /* Transitions */
-  --transition-duration: 0.25s;
-  --transition-easing: cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-standard: all var(--transition-duration) var(--transition-easing);
+  /* Transition properties for smooth animations */
+  --transition-duration: 0.25s;                    /* Standard duration for transitions */
+  --transition-easing: cubic-bezier(0.4, 0, 0.2, 1); /* Easing curve for natural feel */
+  --transition-standard: all var(--transition-duration) var(--transition-easing); /* Combined transition */
 
-  /* Spacing */
-  --space-xs: 5px;
-  --space-sm: 8px;
-  --space-md: 12px;
-  --space-lg: 15px;
-  --space-xl: 20px;
-  --space-xxl: 25px;
+  /* Spacing scale for layout consistency */
+  --space-xs: 5px;                                /* Extra small spacing */
+  --space-sm: 8px;                                /* Small spacing */
+  --space-md: 12px;                               /* Medium spacing */
+  --space-lg: 15px;                               /* Large spacing */
+  --space-xl: 20px;                               /* Extra large spacing */
+  --space-xxl: 25px;                              /* Extra extra large spacing */
 
-  /* Border Radius */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 13px;
-  --radius-circle: 50%;
+  /* Radius values for rounded corners */
+  --radius-sm: 6px;                               /* Small radius */
+  --radius-md: 8px;                               /* Medium radius */
+  --radius-lg: 13px;                              /* Large radius */
+  --radius-circle: 50%;                           /* Full circle radius */
 
-  /* Font Sizes */
-  --font-xs: 0.9rem;
-  --font-sm: 0.95rem;
-  --font-md: 1rem;
-  --font-lg: 1.25rem;
-  --font-xl: 1.3rem;
-  --font-xxl: 1.75rem;
-  --font-hero: clamp(2.5rem, 5vw, 3.5rem);
+  /* Font sizes for typography hierarchy */
+  --font-xs: 0.9rem;                              /* Extra small text */
+  --font-sm: 0.95rem;                             /* Small text */
+  --font-md: 1rem;                                /* Medium (base) text */
+  --font-lg: 1.25rem;                             /* Large text */
+  --font-xl: 1.3rem;                              /* Extra large text */
+  --font-xxl: 1.75rem;                            /* Extra extra large text */
+  --font-hero: clamp(2.5rem, 5vw, 3.5rem);        /* Responsive hero text size */
 
-  /* Font Weights */
-  --weight-normal: 400;
-  --weight-medium: 500;
-  --weight-semibold: 600;
-  --weight-bold: 700;
+  /* Font weights for emphasis */
+  --weight-normal: 400;                           /* Normal weight */
+  --weight-medium: 500;                           /* Medium weight */
+  --weight-semibold: 600;                         /* Semi-bold weight */
+  --weight-bold: 700;                             /* Bold weight */
 }
 
-/* 2. Reset & Base Styles */
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-  font-family: "inter", sans-serif;
+  font-family: "Inter", sans-serif;
 }
 
 body {
   color: var(--color-text);
-  background-attachment: fixed; /* Consider removing if not essential */
-  line-height: 1.6;
+  line-height: 1.4;
 }
 
-/* 3. Utility Classes */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -79,35 +71,30 @@ body {
   border: 0;
 }
 
-.flex-center   { display: flex; align-items: center; }
-.flex-between  { display: flex; justify-content: space-between; align-items: center; }
-.flex-column   { display: flex; flex-direction: column; }
-.transition   { transition: var(--transition-standard); }
-
-/* 4. Typography */
-h1, h2, h3,
 .app-title,
 .app-subtitle,
 .control-section-title {
   margin-bottom: var(--space-sm);
-  line-height: 1.2;
-  color: var(--color-primary);
+  color: var(--color-text);
 }
 
-h1 { font-size: var(--font-hero);   font-weight: var(--weight-bold); }
-h2 { font-size: var(--font-xxl);    font-weight: var(--weight-semibold); line-height: 1.3;}
-h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-height: 1.4; }
+.app-title {
+  font-size: 1.8rem;
+  font-weight: var(--weight-bold);
+  margin-block-end: 0;
+}
 
-.app-title    { font-size: 1.8rem;   font-weight: var(--weight-bold);   margin-block-end: 0;}
-.app-subtitle { font-size: var(--font-md);    font-weight: var(--weight-medium); margin-bottom: -5px; color: var(--color-text-secondary); }
+.app-subtitle {
+  font-size: var(--font-md);
+  font-weight: var(--weight-medium);
+  margin-bottom: -5px;
+}
 
-/* 5. Layout Components */
 .top-bar {
   display: flex;
-  justify-content: space-between;
+  justify-content: left;
   align-items: center;
   background-color: var(--color-surface);
-  backdrop-filter: blur(20px);
   padding: var(--space-md) var(--space-lg);
   box-shadow: 0 2px 8px var(--shadow-subtle);
   border-radius: var(--radius-sm);
@@ -118,14 +105,12 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   z-index: 1000;
 }
 
-.top-bar-left  { display: flex; align-items: center; gap: var(--space-xxl); }
-.top-bar-right { display: flex; align-items: center; }
+.top-bar > * {
+  margin-inline-end: var(--space-xl);
+}
 
-/* Logo */
-.logo-container {
-  width: 40px;
-  height: 40px;
-  margin-left: var(--space-lg);
+.top-bar > *:last-child {
+  margin-inline-end: 0;
 }
 
 .logo-button {
@@ -139,34 +124,27 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   width: 100%;
   height: 100%;
   transition: transform 0.3s var(--transition-easing);
-  fill: var(--color-primary);
+  fill: var(--color-text);
 }
 
 .flowerpot-logo:hover {
   transform: scale(1.1);
 }
 
-/* Top Bar Links and Text - Including Former Footer Content */
-.top-bar-right p {
+.top-bar p {
   font-size: var(--font-sm);
-  color: var(--color-primary-dark);
 }
 
-.top-bar-right a {
-  color: var(--color-primary);
+.top-bar a {
   text-decoration: none;
   font-weight: var(--weight-medium);
-  transition: var(--transition-standard);
+  transition: color 0.3s var(--transition-easing);
   position: relative;
   margin-left: var(--space-md);
 }
 
-.top-bar-right a:hover {
-  color: var(--color-primary-light);
-}
-
-.top-bar-right a:after {
-  content: '';
+.top-bar a::after {
+  content: "";
   position: absolute;
   width: 0;
   height: 1px;
@@ -176,11 +154,10 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   transition: width 0.3s var(--transition-easing);
 }
 
-.top-bar-right a:hover:after {
+.top-bar a:hover::after {
   width: 100%;
 }
 
-/* Heart Animation - Moved from Footer to Header */
 @keyframes heartBeat {
   0% { transform: scale(1); }
   14% { transform: scale(1.1); }
@@ -189,7 +166,7 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   70% { transform: scale(1); }
 }
 
-.top-bar-right .heart-icon {
+.top-bar .heart-icon {
   display: inline-block;
   animation: heartBeat 4s infinite;
   transform-origin: center;
@@ -200,7 +177,10 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   height: 14px;
 }
 
-/* Intro Modal */
+.top-bar .creator-credit {
+  margin-left: auto;
+}
+
 .intro-text {
   position: fixed;
   top: 50%;
@@ -216,8 +196,7 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   max-height: 85vh;
   overflow-y: auto;
   width: 92%;
-  backdrop-filter: blur(20px);
-  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1), transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .intro-content {
@@ -240,16 +219,15 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
 }
 
 @keyframes modalEnter {
-  0%   { opacity: 0; transform: translate(-50%, -55%) scale(0.92); }
+  0% { opacity: 0; transform: translate(-50%, -55%) scale(0.92); }
   100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* Close Button */
 .close-intro {
   position: absolute;
   top: var(--space-md);
   right: var(--space-md);
-  background: var(--color-surface);
+  background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   width: 36px;
   height: 36px;
@@ -258,7 +236,6 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: var(--color-text-secondary);
   transition: all 0.3s var(--transition-easing);
   z-index: 10;
   box-shadow: 0 2px 5px var(--shadow-subtle);
@@ -276,8 +253,7 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   box-shadow: 0 0 0 3px rgba(139, 197, 193, 0.4), 0 2px 5px var(--shadow-subtle);
 }
 
-/* Intro Header */
-.intro-header h2 {
+.intro-content h2 {  
   font-size: var(--font-xxl);
   color: var(--color-primary-dark);
   margin-bottom: var(--space-xl);
@@ -286,11 +262,9 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   font-weight: var(--weight-bold);
 }
 
-/* Intro Description */
 .intro-description {
   font-size: var(--font-md);
   line-height: 1.6;
-  color: var(--color-text-secondary);
   margin-bottom: var(--space-xl);
   text-align: center;
   max-width: 85%;
@@ -298,7 +272,6 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   margin-right: auto;
 }
 
-/* How It Works (Intro) */
 .how-it-works-intro {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -331,11 +304,10 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
 }
 
 @keyframes fadeInSteps {
-  0%   { opacity: 0; transform: translateY(10px); }
+  0% { opacity: 0; transform: translateY(10px); }
   100% { opacity: 1; transform: translateY(0); }
 }
 
-/* Step Number */
 .step-number {
   display: flex;
   align-items: center;
@@ -351,15 +323,13 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   font-size: var(--font-md);
 }
 
-/* Step Content */
-.step-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 100%;
+.step-content { 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
 }
 
-/* Step Title and Description */
 .step-title {
   font-size: var(--font-md);
   font-weight: var(--weight-semibold);
@@ -369,38 +339,36 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
 
 .step-description {
   font-size: var(--font-sm);
-  color: var(--color-text-secondary);
   line-height: 1.4;
 }
 
-/* --- CTA Button --- */
-/* Keep original styling, add .button-base for shared properties */
 .intro-text .cta-button {
-    align-self: center;
-    margin-top: var(--space-xl);
-    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
-    color: white;
-    font-size: var(--font-md);
-    font-weight: var(--weight-semibold);
-    padding: 14px 28px;
-    border: none;
-    border-radius: 30px; /* Keep the original rounded shape */
-    cursor: pointer;
-    transition: all 0.3s var(--transition-easing);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-md);
-    box-shadow: 0 4px 10px rgba(93, 138, 139, 0.3);
-    min-width: 180px;
+  align-self: center;
+  margin-top: var(--space-xl);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  color: white;
+  font-size: var(--font-md);
+  font-weight: var(--weight-semibold);
+  padding: 14px 28px;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.3s var(--transition-easing);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  box-shadow: 0 4px 10px rgba(93, 138, 139, 0.3);
+  min-width: 180px;
 }
 
 .intro-text .cta-button:hover {
   transform: translateY(-3px);
   box-shadow: 0 6px 15px rgba(93, 138, 139, 0.4);
 }
+
 .intro-text .cta-button:active {
-    transform: translateY(-1px); /*  Slight press effect */
+  transform: translateY(-1px);
 }
 
 .intro-text .cta-icon {
@@ -415,13 +383,11 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   transform: translateX(4px);
 }
 
-/* Animation Delay for Steps */
 .how-it-works-intro .step-item:nth-child(1) { animation-delay: 0.1s; }
 .how-it-works-intro .step-item:nth-child(2) { animation-delay: 0.2s; }
 .how-it-works-intro .step-item:nth-child(3) { animation-delay: 0.3s; }
 .how-it-works-intro .step-item:nth-child(4) { animation-delay: 0.4s; }
 
-/* Main Layout */
 .main-container {
   display: flex;
   width: 100%;
@@ -429,12 +395,11 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   overflow: hidden;
 }
 
-/* Sidebar */
 .sidebar {
   position: fixed;
-  top: 80px;
+  top: 85px;
   left: var(--space-xl);
-  width: 330px;
+  width: 340px;
   background-color: var(--color-surface);
   border-radius: var(--radius-sm);
   border-top-right-radius: var(--radius-lg);
@@ -444,7 +409,7 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   transition: transform var(--transition-duration) var(--transition-easing);
   transform: translateX(-107%);
   height: auto;
-  max-height: calc(97vh - 80px);
+  max-height: calc(99vh);
 }
 
 .sidebar[aria-hidden="false"] {
@@ -462,7 +427,6 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   padding-top: 0;
 }
 
-/* Canvas Area */
 .canvas-wrapper {
   display: flex;
   flex-grow: 1;
@@ -476,7 +440,6 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   justify-content: center;
   align-items: center;
   overflow: hidden;
-  background-color: var(--color-canvas-background);
 }
 
 #canvas-container {
@@ -491,16 +454,13 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   display: block;
 }
 
-/* 6. UI Components */
-
-/* Buttons - Base Styles */
 .button-base {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: var(--space-sm) var(--space-lg);
   border: none;
-  border-radius: var(--radius-md); /* Default to --radius-md */
+  border-radius: var(--radius-md);
   cursor: pointer;
   font-size: var(--font-sm);
   font-weight: var(--weight-medium);
@@ -508,32 +468,27 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   transition: var(--transition-standard);
 }
 
-.button-base:hover  { box-shadow: 0 4px 8px var(--shadow-medium); }
-.button-base:active { box-shadow: 0 1px 2px var(--shadow-subtle); transform: translateY(1px); }
-.button-base:focus  { outline: 2px solid var(--color-primary); outline-offset: 2px; }
-
-/* Interaction Button */
-.button-interaction {
-  background-color: var(--color-surface);
-  color: var(--color-primary);
-  box-shadow: 0 3px 4px var(--shadow-subtle);
+.button-base:hover {
+  box-shadow: 0 4px 8px var(--shadow-medium);
+  background-color: var(--color-button-hover-bg);
+  color: var(--color-button-hover-text);
+}
+.button-base:active {
+  box-shadow: 0 1px 2px var(--shadow-subtle);
+  transform: translateY(1px);
+  background-color: var(--color-button-active-bg);
+  color: var(--color-button-active-text);
 }
 
-.button-interaction:hover {
-  background-color: var(--color-primary-light);
-  color: var(--color-surface);
+.button-base:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
-.button-interaction:active {
-  background-color: var(--color-primary-dark);
-}
-
-
-/* Settings and Download Buttons */
 #settings-button,
 #download-button {
   position: absolute;
-  top: 80px;
+  top: 85px;
   z-index: 950;
 }
 
@@ -546,7 +501,6 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   right: var(--space-xl);
 }
 
-/* UI Controls */
 .control-panel {
   display: flex;
   flex-direction: column;
@@ -567,21 +521,20 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   color: var(--color-primary-dark);
 }
 
-/* Form Elements */
-.form-element-base {
+.form-control {
   padding: var(--space-md);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-input-border);
   border-radius: var(--radius-md);
   font-size: var(--font-md);
-  background-color: var(--color-surface);
-  color: var(--color-text);
+  background-color: var(--color-input-bg);
+  color: var(--color-input-text);
   transition: border-color 0.2s var(--transition-easing), box-shadow 0.2s var(--transition-easing);
   box-shadow: 0 1px 3px var(--shadow-subtle);
   width: 100%;
 }
 
-.form-element-base:focus {
-  border-color: var(--color-primary);
+.form-control:focus {
+  border-color: var(--color-input-focus-border);
   outline: none;
   box-shadow: 0 0 0 3px rgba(139, 197, 193, 0.3);
 }
@@ -596,15 +549,12 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   font-size: var(--font-sm);
   font-weight: var(--weight-medium);
   margin-block-end: var(--space-sm);
-  color: var(--color-text-secondary);
+}
+.button-group{
+    display: flex;
+    gap: clamp(5px, 1vw, 10px);
 }
 
-.button-group {
-  display: flex;
-  gap: clamp(5px, 1vw, 10px);
-}
-
-/* Range Slider */
 .form-group input[type="range"] {
   -webkit-appearance: none;
   appearance: none;
@@ -642,217 +592,105 @@ h3 { font-size: var(--font-lg);     font-weight: var(--weight-medium); line-heig
   transform: scale(0.9);
 }
 
-.form-group input[type="range"]::-moz-range-track {
-  width: 100%;
-  height: 8px;
-  background: var(--color-border);
-  border-radius: var(--radius-sm);
-  outline: none;
+.fluent-button i { /* For icons within buttons */
+    margin-inline-end: var(--space-sm);
+    font-size: var(--font-md);
 }
 
-/* Fluent Button Icon */
-.fluent-button i {
-  margin-inline-end: var(--space-sm);
-  font-size: var(--font-md);
-}
-
-.fluent-button.primary {
-  background-color: var(--color-surface);
-  color: var(--color-text);
-}
-
-.fluent-button.primary:hover {
-  background-color: var(--color-primary-light);
-  color: var(--color-surface);
-}
-
-.fluent-button.primary:active {
-  background-color: var(--color-primary);
-  color: var(--color-surface);
-}
-
-/* 7. Accessibility */
-button:focus,
-input:focus,
-select:focus,
-textarea:focus {
+:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
 
-/* 8. Responsive Design */
-
-/* Small screens (e.g., phones) */
-@media (max-width: 767px) {
-  /* Top Bar Adjustments */
+@media (max-width: 1023px) {
   .top-bar {
-    padding: var(--space-xs);
     margin: var(--space-xs);
     height: 60px;
-    align-items: center;
-  }
-  
-  .top-bar-left {
-    gap: var(--space-xs);
-    align-items: center;
-    margin-bottom: var(--space-xs);
-    width: 100%;
-    height: fit-content;
-  }
-  
-  .top-bar-right {
-    visibility: hidden;
-    margin-top: var(--space-xs);
-    font-size: var(--font-xs);
-    width: 0%;
+    gap: var(--space-md);
     justify-content: left;
   }
-  
-  .logo-container {
-    width: 30px;
-    height: 30px;
-    margin-left: 0;
+
+  .top-bar .creator-credit {
+    display: none;
   }
-  
+
   .app-title {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
   }
-  
+
   .app-subtitle {
     font-size: var(--font-sm);
+    font-size: 1.0rem;
   }
-  
-  /* Sidebar Adjustments */
-  .sidebar {
-    width: 100%;
-    left: 0;
-    top: auto;
-    bottom: 0;
-    max-height: 60vh;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    transform: translateY(100%);
-    margin-top: 10px;
-  }
-  
+
+
   .sidebar[aria-hidden="false"] {
     transform: translateY(0);
   }
-  
+
   .sidebar[aria-hidden="false"] ~ .canvas-wrapper > #settings-button {
     transform: translateX(0);
     box-shadow: none;
   }
-  
+
   .sidebar-content {
     padding: var(--space-md);
   }
-  
+
+.sidebar {
+  top: 120px;
+  left: var(--space-xs);
+  bottom: var(--space-xs);
+}
+
   .control-panel {
     width: 100%;
     padding: var(--space-lg);
     margin-right: 0;
     margin-top: var(--space-sm);
   }
-  
-  /* Button Positioning */
+
   #download-button {
     right: var(--space-xs);
     top: 70px;
   }
-  
+
   #settings-button {
     left: var(--space-xs);
     top: 70px;
   }
-  
-  /* Increase button sizes for touch */
+
   .button-base {
     padding: var(--space-md) var(--space-lg);
     font-size: var(--font-md);
   }
-  
+
   .form-group input[type="range"] {
     height: 20px;
   }
-  
-  .form-group input[type="range"]::-webkit-slider-thumb {
-    width: 24px;
-    height: 24px;
-  }
-  
+
+  .form-group input[type="range"]::-webkit-slider-thumb,
   .form-group input[type="range"]::-moz-range-thumb {
     width: 24px;
     height: 24px;
   }
-  
-  /* Intro Modal Adjustments */
+
   .intro-text {
-    width: 98%;
+    width: 90%;
     max-height: 98vh;
   }
-  
+
   .intro-content {
     padding: var(--space-lg);
   }
-  
+
   .how-it-works-intro {
     grid-template-columns: 1fr 1fr;
     gap: var(--space-md);
   }
-  
+
   .intro-text .cta-button {
     padding: 12px 24px;
     min-width: 160px;
   }
-  
-  /* Canvas area adjustments */
-  
-
-/* Medium screens (e.g., tablets) */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .top-bar {
-
-    padding: var(--space-sm) var(--space-lg);
-  }
-  
-  .sidebar {
-    width: 280px;
-    left: var(--space-md);
-    max-height: calc(95vh - 80px);
-  }
-  
-  .sidebar[aria-hidden="false"] ~ .canvas-wrapper > #settings-button {
-    transform: translateX(290px);
-  }
-  
-  #settings-button,
-  #download-button {
-    top: 90px;
-  }
-  
-  /* Slightly larger buttons for touch */
-  .button-base {
-    padding: var(--space-md) var(--space-lg);
-    font-size: var(--font-sm);
-  }
-  
-  .intro-text {
-    max-width: 85%;
-  }
-  
-  .control-panel {
-    padding: var(--space-xl);
-  }
-}
-
-/* Large screens */
-@media (min-width: 1024px) {
-  .top-bar {
-    margin: var(--space-lg) var(--space-xl);
-  }
-  
-  .sidebar {
-    max-height: calc(95vh - 100px);
-  }
-}
 }
