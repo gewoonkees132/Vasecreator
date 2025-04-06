@@ -1,23 +1,27 @@
-# Flowerpot Configurator
+# Vase Creator
 
-Flowerpot Configurator is an interactive 3D web application built by Kees Leemeijer that allows users to design and customize flowerpots and vases for their 3D printer free of charge. With a user-friendly interface, users can adjust various parameters such as shape, dimensions, ect. and visualize their designs in real-time. The application is built using modern web technologies and is optimized for both desktop and mobile devices.
+include gif.
 
-## Features
+Live
+------
+[vasecreator.com](https://vasecreator.com)
 
-* **Interactive 3D Design:** Customize the shape of the flowerpot using control points and curve types (spline or polyline).
-* **Real-Time Visualization:** See changes to your design instantly in the 3D viewer.
-* **Adjustable Parameters:** Modify dimensions, wall thickness, base fillet radius, and drainage hole scale using sliders.
-* **Curve Customization:** Choose between spline and polyline curves, and adjust tension or fillet radius accordingly.
-* **Export Functionality:** Download your custom flowerpot design as an OBJ file for 3D printing or further editing.
-* **Dynamic Background:** A visually appealing gradient background that responds to mouse or touch movement.
-* **Touchscreen Support:** Fully functional on mobile devices with touch-optimized controls.
+Description
+-----------
+This project is an online tool developed using JavaScript and **Three.js** that allows users to design custom 3D printable vases. Users can interactively modify the vase's profile using control points, adjust dimensions, choose curve types, and set parameters like wall thickness and base shape. The final design can be previewed in real-time in a 3D environment and exported as an `.obj` file suitable for 3D printing.
 
-## Libraries used
+This application was created primarily as a learning exercise to practice and showcase skills in 3D web development, procedural geometry generation, user interface design with vanilla JavaScript, and working with the Three.js library. It is non-commercial.
 
-* **Three.js:** For 3D rendering and scene management.
-* **OrbitControls:** For camera controls in the 3D viewer.
-* **OBJExporter:** For exporting the 3D model as an OBJ file.
-* **Fluent UI Icons:** For modern and consistent iconography.
-* **Google Fonts (Inter):** For typography.
-* **CSS Custom Properties:** For a consistent and maintainable design system.
-* **JavaScript (ES6+):** For application logic, including classes and modules.
+Features
+--------
+*   **Interactive Vase Design:** Modify the vase profile using draggable control points.
+*   **Customizable Shape:** Choose between smooth (Spline) and sharp (Polyline) curves, with adjustable tension or fillet radius.
+*   **Adjustable Parameters:** Control overall vase width, depth, wall thickness, base corner rounding (fillet), and drainage hole size.
+*   **Real-time 3D Preview:** See your design update instantly in the interactive canvas powered by Three.js.
+*   **OBJ Export:** Download your unique creation as a 3D printable `.obj` file, scaled in millimeters.
+
+Usage and Purpose
+-----------------
+*   **Purpose:** To deepen understanding and proficiency in Three.js, 3D geometry manipulation, event handling, and building interactive web applications.
+*   **Non-commercial:** This project is purely for educational, portfolio, and demonstration purposes. It is free to use and not intended for commercial profit.
+*   **Assets:** The flowerpot logo used is custom-designed for this project. Core 3D functionality relies on Three.js
