@@ -1,6 +1,6 @@
 # Vase Creator
 
-include gif.
+![Design your vase online](https://github.com/gewoonkees132/Vasecreator/blob/main/vase-creator-preview.gif)
 
 Live
 ------
