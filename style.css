@@ -268,18 +268,19 @@ input[type="range"].form-control:focus-visible::-moz-range-thumb {
 .step-description { font-size: var(--font-sm); line-height: 1.4; color: var(--color-text-secondary); }
 
 .cta-button {
-  align-self: center; margin-top: var(--space-xl); background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  margin-top: var(--space-xl); background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
   color: white; font-size: var(--font-md); font-weight: var(--weight-semibold); padding: var(--space-md) var(--space-xl);
   border: none; border-radius: 30px;
   box-shadow: 0 4px 10px rgba(93, 138, 139, 0.3);
   min-width: 180px;
+  position: sticky;  bottom: var(--space-lg); left: calc(50% - 90px);
 }
 .cta-button:hover {
   transform: translateY(-3px); box-shadow: 0 6px 15px rgba(93, 138, 139, 0.4);
   background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
 }
 .cta-button:active { transform: translateY(-1px); }
-.cta-icon { width: 18px; height: 18px; stroke: white; stroke-width: 2; transition: transform 0.3s ease; }
+.cta-icon {  width: 18px; height: 18px; stroke: white; stroke-width: 2; transition: transform 0.3s ease; }
 .cta-button:hover .cta-icon { transform: translateX(4px); }
 
 
