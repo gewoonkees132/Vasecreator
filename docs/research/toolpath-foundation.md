@@ -1,7 +1,8 @@
 # Vasecreator v2: toolpath-first foundation research
 
 - **Date:** 2026-11-23
-- **Status:** Research input for a design brainstorm. Nothing in this document is decided.
+- **Status:** Research input for a design brainstorm. The decisions taken after the first review are listed in §11.1 and marked D0–D5 where they apply; everything else is undecided.
+- **Decisions so far (§11.1):** clay *and* FDM; walls and thickness chosen at the end, not during design; three.js, working on Android like the current app; physical printer verification deferred, with the focus on the pre-G-code design interface; web only.
 - **Scope:**
   - An audit of the current codebase.
   - The landscape of toolpath-first tools.
@@ -162,10 +163,10 @@ All line references are to the `main` snapshot at commit `da51f2f` (2025-04-08),
 | Tension | `config.curve.tension` | The spline tension, or per-knot smoothness. | Yes |
 | Fillet (polyline) | `script.js:1297-1375` | Corner rounding of the profile: a tangent arc with radius in mm. **The current algorithm draws a notch, so it has to be fixed (§2.3).** | Yes, after a fix |
 | Width / depth | `config.dimensions`, `script.js:2533` | A plan-shape affine scale (sx, sy) applied to each layer's XY points. The bead width stays constant, unlike today's mesh scaling. Because r(z, θ) loses its strict polar meaning after a non-uniform scale, θ becomes a curve parameter (§5.1). | Yes |
-| Wall thickness | `config.curve.wallThickness` | No longer a free geometric value. A single-bead wall is as thick as the bead (nozzle × extrusion factor). Thicker walls become "walls per layer: 1 or 2 (+ spacing)", or a zigzag infill between two perimeters. | Partly, as a printer or bead setting |
+| Wall thickness | `config.curve.wallThickness` | No longer a free geometric value. A single-bead wall is as thick as the bead (nozzle × extrusion factor). Thicker walls become "walls per layer: 1 or 2 (+ spacing)", or a zigzag infill between two perimeters. | Moves to the finish step (D2): clay 1–2 walls, FDM thickness methods |
 | Base fillet (plan corner rounding) | `script.js:1379-1414` | A plan-shape parameter: a rounded rectangle or superellipse, or an N-sided polygon with rounding, written as a radial function s(θ). | Yes, and generalises |
 | Drainage hole | `config.drainageHoleScale`, `script.js:1466-1556` | A floor-pattern parameter. The floor infill (spiral or concentric) runs from r_hole to the foot outline instead of from the centre. The chamfer has no toolpath equivalent. | Yes, except the chamfer |
-| OBJ export | `script.js:896-943` | Replaced by G-code as the primary output. Optional extras: the bead as a solid (STL/OBJ) for renders, the bare toolpath as polylines (OBJ lines), and the design as JSON. A watertight surface mesh could stay for FDM users who want to slice it themselves. | Replaced, with a possible secondary export |
+| OBJ export | `script.js:896-943` | Replaced by G-code as the primary output. Optional extras: the bead as a solid (STL/OBJ) for renders, the bare toolpath as polylines (OBJ lines), and the design as JSON. For FDM, a solid mesh with thickness can be built at the finish step for slicing elsewhere (D2). | Replaced, with a possible secondary export |
 | Dimension handles and labels | `script.js:1669-1866` | Bed-fit overlay, plus size, path, time and material stats. | Yes |
 | Animated background | `script.js:1869-2165` | Not design-relevant. A CSS gradient would free one WebGL context. | Drop or replace |
 
@@ -441,7 +442,7 @@ Prices, versions and status were checked on 2026-11-23. **Reddit was unreachable
 | Eazao · Zero | Cartesian (UNVERIFIED) | 150×150×240 mm | Modified Marlin | 500 ml, push rod + screw | Manual pre-extrusion before each print [C17][C18] |
 | Eazao · "Bisque", "Mega" | — | — | — | — | Not found as clay printers. The "Mega Tong" is a concrete printer (UNVERIFIED naming) |
 
-**Gaps.** The WASP firmware's identity and command support (`M0`/`M226`/`G2`), LUTUM's controller, and 3D Potter's official Cura profile all remain UNVERIFIED. The reliable fix is to collect real exported G-code from each vendor workflow (open question Q3).
+**Gaps.** The WASP firmware's identity and command support (`M0`/`M226`/`G2`), LUTUM's controller, and 3D Potter's official Cura profile all remain UNVERIFIED. The reliable fix is to collect real exported G-code from each vendor workflow. That work is deferred (D4).
 
 ### 3.6 Patterns worth adopting
 
@@ -513,12 +514,12 @@ The "Future" column is a proposal.
 | Aspect | Current (v1) | Future (v2 proposal) | Why change |
 |---|---|---|---|
 | **Source of truth** | A Three.js mesh rebuilt from `controlPoints` plus `config`, with live scene objects mixed into the state (§2.2) | A versioned design JSON, evaluated to **one canonical toolpath buffer** (Float64, CPU worker). Preview and G-code both read that buffer | The printer executes a path, not a mesh. One buffer means the preview can't disagree with the file |
-| **Geometry model** | r(y) profile (51 samples) × rounded-square plan, scaled by width/depth. Wall thickness is a horizontal offset. Solid floor with a drainage hole | P(z, θ) = plan-scaled base curve + radial displacement from an effect stack (§5.1). Single-bead wall; optional second wall. The floor is a toolpath pattern with an optional hole | Bead width is physical, so it can't be offset freely. Textures need a function of (z, θ). Removes the stretched walls that width/depth scaling causes today |
-| **Output formats** | OBJ only, no units, `flowerpot.obj` | **G-code** (primary, with a parameter header and layer comments). Also design `.json`, toolpath OBJ (polylines), bead STL, and an optional watertight mesh for FDM users who slice it themselves (Q8) | The toolpath-first goal. Potterware's export set is the reference [P2] |
-| **Rendering** | WebGLRenderer r175 with MeshStandardMaterial, shadows, a continuous loop, and a second WebGL context for the background | WebGLRenderer r187 (provisional), **vertex-pulled instanced bead** from data textures; lines mode; scrubber; render on demand; CSS background (§8) | 1 M segments as `TubeGeometry` would need about 480 MB (derived, §8.1), and gcode-preview moved off `TubeGeometry` for speed [E29]. Vertex pulling keeps memory at about 40 B/point [E20] |
+| **Geometry model** | r(y) profile (51 samples) × rounded-square plan, scaled by width/depth. Wall thickness is a horizontal offset. Solid floor with a drainage hole | P(z, θ) = plan-scaled base curve + radial displacement from an effect stack (§5.1). While designing, a single centreline wall; walls or thickness are added at the finish step (D2). The floor is a toolpath pattern with an optional hole | Bead width is physical, so it can't be offset freely. Textures need a function of (z, θ). Removes the stretched walls that width/depth scaling causes today |
+| **Output formats** | OBJ only, no units, `flowerpot.obj` | **G-code** (primary, with a parameter header and layer comments). Also design `.json`, toolpath OBJ (polylines), bead STL, and, for FDM, thickness applied at G-code export or a solid mesh (STL/3MF) built afterwards for slicing elsewhere (D2) | The toolpath-first goal. Potterware's export set is the reference [P2] |
+| **Rendering** | WebGLRenderer r175 with MeshStandardMaterial, shadows, a continuous loop, and a second WebGL context for the background | three.js WebGLRenderer r187, which must run on Android (D3); **vertex-pulled instanced bead** from data textures; lines mode; scrubber; render on demand; CSS background (§8) | 1 M segments as `TubeGeometry` would need about 480 MB (derived, §8.1), and gcode-preview moved off `TubeGeometry` for speed [E29]. Vertex pulling keeps memory at about 40 B/point [E20] |
 | **Patterns** | None | Effect stack: waves, image relief/mask/both, seeded noise. Cylindrical UV with aspect lock, prefiltered sampling and a printable-resolution readout (§6) | The core requirement. Potterware sets the baseline [P2] |
 | **Rules and curves** | None | Per-effect and global layer-range rules (layers/mm/%), fades and bands, with order-independent precedence. Curves over height for intensity, rotation, scale and offset, with a monotone cubic default (§6.4–6.6) | Deterministic and predictable. Fixes Potterware's ambiguous "ends at" wording [P2] |
-| **Printer configuration** | None (units are 50 mm) | A separate printer-profile document: kinematics, bed shape and origin, flavour, E mode/units/calibration, templates with placeholders, reservoir, limits (§5.3) | G-code is meaningless without a target machine. Profiles must survive reload and be exportable [P2][P34] |
+| **Printer configuration** | None (units are 50 mm) | A separate printer-profile document: kinematics, bed shape and origin, flavour, E mode/units/calibration, templates with placeholders, reservoir, limits (§5.3). Covers clay and FDM (D1). Ships as unverified drafts (D4) | G-code is meaningless without a target machine. Profiles must survive reload and be exportable [P2][P34] |
 | **Validation** | Clamps on drag only | A check catalogue (bed fit, overhang, slopes, Nyquist, curvature, self-intersection, segment rate, layer time, material) with heatmaps and severities (§7) | Clay limits are tight and material-dependent [C1]. Users need to see why, not just a slider stop |
 | **Persistence** | None; no undo | Snapshot undo/redo (labelled, coalesced drags). IndexedDB gallery with `persist()`. JSON import/export. Share links in the URL fragment (compressed, no server) | Potterware has 100-step undo and a design gallery [P2]. Sharing has to work with no server cost, because the app stays free |
 | **Performance budgets** | None; full rebuild on every input | Main thread ≤ 4 ms per input. Preview ≤ 50 ms p95 at 150 k points. 60 fps orbit at 150 k segments (§10) | Live feedback during drags; mobile reach |
@@ -627,8 +628,14 @@ The design is plain JSON. The printer profile is a separate document (§5.3). Im
     "layerHeight": 1.5, "firstLayerHeightRatio": 0.75,
     "pointsPerLayer": "auto", "maxChordError": 0.05,
     "layerChange": "spiral",                // "spiral" | "seamRamp"
-    "seam": { "angleDeg": 0, "follow": "fixed", "rampLengthMm": 15, "anchor": "none" },  // anchor: none|valley|peak
-    "walls": 1, "wallGap": null
+    "seam": { "angleDeg": 0, "follow": "fixed", "rampLengthMm": 15, "anchor": "none" }   // anchor: none|valley|peak
+  },
+
+  "finish": {                               // D2: chosen at the end; never read by the live design loop
+    "target": "clay",                       // "clay" | "fdm"
+    "clay": { "walls": 1, "wallGap": 0, "link": "none" },              // walls 1 | 2; link: none | zigzag (Q3)
+    "fdm":  { "method": "vase", "thickness": 1.2, "perimeters": 3,     // vase | perimeters | twoWallZigzag | mesh (Q3)
+              "meshFormat": "3mf" }
   },
 
   "base": { "layers": 2, "pattern": "spiral", "spacingRatio": 0.9, "outline": true,
@@ -651,6 +658,7 @@ The design is plain JSON. The printer profile is a separate document (§5.3). Im
 - **The printer is referenced, not embedded.** A preset therefore never changes the machine, as in Potterware [P2]. The hash lets the G-code header name the exact profile used.
 - **Images are referenced by hash** and never go into undo snapshots. Export can optionally embed them, which avoids Potterware's "upload it again" step [P2].
 - **Effects have stable `id`s.** Masks name their targets, so reordering the stack never silently re-targets a mask.
+- **Walls and thickness live in `finish` (D2).** Only the finish step reads it, so the live design loop never depends on it and stays fast. Changing the target from clay to FDM never touches the design itself.
 - **`protect` sits outside every effect.** It holds the global plain zones (first and last N layers), applied last and multiplicatively (§6.4).
 - **There is no v1 migration.** v1 never persisted designs (§2.2), so there is nothing to convert. An optional importer could read v1's default profile shape.
 
@@ -689,7 +697,7 @@ Based on the printer research in §3.5. The fields follow Cura, PrusaSlicer, Orc
 **Notes**
 
 - **E is tracked internally as volume (mm³).** At emission it is converted to the output unit: filament-equivalent mm using `feedDiameter`, or mm³. `eScale` is the user's calibration multiplier. This replaces FullControl's diameter hack with an explicit setting [P17].
-- **Pause commands are firmware-specific** [C25][C27][C28]. The template must be validated per flavour (see Q3).
+- **Pause commands are firmware-specific** [C25][C27][C28]. The template must be validated per flavour. That validation is deferred (D4).
 - **Placeholders use `{name}`,** compatible with Cura and Prusa syntax. Unknown names are rejected at export.
 - **Heater codes (`M104`/`M109`/`M140`/`M190`) are never emitted for clay** [C33].
 - **Built-in profiles are labelled `verified` only** once G-code exported from them has run on a real machine.
@@ -702,17 +710,20 @@ Based on the printer research in §3.5. The fields follow Cura, PrusaSlicer, Orc
 | 2 | Layer grid | H, h, layer mode → z_i, L, continuous index | Worker | Rules resolve to intervals here (§6.4) |
 | 3 | Pre-compute | Curves → lookup tables. Images → float arrays plus a prefilter per sampling grid (§6.3) | Worker | Cached by hash and parameters |
 | 4 | Evaluate the wall | P(z, θ) → XYZ points. N per layer is fixed or "auto" (arc length, chord error, Nyquist; capped by the segment rate) | Worker | **The canonical toolpath** (Float64) |
-| 5 | Topology | Spiral helix, or planar layers + seam ramp that follows the *displaced* wall. Seam angle and anchor. Optional second wall | Worker | |
+| 5 | Topology | Spiral helix, or planar layers + seam ramp that follows the *displaced* wall. Seam angle and anchor | Worker | |
+| 5b | Finish: walls and thickness (D2) | Centreline → final walls. Clay: 1 or 2 walls (inner offset, optional link). FDM: vase width, N perimeters, two walls + zigzag, or hand off to stage 12 | Worker, on demand | Never runs during live editing |
 | 6 | Base | Floor pattern inside the foot curve (spiral, rings, lines, crosshatch, sunburst). Hole, outline, inset. **Ends at the seam angle; alternates direction per layer** | Worker | As Potterware does [P2] |
 | 7 | Process moves | Prime, skirt, travel (`G1 E0`), lift, wipe, coast, refill pauses at volume thresholds | Worker | Uses profile templates |
 | 8 | Extrusion and feed | Volume per segment = 3D length × stadium area × flow. Feed rate, limited by minimum layer time and segment rate | Worker | Bead area (w − h)·h + π·h²/4 [P2][C21] |
 | 9 | Validate | Toolpath → issues list plus per-point scalar fields | Worker | Feeds the heatmaps (§7) |
 | 10 | Render | Float32 positions plus attributes → GPU data textures → bead instances | Main / GPU | Display only |
 | 11 | Emit | Toolpath → G-code text: header with design JSON, profile hash, stats; layer and type comments | Worker, streamed into `Blob` parts | Fixed decimals; `-0.000` normalised [E31] |
+| 12 | Mesh build (FDM option, D2) | Finished surface → watertight solid of the chosen thickness → STL/3MF | Worker, on demand | Inward offset must not self-intersect on deep textures (Q4) |
 
 **What this table encodes**
 
-- Stages 1–9 and 11 form one pure, DOM-free module.
+- Stages 1–9, 11 and 12 form one pure, DOM-free module. Stage 12, the optional FDM mesh build, turns the finished surface into a watertight solid of the chosen thickness (STL/3MF). Its inward offset must not self-intersect on deep textures (Q4).
+- **Live loop vs finish step (D2).** While the user edits, only stages 1–6, the design-level checks of stage 9, and stage 10 run. Stages 5b, 7, 8, the full stage 9, 11 and 12 run at the finish step or on export.
 - The preview and the G-code come from **the same buffer**. That is the main departure from the brief's "evaluate on the GPU" idea (§8).
 
 ---
@@ -864,7 +875,7 @@ Rules gate an effect by height. They resolve once per evaluation into **half-ope
 
 - Runs shorter than one layer are dropped.
 - When *H* or *h* changes, `layers` rules keep their count and `mm`/`%` rules move. The rule chip shows which unit is in use.
-- Rules apply to **wall layers only.** Floor layers carry no wall effects; whether bitmaps should also pattern the floor is open question Q6.
+- Rules apply to **wall layers only.** Floor layers carry no wall effects; whether bitmaps should also pattern the floor is open question Q5.
 - The seam ramp follows the actual (possibly faded) wall.
 
 ### 6.5 Modes, combination and evaluation order
@@ -978,6 +989,12 @@ for each layer i (or helix parameter):
 | V14 | Slenderness | H / base ⌀, and absolute H against a clay-specific collapse height | info | A 4 mm-nozzle cylinder collapsed above ~18–20 cm [C35] (one study) |
 | V15 | Amplitude sanity | \|D\| > w | info (weaving deliberately exceeds it) | Slicers advise fuzzy depth near the wall width [P42][D13]; WeaveSlicer exceeds it on purpose [P33] |
 | V16 | G-code sanity (always on) | No NaN or Inf; feeds > 0; Z non-decreasing (planar); absolute E strictly increasing; no `-0.000`; no heater codes on clay | error (blocks export) | [E31][C33] |
+
+**Live checks vs finish checks (D2)**
+
+- V1–V8 and V11 run live on the centreline, using the nominal bead width.
+- V9, V10, V12, V13 and V16 depend on the final walls, speeds and process moves, so they run at the finish step. V1 runs again there with the final footprint.
+- Because physical verification is deferred (D4), every threshold ships as a sensible default the user can change, not a calibrated value.
 
 **Presenting the results**
 
@@ -1241,7 +1258,7 @@ Rendering is on demand: on input, damping or scrubbing.
 - Its WebGL fallback (`@typegpu/gl`) is experimental: a render subset, no compute [E35].
 - Raw WebGPU has no fallback at all.
 
-### 8.8 Recommendation (provisional)
+### 8.8 Recommendation (provisional; three.js confirmed by D3)
 
 **Go with option A, built so that B is a mechanical port later.**
 
@@ -1253,7 +1270,8 @@ Rendering is on demand: on input, damping or scrubbing.
    - Upgrade to r187 now, with a vertex-pulled bead in GLSL3.
    - Re-evaluate WebGPURenderer once it loses its "experimental" label, or if live GPU evaluation becomes necessary above about 1 M points.
 3. **No GPU compute in v2.0.** CPU evaluation is fast enough (§10.2). A GPU path can come later as an optional preview accelerator.
-4. **Desktop is a later wrapper, if ever (Q4).** Option C is worth revisiting only if a native desktop build or much heavier computation is needed. Possible triggers are mesh import or slicing.
+4. **Web only (D5).** There is no desktop build. Option C would only come back if much heavier computation became necessary, for example mesh import or slicing.
+5. **Android is a first-class target (D3).** Test on a mid-range Android phone in Chrome from the first prototype. On Android, WebGPU needs Android 12+ and a supported GPU, and it is off by default in Firefox [E1], so the WebGL 2 path is the one that has to be fast.
 
 **Why provisional**
 
@@ -1286,7 +1304,7 @@ Rendering is on demand: on input, damping or scrubbing.
 | Polyline fillet (`script.js:1323-1375`) | A true tangent-arc fillet in mm | Fixes the notch (§2.3) |
 | `UnifiedEventHandler` (touch *or* mouse) | Pointer Events with `setPointerCapture` | Works on hybrid devices |
 | Debounced full rebuild on each input | Live worker evaluation with coalesced requests (latest wins) and progressive detail | Live feedback while dragging |
-| OBJ as the only export | G-code first. Then design JSON, toolpath OBJ (lines), bead STL, and optionally a watertight mesh for FDM slicing (Q8) | The toolpath-first goal |
+| OBJ as the only export | G-code first. Then design JSON, toolpath OBJ (lines), bead STL, and for FDM, a solid mesh with thickness built at the finish step (D2) | The toolpath-first goal |
 | `checkWebGLSupport()` (WebGL 1) | A WebGL 2 check, with WebGPU detection if option B (§8) is chosen | Three.js r163+ requires WebGL 2 [E13] |
 | Continuous render loop plus a second WebGL context for the background | Render on demand (on input or damping). CSS gradient background | Battery, GPU memory, and mobile browsers' limits on the number of WebGL contexts |
 
@@ -1305,14 +1323,14 @@ Rendering is on demand: on input, damping or scrubbing.
 
 ### 9.4 Suggested phasing
 
-The phases are a draft. Each phase ships to vasecreator.com.
+The phases are a draft. Each phase ships to vasecreator.com. After the review, the weight sits on the design interface (D4). Profiles ship as unverified drafts, and calibration work is out of scope for now.
 
-- **Phase 0 – Core.** A toolpath core and printer-profile schema, with tests. The only visible change is an experimental G-code download. It produces G-code from *today's* design: profile, plan rounding, width and depth. This proves the pipeline end to end on a real printer.
-- **Phase 1 – Toolpath preview.** The bead renderer, layer, seam and base settings, process moves, stats, validation v1 (bed fit, overhang, material), and the G-code download button. The current OBJ export stays alongside.
+- **Phase 0 – Core.** A toolpath core and printer-profile schema, with tests. The only visible change is an experimental G-code download. It produces G-code from *today's* design: profile, plan rounding, width and depth. This proves the pipeline end to end in software, through golden files. Printing the result is optional (D4).
+- **Phase 1 – Toolpath preview.** The bead renderer, layer, seam and base settings, process moves, stats, validation v1 (bed fit, overhang, material), and finish step v1: clay 1 or 2 walls, FDM vase mode, G-code download (D2). The current OBJ export stays alongside.
 - **Phase 2 – Waves.** Procedural waves with rules and fades, the intensity and rotation curves, and the curve editor v1.
 - **Phase 3 – Bitmaps.** Image relief and mask, the library and upload, aspect lock, and the resolution readout.
-- **Phase 4 – Persistence and sharing.** Gallery, URL share, presets.
-- **Phase 5 – Advanced.** Non-planar vertical effects, double walls, multi-copy layout, mesh import (open question).
+- **Phase 4 – Persistence, sharing and finish methods.** Gallery, URL share, presets. The remaining FDM finish methods: perimeters, two walls + zigzag, and mesh build (STL/3MF).
+- **Phase 5 – Advanced.** Non-planar vertical effects, multi-copy layout, mesh import (open question).
 
 ---
 
@@ -1357,13 +1375,14 @@ Typical sizes (derived values):
 | Metric | Budget | Reasoning |
 |---|---|---|
 | Main-thread work per input event | ≤ 4 ms | Leaves room inside a 16.7 ms frame for rendering and input. All evaluation runs in a worker |
-| Preview update after a parameter change, typical (≤ 150 k pts) | ≤ 50 ms to the updated bead on screen (p95, mid-range laptop) | The ~3 ms evaluation × 5 for a slower device, plus buffer upload and one frame. Feels immediate |
+| Preview update after a parameter change, typical (≤ 150 k pts) | ≤ 50 ms to the updated bead on screen (p95, mid-range Android phone in Chrome, D3) | The ~3 ms evaluation × 5 for a slower device, plus buffer upload and one frame. Feels immediate |
 | Preview update, large (≤ 1 M pts) | Coarse preview (every 4th layer, or N/4) in ≤ 50 ms. Full detail in ≤ 300 ms | Progressive refinement. Latest request wins, and stale results are dropped |
 | Orbit frame rate | 60 fps at 150 k segments and ≥ 30 fps at 1 M segments, on integrated GPUs | Vertex pulling keeps early-Z (§8.1). Segments smaller than a pixel can fall back to lines. Needs a prototype on low-end mobile (UNVERIFIED) |
 | GPU memory for the preview | ≤ 96 MB at 1 M points | Vertex pulling at ~40 B/point [E20], ×2 while double-buffering an update. `TubeGeometry` would need ~480 MB (§8.1) |
 | Validation pass | ≤ 30 ms at 150 k pts (worker) | Runs after each evaluation; mostly linear scans plus a spatial hash for self-intersection |
 | G-code export | ≤ 1 s for 150 k lines and ≤ 3 s for 1 M lines, with a progress indicator | Measured 41 ms / 336 ms on desktop, ×5 margin. Stream with `Blob` parts, so there is never one giant string |
-| G-code file size | Clay: typically ≤ 10 MB, warn above 50 MB | About 33 B/line (measured). Upload limits of printer web UIs and SD workflows are UNVERIFIED (Q3) |
+| G-code file size | Clay: typically ≤ 10 MB, warn above 50 MB | About 33 B/line (measured). Upload limits of printer web UIs and SD workflows are UNVERIFIED (deferred, D4) |
+| Finish step (walls + process moves + G-code) | ≤ 3 s at 150 k points on a mid-range Android phone, with progress shown. Mesh build ≤ 5 s | Runs only on demand (D2). Formatting measured at 41 ms per 100 k lines on desktop, ×5 for the device and ×2 for two walls, plus margin |
 | Image import | ≤ 300 ms to decode, convert and prefilter a 4096² image (worker, one-off) | Cached by hash |
 | Cold load | ≤ 2.5 s to interactive on 4G for the app shell plus three.js, excluding the image library | Library thumbnails load lazily, and full images load on use |
 | Undo snapshot | ≤ 20 KB per design snapshot (images excluded), 200 steps | Snapshot undo is cheap at this size, so no command pattern is needed (§8.4) |
@@ -1371,116 +1390,113 @@ Typical sizes (derived values):
 
 ---
 
-## 11. Open questions for the brainstorm
+## 11. Decisions and open questions for the brainstorm
 
-### 11.1 Assumptions made in this session
+### 11.1 Decisions taken after review (2026-11-23)
 
-These were not asked during the session. Each one maps to an open question below.
+The project owner reviewed the first version of this document and decided the following. The earlier question numbers are kept in brackets for traceability.
 
-| # | Assumption | Becomes |
+| # | Decision | What it changes in this document |
 |---|---|---|
-| A1 | The primary target is **clay/paste (LDM)**; FDM vase mode is secondary | Q1 |
-| A2 | **Fixed constraint from the owner, not an assumption:** the app stays free, with no accounts, paywalls or gated exports. I take this to imply static hosting with no paid backend | Q10 |
-| A3 | The Potterware manual reviewed is the 30-page 5.0 beta edition, the same one that is published [P2]. The `docs/reference/` path in the brief didn't exist | — |
+| D0 | **Vasecreator stays free for the public.** No licensing, paid tiers, accounts or gated exports | Licensing is about dependencies and assets only (§8.6). Static hosting with no paid backend |
+| D1 | **Both clay and FDM are targets** (was Q1) | Printer profiles cover both process classes (§5.3). Validation defaults depend on the process: clay overhang ~27°, FDM ~45° [C1][C42] |
+| D2 | **Walls and thickness are chosen at the end, not during design** (was Q5, Q8). Clay gets 1 or 2 walls. FDM gets several thickness methods, applied at G-code export *or* by building a solid mesh afterwards | The live design loop only evaluates the single centreline wall, so it stays fast. A separate *finish step* adds walls or thickness (§5.2 `finish`, §5.4). A mesh export exists only as an FDM finish method |
+| D3 | **Rendering uses three.js and must work on Android, like the current app** (was Q11, Q15) | WebGL 2 stays the baseline renderer. Android WebGPU is limited to Android 12+ on some GPUs, and is off in Firefox for Android [E1]. Option A is preferred (§8.8). Full touch editing on Android phones is assumed, because v1 supports it |
+| D4 | **Physical verification is deferred** (was Q3). The focus is the pre-G-code design step, with a really good interface | Built-in printer profiles ship as `draft` or `community`. Calibration prints and collecting vendor G-code are out of scope for now. *Interpretation to confirm:* the software printability checks (§7) remain, as design feedback inside the interface |
+| D5 | **Web only** (was Q4) | No desktop wrapper or native build. Option C loses its desktop argument (§8.8). Offline install as a PWA stays possible but isn't required |
+
+### 11.2 Assumptions made in this session
+
+These were made without asking. The "Status" column shows where each one stands after the review.
+
+| # | Assumption | Status |
+|---|---|---|
+| A1 | Clay is the primary target and FDM vase mode secondary | **Superseded by D1** (both are targets) |
+| A2 | The app is hosted statically with no paid backend | Follows from D0. Any server component is still Q8 |
+| A3 | The Potterware manual reviewed is the published 30-page 5.0 beta edition [P2] | — |
 | A4 | v1 never persisted designs, so no user data needs migrating (§2.2) | — |
-| A5 | Mid-range laptops and phones run 3–6× slower than the benchmark desktop | Q2 (budgets) |
-| A6 | Forms stay single-valued in z around a vertical axis: no undercut profiles, no tilted or branching forms | Q12 |
-| A7 | Users print on their own machines and are willing to calibrate once per clay (E scale, overhang limit) | Q3 |
-| A8 | Single-wall vessels are the main use case | Q5 |
-| A9 | English-only UI for v2 | — |
+| A5 | Mid-range devices run 3–6× slower than the benchmark desktop | Budgets now target a mid-range Android phone (D3, §10) |
+| A6 | Forms stay single-valued in z around a vertical axis | Q9 |
+| A7 | Users calibrate once per clay or filament (E scale, overhang limit) | Calibration UX is deferred with D4 |
+| A8 | Single-wall vessels are the main use case | **Superseded by D2** (walls and thickness are set at the end) |
+| A9 | The v2 UI is English-only | — |
 
-### 11.2 Questions, ranked by impact
+### 11.3 Remaining questions, ranked by impact
 
-**Q1. Target printers: clay only, FDM vase mode, or both? If clay, which families first?**
-- **Why it matters:** this sets the validation defaults (clay overhang ~27° vs FDM 45° [C1][C42]), the speeds, the E conventions, the start/end templates and the seam strategy. It also decides how much of the FDM toolchain (retraction, temperatures, fans) has to exist at all.
-- **Options:** (a) clay only; (b) clay first, with FDM vase mode as a later profile class; (c) both from day one.
-- **Lean:** (b). The core is identical, and FDM adds mostly profiles and templates.
+**Q1. What is the interface concept for the design step?** (new; the top question after D4)
+- **Why it matters:** D4 makes the pre-G-code design experience the product. Everything else serves it.
+- **To decide:**
+  - The overall layout: tabbed panels like Potterware's six tabs [P2], a single canvas with contextual panels, or a step flow.
+  - Where profile editing happens: in the 3D view, as v1 does it, or in a 2D side profile.
+  - How the effect stack, image mapping, rules and curves are shown, and how the bead/lines preview, the scrubber and validation feedback are presented.
+  - The desktop layout versus the Android phone layout (D3).
+- **Inputs:** §6 (pattern UX), §7 (feedback presentation), §3.6 (patterns worth adopting), §3.7 (mistakes to avoid).
 
-**Q2. MVP scope: what is the smallest release that is genuinely useful?**
-- **Proposal:**
-  - Phases 0 and 1, plus the waves part of Phase 2 (§9.4).
-  - That means today's form → G-code with seam/spiral, floor, prime/wipe, validation v1, the bead preview, and waves with rules, fades and an intensity curve.
-  - Bitmaps (Phase 3) would be the first follow-up.
-- **The alternative:** treat bitmaps as part of the MVP, because they are the stated core requirement. That adds the image pipeline, library curation and the resolution UI.
-- **Also to settle:** the performance budgets in §10.
+**Q2. MVP scope: which design features are in the first release?**
+- **Proposal:** today's form plus plan shape, seam and spiral, floor, the bead preview with scrubber, waves with rules, fades and an intensity curve, design-level checks, and a basic finish step with export.
+- **The alternative:** include image relief and mask (Phase 3) in the MVP, because they are the stated core requirement.
+- **Also to settle:** the budgets in §10, now on a mid-range Android phone.
 
-**Q3. Which physical printers, and which real G-code exports, can we use for verification?**
-- **Why it matters:** several facts are UNVERIFIED and only real files or printers can settle them:
-  - WASP firmware commands (`M0`/`M226`/`G2`).
-  - LUTUM's controller.
-  - E units per vendor.
-  - Pause behaviour.
-  - Upload size limits.
-- **Without them:** no profile can be labelled "verified", and the defaults in §7 stay uncalibrated.
-- **Also to settle:**
-  - Who prints the calibration coupons: the overhang ladder and the amplitude ladder.
-  - Whether community contributions of profiles are welcome.
+**Q3. Which thickness methods does the finish step offer?** (new, from D2)
+- **FDM candidates:**
+  - (a) Vase mode, a single wall with a chosen extrusion width.
+  - (b) N concentric perimeters.
+  - (c) Two walls with zigzag between them.
+  - (d) A solid mesh of the given thickness, built afterwards for slicing in Cura, Prusa or Orca.
+- **Clay:** 1 or 2 walls.
+  - With 2 walls: are they linked (zigzag or ribs, à la WeaveSlicer [P33]), what gap separates them, and does the inner wall carry the texture or stay smooth?
+- **Impact:** topology (pipeline stage 5b), material estimates, and the checks that only make sense once thickness exists.
 
-**Q4. Web only, or desktop too?**
-- **Options:** (a) web only, possibly installable as a PWA that works offline; (b) a desktop wrapper around the same web app; (c) native desktop, which favours architecture option C.
-- **Lean:** (a) now, with (b) if users ask for it. Every option stays free.
-- **Also to settle:** whether sending G-code directly to printers (Duet web control, OctoPrint) is in scope. It would need network access from the browser.
+**Q4. How does the finish step behave in the interface?** (new, from D2)
+- **Preview:** does it re-render with the final walls or thickness, or only show a summary and export?
+- **Mesh build (method d):**
+  - Formats (STL or 3MF).
+  - Offsetting a deep texture inward without self-intersection.
+  - Whether it runs in a worker, with progress shown.
+- **Guiding rule:** keep the design loop fast. Nothing in the finish step may slow down editing.
 
-**Q5. Wall model: single bead only, or multi-wall?**
-- **Why it matters:** v1's "wall thickness" has no direct toolpath equivalent. The choices are:
-  - Single bead: the wall is as thick as the bead.
-  - Two perimeters.
-  - Perimeters with zigzag infill.
-  - A woven wall à la WeaveSlicer [P33].
-- **Impact:** this changes the topology stage, the validation and the material estimates.
-- **Lean:** single bead for the MVP, with the data model ready for `walls: 2`.
-
-**Q6. Should bitmaps also drive the floor/base pattern?**
+**Q5. Should bitmaps also drive the floor/base pattern?** (was Q6)
 - **Options:**
-  - (a) No; floors stay functional patterns (spiral, rings, lines).
-  - (b) Allow images to modulate the floor line spacing or relief on the *top* floor layer only. The bottom stays flat for adhesion.
-  - (c) A separate "base stamp" effect type.
-- **Impact:** adds a planar UV mapping (polar or planar) and floor-specific checks for adhesion, overlap and drying evenness [C36].
-- **Lean:** (a) for the MVP, and design the effect interface so (c) is possible later.
+  - (a) No. Floors stay functional patterns (spiral, rings, lines).
+  - (b) An image modulates the *top* floor layer only.
+  - (c) A separate "base stamp" effect.
+- **Lean:** (a) for the MVP, with the effect interface designed so (c) is possible later.
 
-**Q7. Is non-planar design (vertical effects, sculpting) in scope for v2?**
-- **Potterware 5.0's** headline feature is non-planar sculpting [P2].
-- **Requirements:** collision geometry in profiles and the V11 checks. Nozzle-clearance data is mostly missing (UNVERIFIED).
-- **Lean:** vertical waves only, behind a "non-planar" toggle, after Phase 3.
+**Q6. Is non-planar design (vertical effects, sculpting) in scope for v2?** (was Q7)
+- **Lean:** vertical waves only, behind a toggle, after Phase 3.
 
-**Q8. Keep a mesh export (watertight OBJ/STL) for people who slice in their own slicer?**
-- **For:** continuity for current FDM users.
-- **Against:** it contradicts "the toolpath is the source of truth", and textured meshes sliced for clay fail [P6].
-- **Lean:** keep the bead STL for renders, and keep a plain-surface mesh export for FDM vase mode, labelled as such.
+**Q7. What is the default layer change for each process?** (was Q9)
+- **Lean:**
+  - Clay: a continuous spiral by default, because failures started at the seam [C1]. A seam ramp is the option.
+  - FDM: spiral for vase mode. Seam placement becomes relevant with the perimeter methods.
 
-**Q9. Default layer change for clay: continuous spiral or seam ramp?**
-- **For spiral:** no seam scar, and failures started at the seam in the overhang study [C1].
-- **For a seam ramp:** some textures need discrete layers.
-- **Lean:** spiral by default for walls, with ramp as an option and an optional seam anchor at a texture valley or peak.
+**Q8. Is any server component acceptable, given D0?** (was Q10)
+- **Examples:** short share links, a community gallery, profile sharing.
+- **The static-only option:** share links in the URL fragment (§8.4).
 
-**Q10. Is *any* server component acceptable, given the free constraint?**
-- **Examples:** stored short share links, a community gallery, profile sharing.
-- **The static-only option:** URL-fragment share links (§8.4) with no hosting cost.
-- **A gallery** would need storage and moderation.
-- **Also to settle:** whether vasecreator.com moves host if COOP/COEP headers ever become necessary (§8.1).
+**Q9. Mesh import ("print the outline of my model")?** (was Q12)
+- It conflicts with assumption A6 and needs slicing.
 
-**Q11. Accept architecture option A (WebGLRenderer r187, vertex-pulled bead, CPU core) as the provisional base?**
-- **Alternative:** go straight to WebGPURenderer and TSL (option B), accepting the "experimental" label [E15].
-- **Proposed decision point:** a one-week prototype measuring the bead renderer at 150 k and 1 M segments on a low-end phone.
+**Q10. Pattern library: how many patterns, made by whom, under which licences?** (was Q13)
+- **Proposal:** 12–20 maps, made in-house or CC0.
 
-**Q12. Mesh import ("print the outline of my model"), as Potterware offers [P2]?**
-- **For:** lets users bring existing forms.
-- **Against:** it needs slicing, which is out of scope for a pure r(z, θ) model, and it conflicts with assumption A6.
+**Q11. Which draft printer profiles ship first?** (new, from D1 and D4)
+- **Candidates:**
+  - Generic clay profiles (delta with centre origin; Cartesian with corner origin).
+  - PotterBot, WASP, LUTUM and Eazao drafts.
+  - Generic FDM profiles (Marlin, Klipper, a Bambu-style template).
+- **Labelling:** all are labelled unverified (D4).
 
-**Q13. Pattern library: how many patterns, made by whom, and under which licences?**
-- **Proposal:** 12–20 tileable maps, either made in-house (procedurally generated and exported) or CC0.
-- **To decide:** whether CC BY or CC BY-SA assets are acceptable (§8.6).
+**Q12. When should Vasecreator adopt three.js WebGPURenderer?** (rest of Q11)
+- The base is three.js on WebGL 2 (D3).
+- **Proposed trigger:**
+  - WebGPURenderer loses its "experimental" label [E15], or a prototype shows a clear gain on Android.
+  - And the WebGL 2 fallback stays the guaranteed path.
 
-**Q14. Shrinkage compensation?**
-- **Context:** drying plus firing shrinkage of 10–25 %, uneven between XY and Z [C2].
-- **Options:** a per-clay scale factor, plus "as printed" and "as fired" dimensions in the stats.
+**Q13. Shrinkage compensation for clay?** (was Q14)
+- **Options:** a per-clay scale factor, plus "as printed" and "as fired" dimensions.
 
-**Q15. Mobile: full editing on phones, or view and export only?**
-- **Why it matters:** the curve editor and profile editing need touch-first design, and GPU budgets differ.
-- **Current state:** v1 is responsive (`style.css:537+`).
-
-**Q16. Multi-copy layout (grid of copies, as in Potterware [P2])?**
-- Low effort in the core, but it needs travel, lift and flow handling between copies.
+**Q14. Multi-copy layout?** (was Q16)
 
 ---
 
