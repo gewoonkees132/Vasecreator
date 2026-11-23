@@ -1402,8 +1402,14 @@ The project owner reviewed the first version of this document and decided the fo
 | D1 | **Both clay and FDM are targets** (was Q1) | Printer profiles cover both process classes (§5.3). Validation defaults depend on the process: clay overhang ~27°, FDM ~45° [C1][C42] |
 | D2 | **Walls and thickness are chosen at the end, not during design** (was Q5, Q8). Clay gets 1 or 2 walls. FDM gets several thickness methods, applied at G-code export *or* by building a solid mesh afterwards | The live design loop only evaluates the single centreline wall, so it stays fast. A separate *finish step* adds walls or thickness (§5.2 `finish`, §5.4). A mesh export exists only as an FDM finish method |
 | D3 | **Rendering uses three.js and must work on Android, like the current app** (was Q11, Q15) | WebGL 2 stays the baseline renderer. Android WebGPU is limited to Android 12+ on some GPUs, and is off in Firefox for Android [E1]. Option A is preferred (§8.8). Full touch editing on Android phones is assumed, because v1 supports it |
-| D4 | **Physical verification is deferred** (was Q3). The focus is the pre-G-code design step, with a really good interface | Built-in printer profiles ship as `draft` or `community`. Calibration prints and collecting vendor G-code are out of scope for now. *Interpretation to confirm:* the software printability checks (§7) remain, as design feedback inside the interface |
+| D4 | **Physical verification is deferred** (was Q3). The focus is the pre-G-code design step, with a really good interface | Built-in printer profiles ship as `draft` or `community`. Calibration prints and collecting vendor G-code are out of scope for now. *Confirmed in the design brainstorm:* the software printability checks (§7) remain, as warnings inside the interface |
 | D5 | **Web only** (was Q4) | No desktop wrapper or native build. Option C loses its desktop argument (§8.8). Offline install as a PWA stays possible but isn't required |
+
+**Later decisions.** The design brainstorm on 2026-11-23 added D6–D27. They are recorded in [`docs/design/v2-design-brainstorm.md`](../design/v2-design-brainstorm.md), §3. The ones that change this document most:
+- **D6:** clay only for now; FDM output is deferred, which narrows D1 and the FDM half of D2.
+- **D9:** one generic gantry printer.
+- **D10:** planar layers with a seam ramp; no spiral, and non-planar is out for now.
+- **D17:** patterns A and B blend, which replaces the effect stack, rules and curves of §6.4–§6.6 in the interface.
 
 ### 11.2 Assumptions made in this session
 
@@ -1411,19 +1417,22 @@ These were made without asking. The "Status" column shows where each one stands 
 
 | # | Assumption | Status |
 |---|---|---|
-| A1 | Clay is the primary target and FDM vase mode secondary | **Superseded by D1** (both are targets) |
-| A2 | The app is hosted statically with no paid backend | Follows from D0. Any server component is still Q8 |
+| A1 | Clay is the primary target and FDM vase mode secondary | **Superseded by D1** (both are targets), then **narrowed by D6** (clay only for now) |
+| A2 | The app is hosted statically with no paid backend | Follows from D0. Q8 is resolved: no server component |
 | A3 | The Potterware manual reviewed is the published 30-page 5.0 beta edition [P2] | — |
 | A4 | v1 never persisted designs, so no user data needs migrating (§2.2) | — |
 | A5 | Mid-range devices run 3–6× slower than the benchmark desktop | Budgets now target a mid-range Android phone (D3, §10) |
-| A6 | Forms stay single-valued in z around a vertical axis | Q9 |
+| A6 | Forms stay single-valued in z around a vertical axis | Holds. Mesh import is deferred (Q9), and geometry morph keeps forms single-valued |
 | A7 | Users calibrate once per clay or filament (E scale, overhang limit) | Calibration UX is deferred with D4 |
 | A8 | Single-wall vessels are the main use case | **Superseded by D2** (walls and thickness are set at the end) |
 | A9 | The v2 UI is English-only | — |
 
 ### 11.3 Remaining questions, ranked by impact
 
+**Status (2026-11-23):** the design brainstorm answered all fourteen questions. Each one now carries a **Resolved** line, and the full reasoning is in [`docs/design/v2-design-brainstorm.md`](../design/v2-design-brainstorm.md), §16. Only Q10 still needs a light owner decision (which patterns and presets ship), and it doesn't block planning.
+
 **Q1. What is the interface concept for the design step?** (new; the top question after D4)
+- **Resolved:** the design is done inside the 3D view, with a four-section sidebar, a Designs screen of tiles, a history column, an Advanced button, a bead-only white preview, and a fixed 40/60 split on phones (D12–D22; design doc §8–§11).
 - **Why it matters:** D4 makes the pre-G-code design experience the product. Everything else serves it.
 - **To decide:**
   - The overall layout: tabbed panels like Potterware's six tabs [P2], a single canvas with contextual panels, or a step flow.
@@ -1433,11 +1442,13 @@ These were made without asking. The "Status" column shows where each one stands 
 - **Inputs:** §6 (pattern UX), §7 (feedback presentation), §3.6 (patterns worth adopting), §3.7 (mistakes to avoid).
 
 **Q2. MVP scope: which design features are in the first release?**
+- **Resolved:** phase 1 in design doc §15.2. The pattern editor, image upload and geometry morph come in phase 2 (D23, D24). The §10 budgets stand, measured on a mid-range Android phone. The 1 M-point FDM case drops out with D6.
 - **Proposal:** today's form plus plan shape, seam and spiral, floor, the bead preview with scrubber, waves with rules, fades and an intensity curve, design-level checks, and a basic finish step with export.
 - **The alternative:** include image relief and mask (Phase 3) in the MVP, because they are the stated core requirement.
 - **Also to settle:** the budgets in §10, now on a mid-range Android phone.
 
 **Q3. Which thickness methods does the finish step offer?** (new, from D2)
+- **Resolved:** clay gets 1 or 2 walls, spaced 0.9 × bead width. The inner wall is smooth by default, set behind the deepest groove, and a toggle makes it follow the pattern (D27). Linked walls come later. FDM methods are deferred with D6.
 - **FDM candidates:**
   - (a) Vase mode, a single wall with a chosen extrusion width.
   - (b) N concentric perimeters.
@@ -1448,6 +1459,7 @@ These were made without asking. The "Status" column shows where each one stands 
 - **Impact:** topology (pipeline stage 5b), material estimates, and the checks that only make sense once thickness exists.
 
 **Q4. How does the finish step behave in the interface?** (new, from D2)
+- **Resolved:** *Prepare print* shows the final walls in the same bead view and computes only on demand, so it never slows editing (design doc §10). The mesh build is deferred with FDM (D6).
 - **Preview:** does it re-render with the final walls or thickness, or only show a summary and export?
 - **Mesh build (method d):**
   - Formats (STL or 3MF).
@@ -1456,6 +1468,7 @@ These were made without asking. The "Status" column shows where each one stands 
 - **Guiding rule:** keep the design loop fast. Nothing in the finish step may slow down editing.
 
 **Q5. Should bitmaps also drive the floor/base pattern?** (was Q6)
+- **Resolved:** option (a), no. Floors stay functional infills, and a "base stamp" can become an issue later.
 - **Options:**
   - (a) No. Floors stay functional patterns (spiral, rings, lines).
   - (b) An image modulates the *top* floor layer only.
@@ -1463,24 +1476,30 @@ These were made without asking. The "Status" column shows where each one stands 
 - **Lean:** (a) for the MVP, with the effect interface designed so (c) is possible later.
 
 **Q6. Is non-planar design (vertical effects, sculpting) in scope for v2?** (was Q7)
+- **Resolved:** out for now (D10). Slight non-planarity is listed for later.
 - **Lean:** vertical waves only, behind a toggle, after Phase 3.
 
 **Q7. What is the default layer change for each process?** (was Q9)
+- **Resolved:** planar layers with a seam ramp, and no spiral mode (D10). This departs from the lean below.
 - **Lean:**
   - Clay: a continuous spiral by default, because failures started at the seam [C1]. A seam ramp is the option.
   - FDM: spiral for vase mode. Seam placement becomes relevant with the perimeter methods.
 
 **Q8. Is any server component acceptable, given D0?** (was Q10)
+- **Resolved:** none. Everything is static and local, and share links come later through the URL fragment.
 - **Examples:** short share links, a community gallery, profile sharing.
 - **The static-only option:** share links in the URL fragment (§8.4).
 
 **Q9. Mesh import ("print the outline of my model")?** (was Q12)
+- **Resolved:** out; listed for later.
 - It conflicts with assumption A6 and needs slicing.
 
 **Q10. Pattern library: how many patterns, made by whom, under which licences?** (was Q13)
+- **Resolved, with one light owner pick:** about 12 in-house generator recipes, not image files, so there are no third-party licences (D16). The owner picks the final 12 and the three preset designs. The working list is in design doc §9.2.
 - **Proposal:** 12–20 maps, made in-house or CC0.
 
 **Q11. Which draft printer profiles ship first?** (new, from D1 and D4)
+- **Resolved:** one generic gantry clay profile, labelled as a draft (D9). Named printer profiles come later.
 - **Candidates:**
   - Generic clay profiles (delta with centre origin; Cartesian with corner origin).
   - PotterBot, WASP, LUTUM and Eazao drafts.
@@ -1488,15 +1507,18 @@ These were made without asking. The "Status" column shows where each one stands 
 - **Labelling:** all are labelled unverified (D4).
 
 **Q12. When should Vasecreator adopt three.js WebGPURenderer?** (rest of Q11)
+- **Resolved:** keep the proposed trigger below. WebGL 2 stays the guaranteed path.
 - The base is three.js on WebGL 2 (D3).
 - **Proposed trigger:**
   - WebGPURenderer loses its "experimental" label [E15], or a prototype shows a clear gain on Android.
   - And the WebGL 2 fallback stays the guaranteed path.
 
 **Q13. Shrinkage compensation for clay?** (was Q14)
+- **Resolved:** later; listed for after launch.
 - **Options:** a per-clay scale factor, plus "as printed" and "as fired" dimensions.
 
 **Q14. Multi-copy layout?** (was Q16)
+- **Resolved:** later; listed for after launch.
 
 ---
 
