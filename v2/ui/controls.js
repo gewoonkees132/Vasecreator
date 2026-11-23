@@ -240,6 +240,9 @@ export function numberField(o) {
     label.addEventListener('pointermove', onLabelMove);
     label.addEventListener('pointerup', onLabelUp);
     label.addEventListener('pointercancel', onLabelUp);
+    // Capture also goes when the field moves to the other layout mid-scrub;
+    // an unfinished scrub would leave set() ignoring the store for good.
+    label.addEventListener('lostpointercapture', onLabelUp);
     label.addEventListener('click', onLabelClick);
   }
 

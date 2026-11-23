@@ -142,3 +142,20 @@ test('print checks: fits the bed, refills, wall gaps and the hole', () => {
   skirted.skirt.offsetMm = 120;
   assert.equal(computePrint(cylinder(), { library, printer: skirted }).checks[0].severity, 'error');
 });
+
+test('the bed check counts the end lift, and a prime point over the pot is an error', () => {
+  const tall = cylinder({ height: 396 });
+  const printer = defaultPrinter();
+  const tooTall = computePrint(tall, { library, printer });
+  assert.equal(tooTall.checks.find((c) => c.id === 'bed').severity, 'error');
+  assert.match(tooTall.checks.find((c) => c.id === 'bed').message, /Too tall/);
+  assert.equal(tooTall.canExport, false);
+  assert.equal(computePrint(cylinder({ height: 380 }), { library, printer }).canExport, true);
+
+  const over = defaultPrinter();
+  over.prime.parkY = -20;
+  const result = computePrint(cylinder(), { library, printer: over });
+  assert.equal(result.checks.find((c) => c.id === 'park')?.severity, 'error');
+  assert.equal(result.canExport, false);
+  assert.equal(computePrint(cylinder(), { library, printer }).checks.find((c) => c.id === 'park'), undefined);
+});

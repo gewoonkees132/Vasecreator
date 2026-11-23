@@ -36,7 +36,7 @@ const PRINTER_GROUPS = [
     { label: 'Lift after prime', unit: 'mm', path: 'prime.liftMm', lim: L.liftMm, decimals: 1 },
     { label: 'Skirt offset', unit: 'mm', path: 'skirt.offsetMm', lim: L.offsetMm, decimals: 1 },
     { label: 'Skirt loops', path: 'skirt.loops', lim: L.loops, decimals: 0, info: '0 = no skirt' },
-    { label: 'End lift', unit: 'mm', path: 'end.liftMm', lim: L.liftMm, decimals: 1 },
+    { label: 'End lift', unit: 'mm', path: 'end.liftMm', lim: L.endLiftMm ?? L.liftMm, decimals: 1 },
     { label: 'End wipe', unit: 'mm', path: 'end.wipeMm', lim: L.wipeMm, decimals: 1 },
   ] },
   { title: 'Speeds', fields: [
@@ -226,9 +226,11 @@ export function mountPrintPanel(el, ctx) {
 
   const visible = () => store.state.view.mode === 'print';
   const blocked = () => !printResult || printResult.canExport === false || (printResult.checks || []).some((c) => c.severity === 'error');
+  // A check is waiting to start or running: the shown checks may be for an older design.
+  const busy = () => running || timer !== 0;
 
   const renderChecks = () => {
-    if (running) {
+    if (busy()) {
       checkStatus.replaceChildren(h('span', { class: 'spinner', 'aria-hidden': 'true' }), 'Checking the print…');
     } else if (!printResult) {
       checkStatus.textContent = '';
@@ -236,7 +238,7 @@ export function mountPrintPanel(el, ctx) {
       const n = (printResult.checks || []).filter((c) => c.severity === 'error').length;
       checkStatus.textContent = n ? `${n === 1 ? 'One problem stops' : `${n} problems stop`} the export.` : '';
     }
-    if (!running && printResult) {
+    if (!busy() && printResult) {
       const checks = printResult.checks || [];
       checkList.replaceChildren(...checks.map((c) => {
         const sev = ICONS[c.severity] ? c.severity : 'info';
@@ -247,14 +249,14 @@ export function mountPrintPanel(el, ctx) {
         ]);
       }));
     }
-    checkList.classList.toggle('is-stale', running);
+    checkList.classList.toggle('is-stale', busy());
   };
 
   const renderExport = () => {
-    gcodeBtn.disabled = running || exporting || blocked();
+    gcodeBtn.disabled = busy() || exporting || blocked();
     const size = printResult?.size ?? store.state.result?.size;
     sizeLine.textContent = size ? `Size ${fmt(size.heightMm)} × ${fmt(size.widthMm)} × ${fmt(size.depthMm)} mm` : '';
-    if (!exporting && !running && printResult && blocked()) exportNote.textContent = 'Fix the problems above to download G-code.';
+    if (!exporting && !busy() && printResult && blocked()) exportNote.textContent = 'Fix the problems above to download G-code.';
     else if (!exporting && exportNote.dataset.kind !== 'done') exportNote.textContent = '';
   };
 
@@ -287,8 +289,11 @@ export function mountPrintPanel(el, ctx) {
   };
   const scheduleCheck = () => {
     clearTimeout(timer);
+    timer = 0;
     if (!visible()) return;
     timer = setTimeout(runCheck, CHECK_DELAY);
+    renderChecks();
+    renderExport();
   };
 
   gcodeBtn.addEventListener('click', async () => {
@@ -352,7 +357,10 @@ export function mountPrintPanel(el, ctx) {
     }
     if (what.has('design') || what.has('printer') || what.has('result')) update(state);
     if (what.has('design') || what.has('printer')) {
-      // Old checks no longer describe this design.
+      // Old checks no longer describe this design, and neither does a check
+      // still running for it: drop its result when it lands.
+      runToken += 1;
+      running = false;
       if (visible()) scheduleCheck();
       else printResult = null;
     }
@@ -363,9 +371,11 @@ export function mountPrintPanel(el, ctx) {
       if (nowVisible && !wasVisible && printResult?.positions && !running) ctx.renderer?.setToolpath?.(printResult);
       wasVisible = nowVisible;
       if (nowVisible && !printResult && !running && !timer) scheduleCheck();
-      if (!nowVisible) {
+      if (!nowVisible && timer) {
+        // The check that was waiting would have replaced these results.
         clearTimeout(timer);
         timer = 0;
+        printResult = null;
       }
     }
   });

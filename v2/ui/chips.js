@@ -82,11 +82,17 @@ export function mountChips(root, ctx) {
       el('span', { class: 'label-phone', text: 'Tap a warning to show where it is on the pot.' }),
     ]),
   ]);
-  const wrap = el('div', { class: 'chip-wrap' }, [chip, card]);
-  const size = el('span', { class: 'chip chip-size', role: 'status', 'aria-label': 'Size: height × width × depth' });
+  // The chip's own label changes silently; a polite live region says when
+  // the count changes (only then, not on every preview).
+  const announce = el('span', { class: 'visually-hidden', role: 'status', 'aria-live': 'polite' });
+  const wrap = el('div', { class: 'chip-wrap' }, [chip, card, announce]);
+  // Not a live region: it changes on every preview during a drag, which would
+  // flood a screen reader. The title names the three numbers.
+  const size = el('span', { class: 'chip chip-size', title: 'Size: height × width × depth' });
   root.replaceChildren(wrap, size);
 
   let lastKey = '';
+  let lastCount = null;
 
   function openCard() {
     if (listed(store.state.result).length === 0) return;
@@ -171,6 +177,11 @@ export function mountChips(root, ctx) {
       const n = warnings.length;
       const errors = warnings.some((w) => w.severity === 'error');
       label.textContent = n === 0 ? 'No warnings' : countLabel(warnings);
+      if (state.result && label.textContent !== lastCount) {
+        // Not on the first preview: nothing has changed yet.
+        if (lastCount != null) announce.textContent = label.textContent;
+        lastCount = label.textContent;
+      }
       icon.hidden = n === 0;
       chip.classList.remove('is-none', 'is-error', 'is-warn');
       chip.classList.add(n === 0 ? 'is-none' : errors ? 'is-error' : 'is-warn');

@@ -55,21 +55,37 @@ export function profileHash(printer) {
   return fnv1a(canonicalJson(printer));
 }
 
-const HEATER = /(^|[\s;])M(104|109|140|190)(?!\d)/im;
+// Leading zeros too: Marlin reads M0104 as M104.
+const HEATER = /(^|[\s;])M0*(104|109|140|190)(?!\d)/im;
 const RESET_E = /^\s*G92\s+E0(\.0*)?\s*(;.*)?$/i;
+const SET_POSITION = /(^|\s)G0*92(?![\d.])/i;
 const PLACEHOLDERS = new Set([
   'e_mode_cmd', 'pause_cmd', 'prime', 'park_x', 'park_y', 'park_z', 'travel_f', 'z_f', 'bed_width', 'bed_depth',
   'max_height', 'layer_height', 'bead_width', 'layer_z', 'refill_index', 'refill_count', 'resume_x', 'resume_y', 'resume_z',
 ]);
 
 /**
- * Throws GcodeError if a template holds a heater code or an unknown placeholder.
+ * Throws GcodeError if a template holds a heater code, a G92 other than
+ * G92 E0, an unknown placeholder, or {prime} sharing a line.
  * @param {object} printer normalised
  */
 export function validateTemplates(printer) {
   for (const [name, text] of Object.entries(printer.templates)) {
-    if (!text.split('\n').every((line) => !HEATER.test(line.split(';')[0]))) {
-      throw new GcodeError(`The ${name} G-code has a heater command; clay printers must not use M104, M109, M140 or M190`);
+    for (const line of text.split('\n')) {
+      const code = line.split(';')[0];
+      if (HEATER.test(code)) {
+        throw new GcodeError(`The ${name} G-code has a heater command; clay printers must not use M104, M109, M140 or M190`);
+      }
+      // G92 with X, Y or Z (or bare, which zeroes every axis) moves the
+      // coordinates under the print, and G92 E<n> puts absolute E out of step:
+      // either can send the nozzle into the pot or flood it with clay.
+      if (SET_POSITION.test(code) && !RESET_E.test(code)) {
+        throw new GcodeError(`The ${name} G-code sets a position with G92; only G92 E0 is allowed`);
+      }
+      // {prime} is a whole move; inside another line it would add clay to that move.
+      if (line.includes('{prime}') && line.trim() !== '{prime}') {
+        throw new GcodeError(`{prime} must be on a line of its own in the ${name} G-code`);
+      }
     }
     for (const match of text.matchAll(/\{([^{}]*)\}/g)) {
       if (!PLACEHOLDERS.has(match[1])) throw new GcodeError(`Unknown placeholder {${match[1]}} in the ${name} G-code`);
@@ -135,8 +151,11 @@ export function planRefills(tp, design, printer, skirt) {
 }
 
 // Fixed-point formatting through an integer, so it never prints "-0.000".
+// Past 2^53 that integer is no longer exact (and from 1e21 String() writes an
+// exponent), so such a number is refused rather than written.
 function fixed(value, scale, digits) {
   let k = Math.round(value * scale);
+  if (!(Math.abs(k) <= Number.MAX_SAFE_INTEGER)) throw new GcodeError(`A number is out of range for G-code: ${value}`);
   if (k === 0) return digits ? `0.${'0'.repeat(digits)}` : '0';
   const negative = k < 0;
   if (negative) k = -k;
@@ -222,8 +241,9 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
     if (xs !== lastX || Number.isNaN(cx)) line += ` X${xs}`;
     if (ys !== lastY || Number.isNaN(cy)) line += ` Y${ys}`;
     if (zs !== lastZ) line += ` Z${zs}`;
+    // No move, with clay or without, may go below what is already printed.
+    if (z < printZ - 1e-9) throw new GcodeError(`The print goes down to ${zs} mm after reaching ${f3(printZ)} mm`);
     if (kind !== KIND.none) {
-      if (z < printZ - 1e-9) throw new GcodeError(`The print goes down to ${zs} mm after reaching ${f3(printZ)} mm`);
       printZ = Math.max(printZ, z);
       eTotal += length * area * ePerMm3;
       line += ` ${eWord()}`;
@@ -263,18 +283,46 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
     eWritten = 0;
   };
 
-  function expand(name, context) {
+  // Expands a template into lines and returns the positioning (G90/G91) and
+  // E mode (M82/M83) it leaves behind, '' where it set none. On Marlin, G90
+  // and G91 set the E mode as well (a G90 after M83 makes E absolute again),
+  // so an E mode only counts when it comes after the last G90 or G91.
+  function expand(name, context, unknown = false) {
     const text = printer.templates[name];
-    if (!text) return;
+    const modes = { positioning: '', eMode: '', touched: false };
+    if (!text) return modes;
     for (const raw of text.split('\n')) {
       const line = raw.replace(/\{([a-z_]+)\}/g, (_, key) => {
-        if (key === 'prime' && context.prime) return primeBlock();
+        if (key === 'prime' && context.prime) {
+          // The prime's E word is in the profile's E mode; set it first if
+          // the template (or, at the start, the machine) may have another.
+          if ((modes.touched || unknown) && modes.eMode !== common.e_mode_cmd) {
+            Object.assign(modes, { eMode: common.e_mode_cmd, touched: true });
+            return `${common.e_mode_cmd}\n${primeBlock()}`;
+          }
+          return primeBlock();
+        }
         if (!(key in context)) throw new GcodeError(`The placeholder {${key}} can't be used in the ${name} G-code`);
         return context[key];
       });
       lines.push(line);
       if (RESET_E.test(line)) resetE();
+      for (const word of line.split(';')[0].toUpperCase().split(/\s+/)) {
+        if (word === 'G90' || word === 'G91') Object.assign(modes, { positioning: word, eMode: '', touched: true });
+        else if (word === 'M82' || word === 'M83') Object.assign(modes, { eMode: word, touched: true });
+      }
     }
+    return modes;
+  }
+
+  // After a template: absolute positioning (a G91 left on would read every
+  // later coordinate as a step) and the profile's E mode, put back whenever
+  // the template may have changed them. `unknown` is for the start, where
+  // nothing is known about the machine before.
+  function restoreModes(modes, unknown) {
+    const absolute = modes.positioning === 'G91' || (unknown && modes.positioning !== 'G90');
+    if (absolute) lines.push('G90');
+    if (absolute || ((modes.touched || unknown) && modes.eMode !== common.e_mode_cmd)) lines.push(common.e_mode_cmd);
   }
 
   const common = {
@@ -308,8 +356,7 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
 
   // Start, then prime: a stationary volume at the park point, then a lift.
   const startHasPrime = printer.templates.start.includes('{prime}');
-  expand('start', { ...common, prime: startHasPrime });
-  if (!printer.templates.start.includes('{e_mode_cmd}')) lines.push(common.e_mode_cmd);
+  restoreModes(expand('start', { ...common, prime: startHasPrime }, true), true);
   // E counts from zero from here on, whatever the start template did.
   if (!printer.templates.start.split('\n').some((line) => RESET_E.test(line))) {
     lines.push('G92 E0');
@@ -324,23 +371,27 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
   cx = prime.parkX;
   cy = prime.parkY;
   cz = liftZ;
-  lastX = common.park_x;
-  lastY = common.park_y;
+  // A start template with its own {prime} may have primed anywhere, so the
+  // first move writes X and Y in full.
+  lastX = startHasPrime ? '' : common.park_x;
+  lastY = startHasPrime ? '' : common.park_y;
   lastZ = f3(liftZ);
   lastF = common.z_f;
 
-  // Travel over to the first bead at the prime height, then down.
+  // Travel over to the first bead at the prime height (never lower than that
+  // bead, so a low park point doesn't drag the nozzle over the bed), then down.
   const goTo = (x, y, z) => {
-    move(x, y, cz, KIND.none, speeds.travelMmS);
+    move(x, y, Math.max(cz, z), KIND.none, speeds.travelMmS);
     move(x, y, z, KIND.none, speeds.zMmS);
   };
 
   if (skirt.length) {
     lines.push(';TYPE:SKIRT');
     type = 'SKIRT';
-    for (let k = 0; k < skirt.length; k++) {
+    // Outermost loop first, so the travel in to the part crosses no skirt bead.
+    for (let k = skirt.length - 1; k >= 0; k--) {
       const loop = skirt[k];
-      if (k === 0) goTo(loop[0], loop[1], loop[2]);
+      if (k === skirt.length - 1) goTo(loop[0], loop[1], loop[2]);
       else move(loop[0], loop[1], loop[2], KIND.base, speeds.baseMmS);
       for (let j = 3; j < loop.length; j += 3) move(loop[j], loop[j + 1], loop[j + 2], KIND.base, speeds.baseMmS);
     }
@@ -371,7 +422,7 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
     const last = layerStarts[k + 1];
     if (refillAt.has(k)) {
       const index = refillAt.get(k);
-      expand('refill', {
+      const context = {
         ...common,
         prime: true,
         refill_index: String(index + 1),
@@ -381,7 +432,18 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
         resume_y: f3(cy + oy),
         resume_z: f3(cz),
         layer_z: f3(layerZ[k]),
-      });
+      };
+      restoreModes(expand('refill', context), false);
+      // A refill template that doesn't come back down to {resume_z} would
+      // leave the next bead to start from wherever it parked: go back over
+      // the top, then down onto the seam.
+      if (!printer.templates.refill.includes('{resume_z}')) {
+        lines.push(
+          `G1 Z${context.park_z} F${common.z_f}`,
+          `G1 X${context.resume_x} Y${context.resume_y} F${common.travel_f}`,
+          `G1 Z${context.resume_z} F${common.z_f}`,
+        );
+      }
       // The template moved the head; write every word of the next move again.
       lastX = lastY = lastZ = lastF = '';
     }

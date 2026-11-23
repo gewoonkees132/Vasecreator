@@ -135,14 +135,21 @@ export function createStore({ design, history = null, printer = null, label = 'S
     dirty.clear();
     removed.clear();
     metaDirty = false;
-    return db.saveHistory({ put, remove, order: steps.map((s) => s.id), pointer });
+    return db.saveHistory({ put, remove, order: steps.map((s) => s.id), pointer }).then((ok) => {
+      if (ok !== false) return;
+      // Not written (quota, a closed connection): keep it for the next write.
+      for (const s of put) dirty.add(s.id);
+      for (const id of remove) removed.add(id);
+      metaDirty = true;
+    });
   }
 
   // Write on page hide too, so a quick close doesn't lose the last step.
+  // metaDirty also covers a write that failed earlier and waits for a retry.
   if (db && typeof addEventListener === 'function') {
-    addEventListener('pagehide', () => { if (persistTimer) { clearTimeout(persistTimer); flush(); } });
+    addEventListener('pagehide', () => { if (persistTimer || metaDirty) { clearTimeout(persistTimer); flush(); } });
     addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden' && persistTimer) { clearTimeout(persistTimer); flush(); }
+      if (document.visibilityState === 'hidden' && (persistTimer || metaDirty)) { clearTimeout(persistTimer); flush(); }
     });
   }
 

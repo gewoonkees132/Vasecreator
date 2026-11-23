@@ -277,3 +277,17 @@ test('pattern features drive the points per layer', () => {
   const i = 15;
   assert.ok(tp.layerStarts[i + 1] - tp.layerStarts[i] >= 8 * 60);
 });
+
+test('a huge pot at fine settings stays inside the point budget and says so', () => {
+  const d = cylinder({ height: 1000, radius: 500, baseLayers: 20 });
+  d.layers.beadWidthMm = 0.5;
+  d.layers.layerHeightMm = 0.2;
+  d.base.spacingRatio = 0.5;
+  for (const walls of [1, 2]) {
+    const { tp } = build(d, walls);
+    assert.ok(tp.pointCount <= 4_400_000, `${tp.pointCount} points`);
+    assert.equal(tp.simplified, true);
+  }
+  // A usual pot is untouched by the budget.
+  assert.equal(build(presets[0], 2).tp.simplified, false);
+});

@@ -445,6 +445,14 @@ export class BeadRenderer {
     size = Math.max(16, Math.round(size));
     const own = result === this._result ? null : buildGeometry(result);
     if (result !== this._result && !own) throw new Error('BeadRenderer.thumbnail: empty toolpath');
+    try {
+      return await this._thumbnailWith(result, own, size);
+    } finally {
+      own?.dispose();
+    }
+  }
+
+  async _thumbnailWith(result, own, size) {
     const bounds = outerBounds(result);
 
     const r = this._renderer;
@@ -498,7 +506,6 @@ export class BeadRenderer {
     const pixels = new Uint8Array(big * big * 4);
     if (r.readRenderTargetPixelsAsync) await r.readRenderTargetPixelsAsync(this._thumbOut, 0, 0, big, big, pixels);
     else r.readRenderTargetPixels(this._thumbOut, 0, 0, big, big, pixels);
-    own?.dispose();
     return pixelsToBlob(pixels, size, THUMB_SUPERSAMPLE);
   }
 

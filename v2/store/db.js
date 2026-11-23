@@ -16,11 +16,11 @@ const HISTORY_META = 'meta';
  * @typedef {object} Db
  * @property {boolean} persistent   false when everything lives in memory only
  * @property {(store: string, key: string) => Promise<any>} get
- * @property {(store: string, key: string, value: any) => Promise<void>} put
+ * @property {(store: string, key: string, value: any) => Promise<boolean>} put   false when the write failed
  * @property {(store: string, key: string) => Promise<void>} delete
  * @property {(store: string) => Promise<any[]>} all
  * @property {() => Promise<{ steps: object[], pointer: number } | null>} loadHistory
- * @property {(change: { put: object[], remove: string[], order: string[], pointer: number }) => Promise<void>} saveHistory
+ * @property {(change: { put: object[], remove: string[], order: string[], pointer: number }) => Promise<boolean>} saveHistory
  */
 
 function promised(request) {
@@ -53,9 +53,18 @@ function openIndexedDb() {
       // Out-of-line keys: every record is written with an explicit key.
       for (const name of STORES) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name);
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('IndexedDB blocked'));
+    let settled = false;
+    request.onsuccess = () => {
+      const db = request.result;
+      // Gave up on it already (blocked): don't hold a connection nobody uses.
+      if (settled) { db.close(); return; }
+      settled = true;
+      // A newer version in another tab must not wait for this one to close.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
+    request.onerror = () => { settled = true; reject(request.error); };
+    request.onblocked = () => { settled = true; reject(new Error('IndexedDB blocked')); };
   });
 }
 
@@ -135,7 +144,8 @@ export async function openDb() {
   return {
     get persistent() { return backend.persistent; },
     get: safe(backend.get, undefined),
-    put: safe(backend.put, undefined),
+    // true once written, false when the write failed (quota, a closed connection).
+    put: safe(async (...args) => { await backend.put(...args); return true; }, false),
     delete: safe(backend.delete, undefined),
     all: safe(backend.all, []),
 
@@ -146,7 +156,9 @@ export async function openDb() {
       const byId = new Map(records.filter((r) => r && r.id).map((r) => [r.id, r]));
       const steps = meta.order.map((id) => byId.get(id)).filter(Boolean);
       if (steps.length === 0) return null;
-      const pointer = Math.min(Math.max(0, meta.pointer | 0), steps.length - 1);
+      // A missing record must not move the pointer onto a neighbouring step.
+      const at = steps.indexOf(byId.get(meta.order[meta.pointer | 0]));
+      const pointer = at >= 0 ? at : steps.length - 1;
       return { steps, pointer };
     }, null),
 
@@ -154,6 +166,7 @@ export async function openDb() {
       const puts = put.map((step) => [step.id, step]);
       puts.push([HISTORY_META, { order, pointer }]);
       await backend.batch('history', puts, remove);
-    }, undefined),
+      return true;
+    }, false),
   };
 }

@@ -6,6 +6,9 @@ import { looksLikeDesign, normaliseDesign } from '../core/design.js';
 
 const LS_NOTE = 'vc2.storageNoteDismissed';
 const FILE_SUFFIX = '.vasecreator.json';
+const NAME_MAX = 80;
+// A design file is a few KB; anything this big isn't one, and reading it would stall the page.
+const FILE_MAX_BYTES = 2 * 1024 * 1024;
 
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -33,7 +36,8 @@ function newTileId() {
 }
 
 function fileName(name) {
-  const safe = String(name || 'design').trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').slice(0, 80) || 'design';
+  const safe = String(name || 'design').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-').replace(/\s+/g, ' ').trim()
+    .replace(/^\.+/, '').slice(0, NAME_MAX) || 'design';
   return safe + FILE_SUFFIX;
 }
 
@@ -110,7 +114,9 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
   /** @type {{ id: string, name: string, design: object, thumb: Blob | null, updated: number }[]} */
   let saved = [];
   const savedReady = db.all('designs').then((rows) => {
-    saved = rows.filter((r) => r && r.id && r.design).sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    saved = rows.filter((r) => r && r.id && r.design)
+      .map((r) => ({ ...r, name: String(r.name || 'Design').slice(0, NAME_MAX), updated: Number(r.updated) || 0 }))
+      .sort((a, b) => b.updated - a.updated);
   });
 
   // Normalised presets, made once; a broken preset is skipped, not fatal.
@@ -335,16 +341,27 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
     }
   }
 
+  /** @returns {Promise<boolean>} false when the browser didn't store it (the tile stays for this session) */
   async function putRecord(rec) {
-    await db.put('designs', rec.id, rec);
+    const ok = await db.put('designs', rec.id, rec);
     const i = saved.findIndex((s) => s.id === rec.id);
     if (i >= 0) saved.splice(i, 1);
     saved.unshift(rec);
     if (isOpen()) renderSaved();
+    if (ok === false) notify(`Couldn't store "${rec.name}" in this browser. Download the design file to keep it.`);
+    return ok !== false;
+  }
+
+  // One save at a time: a second click while the name is asked or the tile
+  // is written would add a second tile instead of updating the first.
+  let saving = null;
+  function promptSave() {
+    saving ||= saveDesign().finally(() => { saving = null; });
+    return saving;
   }
 
   /** Save design: asks for a name; updates the tile it came from, or adds one. */
-  async function promptSave() {
+  async function saveDesign() {
     await savedReady;
     const current = saved.find((s) => s.id === store.state.savedId) || null;
     const answer = await asker.ask(current
@@ -368,9 +385,9 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
     const thumb = await currentThumb();
     const design = structuredClone(store.state.design);
     design.meta = { ...(design.meta || {}), name };
-    await putRecord({ id, name, design, thumb, updated: Date.now() });
+    const ok = await putRecord({ id, name, design, thumb, updated: Date.now() });
     store.setSaved(id, name);
-    notify(`Saved "${name}".`);
+    if (ok) notify(`Saved "${name}".`);
   }
 
   async function renameSaved(rec) {
@@ -416,6 +433,7 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
     if (!file) return;
     let design;
     try {
+      if (file.size > FILE_MAX_BYTES) throw new TypeError('File too big for a design');
       const json = JSON.parse(await file.text());
       // normaliseDesign() fills anything missing, so check it is a design first.
       if (!looksLikeDesign(json)) throw new TypeError('Not a design file');
@@ -425,8 +443,8 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
       status.textContent = `"${file.name}" isn't a Vase Creator design file.`;
       return;
     }
-    const name = (design.meta?.name && String(design.meta.name).trim())
-      || file.name.replace(/\.vasecreator\.json$|\.json$/i, '') || nextName();
+    const name = ((design.meta?.name && String(design.meta.name).trim())
+      || file.name.replace(/\.vasecreator\.json$|\.json$/i, '') || nextName()).slice(0, NAME_MAX);
     design.meta = { ...(design.meta || {}), name };
     const id = newTileId();
     let thumb = null;

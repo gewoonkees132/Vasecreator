@@ -83,12 +83,15 @@ async function boot() {
   const [persisted, savedPrinter] = await Promise.all([db.loadHistory(), db.get('settings', 'printer')]);
 
   // Old steps go through normalise too, so a schema migration applies to them.
+  // A step that can't be read is dropped; the pointer follows its step, not its index.
   let history = null;
   if (persisted) {
+    const pointerId = persisted.steps[persisted.pointer]?.id;
     const steps = persisted.steps
       .map((s) => ({ ...s, design: safeNormalise(s.design) }))
       .filter((s) => s.design);
-    if (steps.length) history = { steps, pointer: Math.min(persisted.pointer, steps.length - 1) };
+    const pointer = steps.findIndex((s) => s.id === pointerId);
+    if (steps.length) history = { steps, pointer: pointer >= 0 ? pointer : steps.length - 1 };
   }
   const first = normaliseDesign(presets[0]);
   const store = createStore({
@@ -237,6 +240,7 @@ async function boot() {
   // screen renders its own tiles.
   let backfillTimer = 0;
   let backfilling = false;
+  const thumbFailed = new Set();
   function scheduleBackfill() {
     clearTimeout(backfillTimer);
     backfillTimer = setTimeout(backfillThumb, BACKFILL_IDLE_MS);
@@ -245,7 +249,7 @@ async function boot() {
     if (backfilling) return;
     if (dragging || store.state.view.mode !== 'design' || ctx.designs?.isOpen) { scheduleBackfill(); return; }
     const currentId = store.currentStep().id;
-    const step = store.history().slice(0, BACKFILL_STEPS).find((s) => !s.thumb && s.id !== currentId);
+    const step = store.history().slice(0, BACKFILL_STEPS).find((s) => !s.thumb && s.id !== currentId && !thumbFailed.has(s.id));
     if (!step) return;
     backfilling = true;
     try {
@@ -253,6 +257,9 @@ async function boot() {
       if (blob && !step.thumb) store.setThumb(step.id, blob);   // emits 'history', which schedules the next
     } catch (err) {
       console.warn('[thumbnail]', err);
+      // A step whose preview fails must not hold up the ones behind it.
+      thumbFailed.add(step.id);
+      scheduleBackfill();
     } finally {
       backfilling = false;
     }
@@ -322,11 +329,28 @@ async function boot() {
     panel.setAttribute('aria-label', printing ? 'Prepare print' : 'Design settings');
     handles.setVisible(!printing);
     applySeam();
-    if (mode === 'print' && !printing) requestPreview(); // the print panel may have drawn final walls
+    if (mode === 'print' && !printing) {
+      // The print panel may have drawn final walls: no step thumbnail of
+      // those, and the centreline preview comes back.
+      shownDesign = null;
+      requestPreview();
+    }
     mode = store.state.view.mode;
   }
 
   let printerTimer = 0;
+  function savePrinter() {
+    printerTimer = 0;
+    db.put('settings', 'printer', store.state.printer);
+  }
+  // A printer edit made just before the tab closes must not be lost.
+  const flushPrinter = () => { if (printerTimer) { clearTimeout(printerTimer); savePrinter(); } };
+  addEventListener('pagehide', flushPrinter);
+  addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushPrinter(); });
+
+  // The Designs screen opens by itself once, with the first preview, unless
+  // the visitor already went there.
+  let designsSeen = false;
   store.subscribe((state, what) => {
     if (what.has('design') || what.has('printer')) {
       clearTimeout(thumbTimer);
@@ -339,7 +363,7 @@ async function boot() {
     if (what.has('printer')) {
       renderer.setBed(bedOf(state.printer));
       clearTimeout(printerTimer);
-      printerTimer = setTimeout(() => db.put('settings', 'printer', state.printer), PRINTER_SAVE_MS);
+      printerTimer = setTimeout(savePrinter, PRINTER_SAVE_MS);
     }
     if (what.has('result') && state.result) {
       // In Prepare print the print panel owns what the renderer shows.
@@ -355,7 +379,7 @@ async function boot() {
       if (firstResult) {
         firstResult = false;
         // The Designs screen opens on every visit, once there is a pot to show.
-        ctx.designs.open();
+        if (!designsSeen) ctx.designs.open();
       }
       scheduleStepThumb();
       scheduleBackfill();
@@ -365,6 +389,7 @@ async function boot() {
       scheduleBackfill();
     }
     if (what.has('view')) {
+      if (state.view.designsOpen) designsSeen = true;
       applyHighlight();
       applySeam();
       handles.setSelected(state.view.selectedKnot);

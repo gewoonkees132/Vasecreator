@@ -215,7 +215,8 @@ export function normaliseDesign(json) {
     schema: DESIGN_SCHEMA,
     version: DESIGN_VERSION,
     units: 'mm',
-    meta: { ...structuredClone(meta), name: typeof meta.name === 'string' && meta.name ? meta.name : D.meta.name },
+    // Names come from files too, so keep them to a length every tile and file name can hold.
+    meta: { ...structuredClone(meta), name: typeof meta.name === 'string' && meta.name.trim() ? meta.name.trim().slice(0, 80) : D.meta.name },
     form: {
       height,
       profile: {

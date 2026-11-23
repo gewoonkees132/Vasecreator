@@ -10,7 +10,7 @@
 import { normaliseDesign } from './design.js';
 import { normalisePrinter } from './printer.js';
 import { profileLine as evaluateProfileLine } from './profile.js';
-import { buildSkirt, buildToolpath } from './toolpath.js';
+import { MAX_PREVIEW_POINTS, buildSkirt, buildToolpath } from './toolpath.js';
 import { designChecks, printChecks } from './checks.js';
 import { planRefills, writeGcode } from './gcode.js';
 
@@ -62,7 +62,7 @@ export function computePreview(design, { library, printer } = {}) {
   const started = now();
   const d = normaliseDesign(design);
   const p = normalisePrinter(printer);
-  const tp = buildToolpath(d, library, { walls: 1 });
+  const tp = buildToolpath(d, library, { walls: 1, maxPoints: MAX_PREVIEW_POINTS });
   const warnings = designChecks(tp, d, p);
   return summarise(tp, d, warnings, started);
 }

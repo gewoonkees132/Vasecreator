@@ -174,6 +174,10 @@ export function designChecks(tp, design, printer) {
     warnings.push({ id: 'layerRatio', severity: 'warning', bit: 0, message: 'Layer height is unusual for this bead' });
   }
 
+  if (tp.simplified) {
+    warnings.push({ id: 'simplified', severity: 'warning', bit: 0, message: 'Too big for full detail, so the path has fewer points' });
+  }
+
   if (tp.model.missing.length) {
     warnings.push({ id: 'missingPattern', severity: 'warning', bit: 0, message: "A pattern in this design isn't available, so it prints plain" });
   }
@@ -208,11 +212,31 @@ export function printChecks(tp, design, printer, { skirt, refills, designWarning
     }
   }
   const parkInside = Math.abs(prime.parkX) <= halfW && Math.abs(prime.parkY) <= halfD;
-  const tallEnough = top <= machine.maxHeightMm && prime.parkZ + prime.liftMm <= machine.maxHeightMm;
+  // The end lift (and the refill park, which rises the same lift above the
+  // print) must stay inside the machine too.
+  const tallEnough = top + printer.end.liftMm <= machine.maxHeightMm && prime.parkZ + prime.liftMm <= machine.maxHeightMm;
   if (ex <= halfW && ey <= halfD && parkInside && tallEnough) {
     checks.push({ id: 'bed', severity: 'ok', bit: 0, message: 'Fits the bed' });
+  } else if (ex <= halfW && ey <= halfD && parkInside) {
+    checks.push({
+      id: 'bed', severity: 'error', bit: ISSUE.bed,
+      message: `Too tall for the printer: the nozzle has to reach ${mm(Math.max(top + printer.end.liftMm, prime.parkZ + prime.liftMm))} mm`,
+    });
   } else {
     checks.push({ id: 'bed', severity: 'error', bit: ISSUE.bed, message: "Doesn't fit the printer bed" });
+  }
+
+  // The prime (at the start and at every refill) leaves a blob of clay under
+  // the park point. Over the pot or the skirt, the beads would be printed into
+  // it. Clear means outside the box or the circle around everything printed.
+  let reach = 0;
+  const reachOf = (x, y) => { reach = Math.max(reach, x * x + y * y); };
+  for (let p = 0; p < tp.pointCount; p++) reachOf(tp.path[3 * p], tp.path[3 * p + 1]);
+  for (const loop of skirt) for (let j = 0; j < loop.length; j += 3) reachOf(loop[j], loop[j + 1]);
+  const radius = Math.sqrt(reach) + w / 2;
+  const { parkX: px, parkY: py } = prime;
+  if (Math.abs(px) <= ex && Math.abs(py) <= ey && px * px + py * py <= radius * radius) {
+    checks.push({ id: 'park', severity: 'error', bit: 0, message: 'The prime point is over the pot or the skirt; move it to the side' });
   }
 
   const hole = design.base.hole.diameter;

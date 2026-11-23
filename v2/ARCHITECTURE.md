@@ -86,7 +86,7 @@ Profile `interp` is `'catmullRomCentripetal'` (shown as *Smooth*), `'monotone'` 
   templates: { start, end, refill } }                      // G-code text with {placeholders}
 ```
 
-Placeholders allowed in every template: `{e_mode_cmd} {pause_cmd} {travel_f} {z_f} {bed_width} {bed_depth} {max_height} {layer_height} {bead_width} {park_x} {park_y} {park_z}`. `{prime}` (a stationary prime of `prime.volumeMm3`) works in start and refill only. Refill also gets `{refill_index} {refill_count} {resume_x} {resume_y} {resume_z} {layer_z}`, and end gets `{layer_z}`. Each of these is a `GcodeError`: a heater code (M104, M109, M140, M190), an unknown placeholder, or a placeholder used in a template that doesn't allow it. If the start template leaves out `{prime}`, `{e_mode_cmd}` or `G92 E0`, the writer adds them after it.
+Placeholders allowed in every template: `{e_mode_cmd} {pause_cmd} {travel_f} {z_f} {bed_width} {bed_depth} {max_height} {layer_height} {bead_width} {park_x} {park_y} {park_z}`. `{prime}` (a stationary prime of `prime.volumeMm3`) works in start and refill only. Refill also gets `{refill_index} {refill_count} {resume_x} {resume_y} {resume_z} {layer_z}`, and end gets `{layer_z}`. Each of these is a `GcodeError`: a heater code (M104, M109, M140, M190), an unknown placeholder, or a placeholder used in a template that doesn't allow it. So is a `G92` other than `G92 E0`, and `{prime}` sharing a line. If the start template leaves out `{prime}`, `G90`, the E-mode command or `G92 E0`, the writer adds them after it. After any template that switches G90/G91 or M82/M83 (on Marlin, G90 and G91 also reset the E mode), the writer puts back `G90` and the profile's E mode, also before a `{prime}` inside it. A refill template without `{resume_z}` gets the lift, travel and descent back onto the seam appended. `end.liftMm` is at least 5 mm (`PRINTER_LIMITS.endLiftMm`; it is also the refill park height above the print) and `prime.parkZ` at least 2 mm.
 
 ## Engine (core → worker → main)
 
@@ -143,9 +143,11 @@ Warning = { id: string, severity: 'ok' | 'info' | 'warning' | 'error', bit: numb
 | `overhang` | design | warning | the radial step to the point one layer below at the same u is more than h·tan(`overhangLimitDeg`) (V2) |
 | `finePattern` | design | warning | a bead-scale curve is tighter than half a bead (V6), a layer hits the 1600-point cap, or a tile has fewer than two layers per bump (V5) |
 | `narrow` | design | warning | a radius is under 2 × bead width; the wall is clamped to it (V7) |
-| `bed` | design, print | error (print: `ok` when it fits) | off the bed or above `maxHeightMm` (V1); the print check also counts the skirt, the park point and the prime lift |
+| `bed` | design, print | error (print: `ok` when it fits) | off the bed or above `maxHeightMm` (V1); the print check also counts the skirt, the park point, the prime lift and the end lift above the top |
 | `layerRatio` | design | warning | the layer height is outside 0.3–0.6 × bead width |
 | `missingPattern` | design | warning | a slot's pattern isn't in the library |
+| `park` | print | error | the prime park point lies over the pot or the skirt (the prime blob would be printed into) |
+| `simplified` | design | warning | the toolpath is over its point budget (`MAX_TOOLPATH_POINTS` 4 M, preview `MAX_PREVIEW_POINTS` 2 M), so points are spaced further apart |
 | `hole` | print | warning | the hole is under two beads wide |
 | `refill` | print | info | refill pauses are planned (it lists their heights) |
 | `wallGap` | print | info | two smooth walls leave gaps behind raised parts |
@@ -206,7 +208,7 @@ view = { advanced, mode: 'design' | 'print', openSections: string[], slot: 'a' |
 
 History (C3): the history is a list of design snapshots, oldest first, plus a pointer. Undo and redo only move the pointer. A commit, open or restore made below the top is added on top, so no step is ever dropped, except the oldest once there are more than 200. Designs are compared without `meta`, so renaming or saving doesn't count as a step. Camera, view state and printer settings are not in history (§8.4).
 
-`store/db.js`: `openDb()` never rejects. It returns `{ persistent, get(store, key), put(store, key, value), delete(store, key), all(store), loadHistory(), saveHistory({ put, remove, order, pointer }) }`. The IndexedDB database `vasecreator-v2` has three stores: `history` (one record per step, plus `meta` = `{ order, pointer }`), `designs` (saved tiles, `{ id, name, design, thumb, updated }`) and `settings` (`printer`). Without IndexedDB (some private modes), the same API works in memory for the session. A failing call is logged and returns a fallback; it never throws.
+`store/db.js`: `openDb()` never rejects. It returns `{ persistent, get(store, key), put(store, key, value), delete(store, key), all(store), loadHistory(), saveHistory({ put, remove, order, pointer }) }`. The IndexedDB database `vasecreator-v2` has three stores: `history` (one record per step, plus `meta` = `{ order, pointer }`), `designs` (saved tiles, `{ id, name, design, thumb, updated }`) and `settings` (`printer`). Without IndexedDB (some private modes), the same API works in memory for the session. A failing call is logged and returns a fallback; it never throws. `put` and `saveHistory` resolve `false` when the write failed, so the caller can keep the data for a retry or say it wasn't saved.
 
 ## UI contracts
 

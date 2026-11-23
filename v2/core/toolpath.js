@@ -30,6 +30,16 @@ export const KIND = Object.freeze({ none: 0, outer: 1, inner: 2, base: 3, connec
 
 export const MIN_POINTS_PER_LAYER = 64;
 export const MAX_POINTS_PER_LAYER = 1600;
+/**
+ * Points one toolpath may have, so a huge pot at fine settings (1 m tall at
+ * 0.2 mm layers, or a 1 m base at a 0.5 mm bead, which would be hundreds of
+ * millions of points) can't hang the worker or run it out of memory. Three
+ * quarters go to the walls and a quarter to the base. Over budget, points
+ * are spaced further apart and the toolpath says `simplified`. The preview
+ * gets less: it is drawn as well.
+ */
+export const MAX_TOOLPATH_POINTS = 4_000_000;
+export const MAX_PREVIEW_POINTS = 2_000_000;
 /** Wall layers over which the seam ramp grows to a full layer height above a flat layer. */
 export const RAMP_IN_LAYERS = 4;
 
@@ -273,10 +283,11 @@ function groove(m, z, centre, w) {
 
 /**
  * Points around for a layer at height z (lead decision 5): bead spacing of
- * w/2, at least 8 points per pattern feature, then the 64–1600 clamp.
+ * w/2, at least 8 points per pattern feature, then the 64–1600 clamp, or
+ * the lower `cap` the point budget allows.
  * @returns {{ n: number, capped: boolean }}
  */
-function pointsAround(m, zStart, zTop) {
+function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
   const perimeter = m.profile.at(zTop) * m.plan.unitPerimeter;
   let need = Math.max(Math.ceil(perimeter / (m.w / 2)), MIN_POINTS_PER_LAYER);
   const lo = m.weightsAt(zStart);
@@ -287,16 +298,18 @@ function pointsAround(m, zStart, zTop) {
     const on = s.key === 'a' ? loA > 0 || hi.a > 0 : loB > 0 || hi.b > 0;
     if (on) need = Math.max(need, 8 * s.repeats * s.features.around);
   }
-  return { n: Math.min(need, MAX_POINTS_PER_LAYER), capped: need > MAX_POINTS_PER_LAYER };
+  const n = Math.min(need, MAX_POINTS_PER_LAYER);
+  return { n: Math.min(n, cap), capped: need > MAX_POINTS_PER_LAYER, simplified: n > cap };
 }
 
 /**
  * Builds the full toolpath for a design.
  * @param {object} design a normalised design
  * @param {{ patterns: object[] }} library
- * @param {{ walls?: 1 | 2 }} [options] walls defaults to 1 (the design view's centreline wall)
+ * @param {{ walls?: 1 | 2, maxPoints?: number }} [options] walls defaults to 1 (the design
+ *   view's centreline wall); maxPoints is the point budget (MAX_TOOLPATH_POINTS)
  */
-export function buildToolpath(design, library, { walls = 1 } = {}) {
+export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOLPATH_POINTS } = {}) {
   const m = createWallModel(design, library);
   const { h, w, layerCount: L, baseLayers: nb, profile, plan, rMin, stepLimit } = m;
   const spacing = design.finish.wallSpacingMm;
@@ -304,7 +317,20 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
   const rampMm = design.layers.seam.rampLengthMm;
   const seams = seamPositions(m);
 
-  const estimate = Math.ceil((L - nb) * walls * 1.1 * (profile.at(design.form.height / 2) * plan.unitPerimeter) / (w / 2)) + nb * 4000;
+  // The point budget (MAX_TOOLPATH_POINTS): a cap on points per wall layer,
+  // and a spacing along the base spiral, both untouched for any usual pot.
+  const layerCap = Math.min(MAX_POINTS_PER_LAYER,
+    Math.max(MIN_POINTS_PER_LAYER, Math.floor((0.75 * maxPoints) / (Math.max(L - nb, 1) * walls))));
+  let basePoints = 0;
+  for (let k = 0; k < nb; k++) {
+    const r = profile.at((k + 1) * h);
+    basePoints += (4 * r * r * plan.ratio) / (design.base.spacingRatio * w * (w / 2));
+  }
+  const baseStep = (w / 2) * Math.max(1, basePoints / (0.25 * maxPoints));
+  let simplified = baseStep > w / 2;
+
+  const around = Math.min(Math.max((profile.at(design.form.height / 2) * plan.unitPerimeter) / (w / 2), MIN_POINTS_PER_LAYER), layerCap);
+  const estimate = Math.ceil((L - nb) * walls * 1.1 * around + Math.min(basePoints, 0.25 * maxPoints) + nb * 2 * layerCap);
   const buf = new PathBuffer(estimate);
   const layerStarts = new Uint32Array(L + 1);
   const layerZ = new Float64Array(L);
@@ -426,7 +452,7 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
     ps.push(0);
     for (;;) {
       const perimeter = plan.perimeter(a, b, inset + step * (1 + p));
-      p += w / 2 / Math.max(perimeter, w);
+      p += baseStep / Math.max(perimeter, w);
       if (p >= end - 1e-9) { if (end > 0) ps.push(end); break; }
       ps.push(p);
     }
@@ -454,7 +480,7 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
     layerStarts[k] = buf.n;
     layerZ[k] = (k + 1) * h;
     const uS = seams[k];
-    const { n } = pointsAround(m, k * h, (k + 1) * h);
+    const { n } = pointsAround(m, k * h, (k + 1) * h, layerCap);
     const outward = (nb - 1 - k) % 2 === 0;
     const below = outward && k > 0 ? spiralTurns(k - 1, inset).end : -1;
     const spiral = spiralTurns(k, inset, below);
@@ -492,7 +518,8 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
     layerStarts[i] = buf.n;
     layerZ[i] = (i + 1) * h;
     const uS = seams[i];
-    const { n, capped } = pointsAround(m, i * h, (i + 1) * h);
+    const { n, capped, simplified: thinned } = pointsAround(m, i * h, (i + 1) * h, layerCap);
+    if (thinned) simplified = true;
     const start = buf.n;
     minD = Infinity;
     maxD = -Infinity;
@@ -532,6 +559,7 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
     seams,
     pointCount: count,
     maxGapMm,
+    simplified,
   };
 }
 

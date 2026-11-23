@@ -238,3 +238,99 @@ for (const [name, design] of goldens) {
     }
   });
 }
+
+// A tiny Marlin model of the modes: G90/G91 also set the E mode there.
+function marlinModes(text) {
+  let absolute = true;
+  let eAbsolute = true;
+  const states = [];
+  for (const line of text.split('\n')) {
+    const code = line.split(';')[0].trim().toUpperCase();
+    if (code === 'G90') absolute = eAbsolute = true;
+    else if (code === 'G91') absolute = eAbsolute = false;
+    else if (code === 'M82') eAbsolute = true;
+    else if (code === 'M83') eAbsolute = false;
+    else if (/^G1 .*E/.test(code)) states.push({ absolute, eAbsolute, line });
+  }
+  return states;
+}
+
+test('templates that switch G90/G91 or the E mode never leave the print in the wrong mode', () => {
+  const templates = [
+    { refill: 'G91\nG1 Z10 F600\nG90\nG1 X{park_x} Y{park_y} F{travel_f}\n{pause_cmd}\n{prime}' },
+    { refill: 'G91\nG1 Z10 F600\n{pause_cmd}' },
+    { start: 'G28\nM83' },
+    { start: 'G90\n{e_mode_cmd}\nM82\nG28' },
+    { start: '{prime}\nG28' },
+  ];
+  for (const t of templates) {
+    for (const eMode of ['relative', 'absolute']) {
+      const printer = normalisePrinter({ reservoirMl: 0.5, extrusion: { eMode }, templates: { ...defaultPrinter().templates, ...t } });
+      for (const s of marlinModes(gcode(cylinder(), printer))) {
+        assert.ok(s.absolute, `${JSON.stringify(t)}: ${s.line}`);
+        assert.equal(s.eAbsolute, eMode === 'absolute', `${JSON.stringify(t)} ${eMode}: ${s.line}`);
+      }
+    }
+  }
+});
+
+test('the default templates come out exactly as before (no extra mode lines)', () => {
+  const lines = classic.split('\n');
+  const start = lines.indexOf('G21');
+  assert.deepEqual(lines.slice(start, start + 6), ['G21', 'G90', 'M83', 'G28', 'G92 E0', ';TYPE:PRIME']);
+});
+
+test('V16: G92 other than G92 E0, {prime} inside a line and padded heater codes are refused', () => {
+  for (const [key, text] of [
+    ['start', 'G28\nG92 X0 Y0'], ['refill', 'g92'], ['refill', 'G92 E5'], ['end', 'G92 Z0'],
+    ['start', 'G1 X10 {prime}'], ['start', 'M0104 S0'], ['start', ' m109 S0'], ['end', 'm140'],
+  ]) {
+    const printer = defaultPrinter();
+    printer.templates[key] = text;
+    assert.throws(() => gcode(cylinder(), printer), GcodeError, text);
+  }
+  const ok = defaultPrinter();
+  ok.templates.refill = `G92 E0.0 ; reset\n${ok.templates.refill}`;
+  assert.doesNotThrow(() => gcode(cylinder(), ok));
+});
+
+test('a refill template that does not resume still comes back over the top onto the seam', () => {
+  const printer = normalisePrinter({ reservoirMl: 0.5, templates: { refill: '{pause_cmd}' } });
+  const lines = gcode(cylinder(), printer).split('\n');
+  const at = lines.indexOf('M0');
+  assert.ok(at > 0);
+  const [lift, over, down] = lines.slice(at + 1, at + 4);
+  const z = word(lines.slice(0, at).filter((l) => / Z/.test(l)).at(-1), 'Z');
+  assert.ok(word(lift, 'Z') >= z + 5, lift);
+  assert.ok(word(over, 'X') !== undefined && word(over, 'Y') !== undefined && word(over, 'E') === undefined, over);
+  assert.equal(word(down, 'Z'), z);
+});
+
+test('no move goes below the printed height, and the end and refill lifts clear the rim', () => {
+  const printer = normalisePrinter({ reservoirMl: 0.5, end: { liftMm: 0 }, prime: { parkZ: 0, liftMm: 0 } });
+  assert.equal(printer.end.liftMm, 5);
+  assert.equal(printer.prime.parkZ, 2);
+  const text = gcode(presets[0], printer);
+  let z = NaN;
+  let top = -Infinity;
+  let parked = 0;
+  for (const line of text.split('\n')) {
+    z = word(line, 'Z') ?? z;
+    if (/^G1 [XY].* E/.test(line)) top = Math.max(top, z);
+    else if (line.startsWith('G1 ') && top > -Infinity) assert.ok(z >= top - 1e-9, line);
+    if (line === 'M0') { parked++; assert.ok(z >= top + 5 - 1e-9, `refill park at ${z}, print at ${top}`); }
+  }
+  assert.ok(parked > 0);
+  const end = text.split('\n');
+  const homing = end.indexOf('G28 X Y');
+  assert.ok(word(end.slice(0, homing).filter((l) => / Z/.test(l)).at(-1), 'Z') >= top + 5);
+});
+
+test('a skirt of several loops runs outermost first, so the travel in crosses none of them', () => {
+  const printer = normalisePrinter({ skirt: { loops: 3, offsetMm: 10 } });
+  const lines = gcode(cylinder(), printer).split('\n');
+  const at = lines.indexOf(';TYPE:SKIRT');
+  const first = lines[at + 1];
+  const x0 = word(first, 'X') - 150;
+  assert.ok(Math.abs(x0 - (30 + 10 + 2 * 3)) < 1e-3, first);
+});

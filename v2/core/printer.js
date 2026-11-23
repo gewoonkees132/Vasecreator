@@ -42,8 +42,13 @@ export const PRINTER_LIMITS = Object.freeze({
   volumeMm3: { min: 0, max: 100000, step: 10 },
   parkX: { min: -3000, max: 3000, step: 1 },
   parkY: { min: -3000, max: 3000, step: 1 },
-  parkZ: { min: 0, max: 3000, step: 1 },
+  // The prime travels to the park point at park Z: at 0 it would drag the nozzle over the bed.
+  parkZ: { min: 2, max: 3000, step: 1 },
   liftMm: { min: 0, max: 500, step: 1 },
+  // The end lift also sets the refill park height above the print. The head
+  // crosses the pot after both (G28 X Y, the travel to the park point), so it
+  // must clear the rim it has just printed.
+  endLiftMm: { min: 5, max: 500, step: 1 },
   offsetMm: { min: 0, max: 200, step: 0.5 },
   loops: { min: 0, max: 10, step: 1 },
   wipeMm: { min: 0, max: 100, step: 1 },
@@ -135,7 +140,7 @@ export function normalisePrinter(json) {
       loops: num(skirt.loops, D.skirt.loops, L.loops, true),
     },
     end: {
-      liftMm: num(end.liftMm, D.end.liftMm, L.liftMm),
+      liftMm: num(end.liftMm, D.end.liftMm, L.endLiftMm),
       wipeMm: num(end.wipeMm, D.end.wipeMm, L.wipeMm),
     },
     speeds: {
