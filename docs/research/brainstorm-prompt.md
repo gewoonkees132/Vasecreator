@@ -57,7 +57,10 @@ Take one topic at a time, in this order.
 - Give options with your recommendation first, and keep them concrete: ASCII wireframes, interaction sketches, example values.
 - Ground proposals in the research doc and cite its sections (for example "§6.4"). Label new assumptions as assumptions.
 - Keep facts and recommendations separate. If you need a new fact, such as how another tool solves an interaction, verify it with a web search and cite it.
-- If a brainstorming skill is available (for example product-management:product-brainstorming, or /brainstorm), you may use it for the divergent parts.
+- Use the `brainstorming` skill for this session, with these overrides:
+  - Write the design doc to docs/design/v2-design-brainstorm.md, not docs/superpowers/specs/.
+  - superpowers:writing-plans is not installed. After I approve the design, stop and summarise instead of moving on to a plan.
+  - The visual companion is welcome for wireframes and layout options. Keep its .superpowers/ folder out of git by adding it to .git/info/exclude, not to .gitignore.
 - Write no implementation code. Pseudocode and JSON sketches are fine. Do not modify source files.
 
 ## Output
