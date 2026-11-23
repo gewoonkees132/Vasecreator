@@ -108,7 +108,10 @@ test('height ranges read in mm, merged and counted', () => {
   flags[63] = flags[64] = flags[66] = flags[72] = 1;
   const ranges = heightRanges(flags, z);
   assert.deepEqual(ranges, [{ from: 96, to: 100.5 }, { from: 109.5, to: 109.5 }]);
-  assert.equal(describeHeights(ranges), 'in 2 places, from 96 to 110 mm');
+  assert.equal(describeHeights(ranges), 'at 96–101 and 110 mm');
+  const many = [{ from: 6, to: 9 }, { from: 30, to: 30 }, { from: 50, to: 52.5 }, { from: 96, to: 110 }];
+  assert.equal(describeHeights(many.slice(0, 3)), 'at 6–9, 30 and 50–53 mm');
+  assert.equal(describeHeights(many), 'in 4 places, from 6 to 110 mm');
   assert.equal(describeHeights([ranges[0]]), 'between 96 and 101 mm');
   assert.equal(describeHeights([ranges[0]], 'dash'), 'at 96–101 mm');
   assert.equal(describeHeights([ranges[1]]), 'at 110 mm');

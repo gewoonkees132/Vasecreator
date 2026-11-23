@@ -41,14 +41,19 @@ export function heightRanges(flagged, layerZ, gap = 2) {
 }
 
 /**
- * "between 96 and 110 mm", "at 40–60 mm", "at 142 mm" or
- * "in 3 places, from 10 to 110 mm".
+ * "between 96 and 110 mm", "at 40–60 mm", "at 142 mm", up to three places
+ * listed ("at 6–14 and 96–110 mm"), or "in 5 places, from 10 to 110 mm".
  * @param {{ from: number, to: number }[]} ranges
  * @param {'between' | 'dash'} style how a single range reads
  */
 export function describeHeights(ranges, style = 'between') {
   if (ranges.length === 0) return '';
-  if (ranges.length > 1) return `in ${ranges.length} places, from ${mm(ranges[0].from)} to ${mm(ranges.at(-1).to)} mm`;
+  if (ranges.length > 3) return `in ${ranges.length} places, from ${mm(ranges[0].from)} to ${mm(ranges.at(-1).to)} mm`;
+  if (ranges.length > 1) {
+    // A few places read best listed, so each band can be found on the pot.
+    const parts = ranges.map(({ from, to }) => (mm(from) === mm(to) ? `${mm(from)}` : `${mm(from)}–${mm(to)}`));
+    return `at ${parts.slice(0, -1).join(', ')} and ${parts.at(-1)} mm`;
+  }
   const { from, to } = ranges[0];
   if (mm(from) === mm(to)) return `at ${mm(from)} mm`;
   return style === 'dash' ? `at ${mm(from)}–${mm(to)} mm` : `between ${mm(from)} and ${mm(to)} mm`;

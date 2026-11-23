@@ -33,7 +33,8 @@ const DEFAULT_ELEVATION = THREE.MathUtils.degToRad(22);
 const COLOR_BEAD = '#f3f1ec';
 const COLOR_WARNING = '#e0a100';
 const COLOR_ERROR = '#d64545';
-const COLOR_SEAM = 'rgb(18,47,45)';
+// Dashed and lighter than the solid profile line, so the two never read as one (C13).
+const COLOR_SEAM = 'rgb(93,138,139)';
 
 const UP = new THREE.Vector3(0, 0, 1);
 
@@ -210,7 +211,7 @@ export class BeadRenderer {
     this._bedGroup = new THREE.Group();
     this._scene.add(this._bedGroup);
     this._seam = new THREE.Line(new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ color: COLOR_SEAM, transparent: true, opacity: 0.55, depthWrite: false }));
+      new THREE.LineDashedMaterial({ color: COLOR_SEAM, dashSize: 3, gapSize: 2, transparent: true, opacity: 0.95, depthWrite: false }));
     this._seam.frustumCulled = false;
     this._seam.visible = false;
     this._scene.add(this._seam);
@@ -619,6 +620,7 @@ export class BeadRenderer {
       out[i + 2] = seam[i + 2] - h / 2;
     }
     this._seam.geometry.setAttribute('position', new THREE.BufferAttribute(out, 3));
+    this._seam.computeLineDistances();
     this._seam.visible = this._seamVisible;
   }
 

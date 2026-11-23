@@ -32,6 +32,15 @@ export function formatSize(size) {
   return `${r(size.heightMm)} × ${r(size.widthMm)} × ${r(size.depthMm)} mm`;
 }
 
+// "1 error", "2 warnings" or "1 error · 2 warnings": an error is never called a warning.
+function countLabel(warnings) {
+  const errors = warnings.filter((w) => w.severity === 'error').length;
+  const others = warnings.length - errors;
+  const part = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  if (errors && others) return `${part(errors, 'error')} · ${part(others, 'warning')}`;
+  return errors ? part(errors, 'error') : part(others, 'warning');
+}
+
 /**
  * Mounts the warnings and size chips.
  *
@@ -148,7 +157,7 @@ export function mountChips(root, ctx) {
     const showing = !!active && card.hidden;
     clear.hidden = !showing;
     chip.classList.toggle('is-active', !!active);
-    const count = `${n} warning${n === 1 ? '' : 's'}`;
+    const count = countLabel(warnings);
     let aria = n === 0 ? 'No warnings' : `${count}, show list`;
     if (showing) aria = `${count}. Showing on the pot: ${active.message || active.id}. Stop showing`;
     chip.setAttribute('aria-label', aria);
@@ -161,7 +170,7 @@ export function mountChips(root, ctx) {
     if (what.has('result')) {
       const n = warnings.length;
       const errors = warnings.some((w) => w.severity === 'error');
-      label.textContent = n === 0 ? 'No warnings' : `${n} warning${n === 1 ? '' : 's'}`;
+      label.textContent = n === 0 ? 'No warnings' : countLabel(warnings);
       icon.hidden = n === 0;
       chip.classList.remove('is-none', 'is-error', 'is-warn');
       chip.classList.add(n === 0 ? 'is-none' : errors ? 'is-error' : 'is-warn');
