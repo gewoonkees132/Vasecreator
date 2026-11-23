@@ -158,6 +158,20 @@ function normaliseKnots(input, height, h, rMin, fallbackKnots) {
 }
 
 /**
+ * Whether an opened file is a design at all, before normaliseDesign() fills
+ * the gaps: it names the design schema, or (an older file without one) it
+ * holds a form. Any other JSON, such as `{"hello": 1}`, would otherwise
+ * normalise into the default pot without a word.
+ * @param {unknown} json
+ * @returns {boolean}
+ */
+export function looksLikeDesign(json) {
+  if (!isObject(json)) return false;
+  if (json.schema !== undefined) return json.schema === DESIGN_SCHEMA;
+  return isObject(json.form);
+}
+
+/**
  * Fills defaults, clamps ranges, sorts knots and migrates older versions.
  * Never throws on missing or broken fields.
  * @param {unknown} json

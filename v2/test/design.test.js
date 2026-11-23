@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DESIGN_SCHEMA, DESIGN_VERSION, LIMITS, MAX_KNOTS, cloneDesign, defaultDesign, deleteKnot, designsEqual,
-  insertKnot, moveKnot, normaliseDesign, setDepth, setHeight, setWidth, widestRadius,
+  insertKnot, looksLikeDesign, moveKnot, normaliseDesign, setDepth, setHeight, setWidth, widestRadius,
 } from '../core/design.js';
 import { presets } from './support/fixtures.js';
 
@@ -65,6 +65,15 @@ test('the height scales knots that stop short of it', () => {
 test('normalise rejects what is not a design', () => {
   for (const bad of [null, 3, 'design', [], { schema: 'vasecreator/printer' }, { version: 99 }]) {
     assert.throws(() => normaliseDesign(bad), TypeError);
+  }
+});
+
+test('looksLikeDesign tells a design file from other JSON', () => {
+  assert.equal(looksLikeDesign(defaultDesign()), true);
+  for (const p of presets) assert.equal(looksLikeDesign(p), true);
+  assert.equal(looksLikeDesign({ form: { height: 120 } }), true);  // an older file without a schema
+  for (const bad of [null, 3, 'design', [], {}, { hello: 1 }, { schema: 'vasecreator/printer', form: {} }, { form: 3 }]) {
+    assert.equal(looksLikeDesign(bad), false);
   }
 });
 

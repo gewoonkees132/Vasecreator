@@ -2,7 +2,7 @@
 // presets, then the saved designs and a "+ Save design" tile. Saved designs
 // live in IndexedDB (store/db.js); design files move them between devices.
 
-import { normaliseDesign } from '../core/design.js';
+import { looksLikeDesign, normaliseDesign } from '../core/design.js';
 
 const LS_NOTE = 'vc2.storageNoteDismissed';
 const FILE_SUFFIX = '.vasecreator.json';
@@ -416,7 +416,10 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
     if (!file) return;
     let design;
     try {
-      design = normaliseDesign(JSON.parse(await file.text()));
+      const json = JSON.parse(await file.text());
+      // normaliseDesign() fills anything missing, so check it is a design first.
+      if (!looksLikeDesign(json)) throw new TypeError('Not a design file');
+      design = normaliseDesign(json);
     } catch (err) {
       console.warn('[designs] not a design file', err);
       status.textContent = `"${file.name}" isn't a Vase Creator design file.`;
