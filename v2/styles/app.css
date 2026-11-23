@@ -326,6 +326,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .chip-warnings.is-error { background: rgb(250,229,229); border-color: rgba(214,69,69,.45); }
 .chip-warnings .chip-icon { color: #9a6c00; }
 .chip-warnings.is-error .chip-icon { color: var(--c-error-text); }
+/* Beads are coloured for one of the warnings. */
+.chip-warnings.is-active { border-color: var(--c-primary-dark); box-shadow: inset 0 0 0 1px var(--c-primary-dark), var(--shadow-1); }
+.chip-clear {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin-right: -4px;
+  border-radius: 50%;
+  background: var(--c-primary-dark); color: #fff;
+  font-size: 13px; line-height: 1;
+}
 
 .chip-wrap { position: relative; }
 
@@ -361,6 +370,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .warn-item:hover { background: rgba(0,0,0,.06); }
 .warn-item[aria-pressed="true"] { border-color: var(--c-primary-dark); background: #fff; }
+.warn-item.is-static { cursor: default; }
+.warn-item.is-static:hover { background: rgba(0,0,0,.03); }
 .warn-dot { flex: none; width: 10px; height: 10px; margin-top: 4px; border-radius: 50%; background: var(--c-warn); }
 .warn-item.is-error .warn-dot { background: var(--c-error); }
 .warn-item.is-info .warn-dot { background: var(--c-primary-light); }
@@ -412,6 +423,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .history-item:hover { background: rgba(255,255,255,.7); }
+/* Inside the scrolling list an outer ring would be clipped. */
+.history-item:focus-visible { outline: 2px solid var(--c-primary-dark); outline-offset: -2px; box-shadow: inset 0 0 0 4px rgba(139,197,193,.6); }
 .history-item:disabled { cursor: default; opacity: .6; }
 .history-item:disabled:hover { background: transparent; }
 .history-item.is-current {
@@ -488,6 +501,27 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .history-overlay .history-item { flex-direction: column; align-items: center; padding: var(--space-1); min-height: 44px; }
 .history-overlay .history-thumb { width: 100%; height: auto; aspect-ratio: 1; }
+
+/* A short confirmation under the top bar ("Saved …"). */
+.toast {
+  position: fixed;
+  top: calc(var(--gap) + var(--topbar-h) + var(--space-2));
+  left: 50%;
+  z-index: 70;
+  max-width: calc(100vw - 32px);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-ctl);
+  background: var(--c-primary-dark);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: var(--shadow-3);
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -4px);
+  transition: opacity .2s ease, transform .2s ease;
+}
+.toast.is-shown { opacity: 1; transform: translate(-50%, 0); }
 
 /* ---------- Dialogs ---------- */
 
@@ -684,7 +718,25 @@ dialog::backdrop {
   }
   .chip { height: 30px; padding: 0 var(--space-2); font-size: 12px; }
   .chip-warnings { min-width: 0; }
-  .warn-card { left: 0; right: auto; }
+  /* D22: the list opens over the controls area, never over the pot. */
+  .warn-card {
+    position: fixed;
+    top: auto; left: 0; right: 0; bottom: 0;
+    width: auto; max-width: none;
+    max-height: var(--panel-h);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom));
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    background: rgb(250,250,250);
+    box-shadow: 0 -6px 20px rgba(0,0,0,.12);
+    z-index: 60;
+  }
+  .warn-card-head { font-size: 16px; }
+  .warn-card-head .icon-close { width: 44px; height: 44px; }
+  .warn-item { min-height: 44px; padding: var(--space-3); font-size: 15px; align-items: center; }
+  .warn-dot { margin-top: 0; }
+  .warn-hint { font-size: 13px; }
 
   #rightcol {
     top: calc(var(--content-top) + var(--space-2));

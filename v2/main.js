@@ -19,6 +19,8 @@ import { mountDesigns } from './ui/designs.js';
 
 const PHONE = matchMedia('(max-width: 760px)');
 const THUMB_SETTLE_MS = 600;
+const BACKFILL_IDLE_MS = 1500;
+const BACKFILL_STEPS = 40;
 const PRINTER_SAVE_MS = 500;
 
 const $ = (sel) => document.querySelector(sel);
@@ -111,6 +113,11 @@ async function boot() {
   const renderer = new BeadRenderer(canvas);
 
   let dragging = false;
+  function removeKnot(index) {
+    let removed = false;
+    store.apply('Remove point', (d) => { removed = deleteKnot(d, index); });
+    if (removed) store.setView({ selectedKnot: null });
+  }
   const handles = createProfileHandles(renderer, $('#overlay'), {
     onDrag(index, value) {
       dragging = true;
@@ -125,11 +132,7 @@ async function boot() {
       store.apply('Add point', (d) => { index = insertKnot(d, value); });
       store.setView({ selectedKnot: index >= 0 ? index : store.state.view.selectedKnot });
     },
-    onRemove(index) {
-      let removed = false;
-      store.apply('Remove point', (d) => { removed = deleteKnot(d, index); });
-      if (removed) store.setView({ selectedKnot: null });
-    },
+    onRemove: removeKnot,
     onSelect(index) {
       store.setView({ selectedKnot: index });
     },
@@ -224,6 +227,33 @@ async function boot() {
     }, THUMB_SETTLE_MS);
   }
 
+  // Steps made in quick succession move on before their picture is taken.
+  // They get one later, newest first and one at a time, but only after a
+  // quiet moment: never during a drag, in Prepare print or while the Designs
+  // screen renders its own tiles.
+  let backfillTimer = 0;
+  let backfilling = false;
+  function scheduleBackfill() {
+    clearTimeout(backfillTimer);
+    backfillTimer = setTimeout(backfillThumb, BACKFILL_IDLE_MS);
+  }
+  async function backfillThumb() {
+    if (backfilling) return;
+    if (dragging || store.state.view.mode !== 'design' || ctx.designs?.isOpen) { scheduleBackfill(); return; }
+    const currentId = store.currentStep().id;
+    const step = store.history().slice(0, BACKFILL_STEPS).find((s) => !s.thumb && s.id !== currentId);
+    if (!step) return;
+    backfilling = true;
+    try {
+      const blob = await thumbnailFor(step.design);
+      if (blob && !step.thumb) store.setThumb(step.id, blob);   // emits 'history', which schedules the next
+    } catch (err) {
+      console.warn('[thumbnail]', err);
+    } finally {
+      backfilling = false;
+    }
+  }
+
   // ---------- Layout ----------
 
   function viewportRect() {
@@ -242,20 +272,23 @@ async function boot() {
     return { x, y, width: Math.max(40, r.left - v.left - gap - x), height: Math.max(40, v.height - y - gap) };
   }
 
+  /** @param {false | 'reset' | 'keep'} fit  refit the camera; 'keep' keeps the orbit angle */
   function layout(fit) {
     renderer.resize();
     renderer.setViewport(viewportRect());
-    if (fit) renderer.fitCamera();
+    if (fit) renderer.fitCamera({ keepDirection: fit === 'keep' });
     renderer.requestRender();
   }
 
+  // A layout change (window size, the phone split) refits the pot into its
+  // region, keeping the angle the user turned it to.
   let resizeFrame = 0;
   let resizeFitTimer = 0;
   function onResize() {
     cancelAnimationFrame(resizeFrame);
     resizeFrame = requestAnimationFrame(() => layout(false));
     clearTimeout(resizeFitTimer);
-    resizeFitTimer = setTimeout(() => layout(true), 200);
+    resizeFitTimer = setTimeout(() => layout('keep'), 200);
   }
   addEventListener('resize', onResize);
   PHONE.addEventListener('change', onResize);
@@ -312,7 +345,7 @@ async function boot() {
         applyHighlight();
         if (fitPending) {
           fitPending = false;
-          layout(true);
+          layout('reset');
         }
       }
       if (firstResult) {
@@ -321,8 +354,12 @@ async function boot() {
         ctx.designs.open();
       }
       scheduleStepThumb();
+      scheduleBackfill();
     }
-    if (what.has('history')) scheduleStepThumb();
+    if (what.has('history')) {
+      scheduleStepThumb();
+      scheduleBackfill();
+    }
     if (what.has('view')) {
       applyHighlight();
       applySeam();
@@ -334,9 +371,21 @@ async function boot() {
   // ---------- Keyboard ----------
 
   addEventListener('keydown', (e) => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    if (e.defaultPrevented) return;
     if (e.target instanceof Element && e.target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
     if (document.querySelector('dialog[open]') || store.state.view.mode !== 'design') return;
+    // Delete removes the selected point, also after a click on the pot took
+    // the focus off its handle (the focused handle handles the key itself).
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const i = store.state.view.selectedKnot;
+      const idle = !document.activeElement || document.activeElement === document.body;
+      if (i != null && idle) {
+        e.preventDefault();
+        removeKnot(i);
+      }
+      return;
+    }
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const key = e.key.toLowerCase();
     if (key === 'z' && !e.shiftKey) {
       e.preventDefault();

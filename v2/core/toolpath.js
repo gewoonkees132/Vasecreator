@@ -4,8 +4,12 @@
 // The path is one continuous line of beads. Layer i has its top at
 // z_i = (i + 1)·h. A wall layer starts at its seam on the layer below's height
 // and climbs one layer height over the seam ramp, then runs flat back to the
-// seam, where the next layer starts. Every bead therefore sits exactly one
-// layer height above the bead below it, with no travel between layers (D10).
+// seam, where the next layer starts. Every bead therefore sits one layer
+// height above the bead below it, with no travel between layers (D10). The
+// exceptions are bounded: base layers are flat (rings included) and climb
+// with a short step at the seam; the first RAMP_IN_LAYERS wall layers grow
+// the ramp (gap ≥ 0.75 h); a seam that moves along the wall by up to a bead
+// width changes the gap over the ramp by at most that width / ramp length.
 //
 // The wall point is P = B(z, u) + D(z, u)·d̂: B the footprint outline scaled
 // by the profile radius and turned by the twist, d̂ its radial direction in
@@ -25,6 +29,8 @@ export const KIND = Object.freeze({ none: 0, outer: 1, inner: 2, base: 3, connec
 
 export const MIN_POINTS_PER_LAYER = 64;
 export const MAX_POINTS_PER_LAYER = 1600;
+/** Wall layers over which the seam ramp grows to a full layer height above a flat layer. */
+export const RAMP_IN_LAYERS = 4;
 
 // Features per tile of each named shape, around and up: how many bumps one
 // repeat puts in a row and in a column. Drives the points per layer (8 per
@@ -227,7 +233,12 @@ function seamPositions(m) {
   for (let i = 0; i < layerCount; i++) {
     const zStart = i === 0 ? h : i * h;
     let u = follow;
-    if (position === 'fixed') u = plan.uAtAngle(angle - m.twistPerMm * zStart);
+    // A fixed seam on a pot that twists counter-clockwise (the print direction)
+    // moves back along the wall, so each layer starts where the one below
+    // ended (buildToolpath, "Seam moved back"); taking the angle at the layer
+    // top puts those starts on the chosen angle.
+    const zSeam = m.twistPerMm > 0 ? (i + 1) * h : zStart;
+    if (position === 'fixed') u = plan.uAtAngle(angle - m.twistPerMm * zSeam);
     else if (position === 'hidden') u = plan.footprint === 'rectangle' ? corner : groove(m, (i + 1) * h, previous, w);
     seams[i] = u;
     previous = u;
@@ -303,54 +314,75 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
   let minD = 0;
   let maxD = 0;
 
-  // One closed loop of the outer wall (or a base ring) from the seam back to
-  // the seam. With a ramp it starts one layer lower and climbs over the ramp.
-  function outerLoop(i, uS, n, ramp, kind, firstKind, checkOverhang) {
-    const zStart = i * h;
+  // One outer wall point at outline position u and height z, into wx, wy, wIssue.
+  let wx = 0, wy = 0, wIssue = 0;
+  function wallPoint(u, z, checkOverhang) {
+    plan.unitPoint(u, unit);
+    const unitLength = Math.sqrt(unit[0] * unit[0] + unit[1] * unit[1]);
+    const D = m.displacement(z, u);
+    if (D < minD) minD = D;
+    if (D > maxD) maxD = D;
+    let radius = profile.at(z) * unitLength + D;
+    let issue = 0;
+    // A hair of slack: a circle of exactly r_min must not flag itself.
+    if (radius < rMin - 1e-9) { radius = rMin; issue |= ISSUE.narrow; }
+    if (checkOverhang) {
+      const zb = z - h;
+      let below = profile.at(zb) * unitLength + m.displacement(zb, u);
+      if (below < rMin - 1e-9) below = rMin;
+      if (Math.abs(radius - below) > stepLimit) issue |= ISSUE.overhang;
+    }
+    const t = m.twistAt(z);
+    const s = radius / unitLength;
+    wx = (unit[0] * t.c - unit[1] * t.s) * s;
+    wy = (unit[0] * t.s + unit[1] * t.c) * s;
+    wIssue = issue;
+  }
+
+  // The outer wall (or a base ring) of layer i from u0 round to u1, n points
+  // per full turn. It starts `rise` below the layer top and climbs that much
+  // over the seam ramp (rise 0: flat at the top). The first point is not
+  // repeated when the path is already there; otherwise the move to it is
+  // `firstKind`.
+  function outerLoop(i, u0, u1, n, rise, kind, firstKind, checkOverhang) {
     const zTop = (i + 1) * h;
+    const zLow = zTop - rise;
     const perimeter = profile.at(zTop) * plan.unitPerimeter;
     const rampLength = Math.min(rampMm, perimeter / 2);
-    minD = Infinity;
-    maxD = -Infinity;
-    for (let j = 0; j <= n; j++) {
-      const u = uS + j / n;
+    const span = u1 - u0;
+    const count = Math.max(1, Math.round(n * span));
+    for (let j = 0; j <= count; j++) {
+      const u = j === count ? u1 : u0 + (span * j) / count;
       let z = zTop;
-      if (ramp) {
-        if (j === 0) z = zStart;
-        else if (rampLength > 0) z = zStart + h * Math.min(((j / n) * perimeter) / rampLength, 1);
+      if (rise > 0) {
+        if (j === 0) z = zLow;
+        else if (rampLength > 0) z = zLow + rise * Math.min(((span * j) / count) * perimeter / rampLength, 1);
       }
-      plan.unitPoint(u, unit);
-      const unitLength = Math.sqrt(unit[0] * unit[0] + unit[1] * unit[1]);
-      const D = m.displacement(z, u);
-      if (D < minD) minD = D;
-      if (D > maxD) maxD = D;
-      let radius = profile.at(z) * unitLength + D;
-      let issue = 0;
-      // A hair of slack: a circle of exactly r_min must not flag itself.
-      if (radius < rMin - 1e-9) { radius = rMin; issue |= ISSUE.narrow; }
-      if (checkOverhang) {
-        const zb = z - h;
-        let below = profile.at(zb) * unitLength + m.displacement(zb, u);
-        if (below < rMin - 1e-9) below = rMin;
-        if (Math.abs(radius - below) > stepLimit) issue |= ISSUE.overhang;
-      }
-      const t = m.twistAt(z);
-      const s = radius / unitLength;
-      const x = (unit[0] * t.c - unit[1] * t.s) * s;
-      const y = (unit[0] * t.s + unit[1] * t.c) * s;
+      wallPoint(u, z, checkOverhang);
       if (j === 0) {
-        if (kind === KIND.outer && i >= nb) {
-          const k = 3 * (i - nb);
-          seamLine[k] = x;
-          seamLine[k + 1] = y;
-          seamLine[k + 2] = z;
-        }
-        if (buf.at(x, y, z)) continue;
-        buf.push(x, y, z, buf.n === 0 ? KIND.none : firstKind, issue, i);
+        if (buf.at(wx, wy, z)) continue;
+        buf.push(wx, wy, z, buf.n === 0 ? KIND.none : firstKind, wIssue, i);
       } else {
-        buf.push(x, y, z, kind, issue, i);
+        buf.push(wx, wy, z, kind, wIssue, i);
       }
     }
+  }
+
+  // Gets the path onto the outer wall at u, height z, before a loop: a bead
+  // of `kind` when the path is elsewhere (a seam that moved on, or a
+  // connector out from the inner wall), nothing when it is already there.
+  function stepOnto(i, u, z, kind, checkOverhang) {
+    wallPoint(u, z, checkOverhang);
+    if (buf.n > 0 && !buf.at(wx, wy, z)) buf.push(wx, wy, z, kind, wIssue, i);
+  }
+
+  // The seam marker of wall layer i: where the layer starts.
+  function markSeam(i, u, z) {
+    wallPoint(u, z, false);
+    const k = 3 * (i - nb);
+    seamLine[k] = wx;
+    seamLine[k + 1] = wy;
+    seamLine[k + 2] = z;
   }
 
   // The inner wall: flat at the layer top, `spacing` inside the outer wall.
@@ -374,8 +406,9 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
   }
 
   // Base spiral parameters for base layer k: offset δ(p) = inset + spacing·(1 + p)
-  // grows by one spacing per turn p, and every turn starts at the seam u.
-  function spiralTurns(k, inset) {
+  // grows by one spacing per turn p, and every turn starts at the seam u. The
+  // spiral runs `endTurns` turns, by default as far in as the layer allows.
+  function spiralTurns(k, inset, endTurns) {
     const zTop = (k + 1) * h;
     const r = profile.at(zTop);
     const a = r;
@@ -383,9 +416,10 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
     const step = design.base.spacingRatio * w;
     const hole = design.base.hole.diameter;
     const stop = hole > 0 ? hole / 2 + w / 2 : step / 2;
-    const end = (Math.min(a, b) - stop - inset) / step - 1;
+    const own = (Math.min(a, b) - stop - inset) / step - 1;
+    const end = endTurns >= 0 ? endTurns : own;
     const ps = [];
-    if (end < 0) return { ps, a, b, step, zTop };
+    if (own < 0) return { ps, a, b, step, zTop, end: own };
     let p = 0;
     ps.push(0);
     for (;;) {
@@ -394,7 +428,7 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
       if (p >= end - 1e-9) { if (end > 0) ps.push(end); break; }
       ps.push(p);
     }
-    return { ps, a, b, step, zTop };
+    return { ps, a, b, step, zTop, end };
   }
 
   function spiralPoint(spiral, inset, uS, p, kind, layer) {
@@ -407,28 +441,33 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
   // spiral inside, alternating direction so the last base layer ends at the
   // seam on the outer ring and the wall starts in place.
   //   outward: centre → spiral out → step to the ring → ring loop to the seam
-  //   inward:  ring loop from the seam → step in → spiral in to the centre
+  //   inward:  step up at the seam → ring loop → step in → spiral in to the centre
+  // Every base layer is flat at its top, rings included, so each ring sits
+  // exactly one layer height on the ring below; the climb from one to the
+  // next is a short step up with no bead (at the seam, or at the centre).
+  // An outward spiral turns as far as the inward one below it, so the step up
+  // at the centre stays short on a narrow ellipse as well.
+  const inset = walls === 2 ? spacing : 0;
   for (let k = 0; k < nb; k++) {
     layerStarts[k] = buf.n;
     layerZ[k] = (k + 1) * h;
     const uS = seams[k];
     const { n } = pointsAround(m, k * h, (k + 1) * h);
     const outward = (nb - 1 - k) % 2 === 0;
-    const inset = walls === 2 ? spacing : 0;
-    const spiral = spiralTurns(k, inset);
+    const below = outward && k > 0 ? spiralTurns(k - 1, inset).end : -1;
+    const spiral = spiralTurns(k, inset, below);
     if (outward) {
       for (let q = spiral.ps.length - 1; q >= 0; q--) {
         spiralPoint(spiral, inset, uS, spiral.ps[q], q === spiral.ps.length - 1 ? KIND.none : KIND.base, k);
       }
       if (walls === 2) {
         innerLoop(k, uS, n, 0, spiral.ps.length ? KIND.base : KIND.none);
-        outerLoop(k, uS, n, false, KIND.outer, KIND.connector, false);
+        outerLoop(k, uS, uS + 1, n, 0, KIND.outer, KIND.connector, false);
       } else {
-        outerLoop(k, uS, n, false, KIND.outer, spiral.ps.length ? KIND.base : KIND.none, false);
+        outerLoop(k, uS, uS + 1, n, 0, KIND.outer, spiral.ps.length ? KIND.base : KIND.none, false);
       }
     } else {
-      const firstKind = buf.lastKind() === KIND.inner ? KIND.connector : KIND.outer;
-      outerLoop(k, uS, n, k > 0, KIND.outer, firstKind, false);
+      outerLoop(k, uS, uS + 1, n, 0, KIND.outer, KIND.none, false);
       if (walls === 2) innerLoop(k, uS, n, 0, KIND.connector);
       for (let q = 0; q < spiral.ps.length; q++) spiralPoint(spiral, inset, uS, spiral.ps[q], KIND.base, k);
     }
@@ -437,14 +476,36 @@ export function buildToolpath(design, library, { walls = 1 } = {}) {
   // Wall layers: outer loop (ramped), then for two walls a connector in at the
   // seam, the inner loop flat at the layer top and a connector back out to the
   // next layer's start.
+  //   Ramp in: the layer above a flat one (the last base ring, or a sleeve's
+  //   first layer) can't climb a whole layer height over the ramp, or it would
+  //   start on the bead below with no gap. The climb grows over RAMP_IN_LAYERS
+  //   layers instead, with the rest as a step up at the seam, so the gap to
+  //   the bead below never drops under (1 − 1/RAMP_IN_LAYERS) of a layer.
+  //   Seam moved back: starting the layer behind where the one below ended
+  //   would run over that layer's last beads at their own height. The layer
+  //   starts where the one below ended and stops at its own seam, a little
+  //   short of a full turn; the next layer covers the rest.
+  const firstRamped = Math.max(nb, 1);
   for (let i = nb; i < L; i++) {
     layerStarts[i] = buf.n;
     layerZ[i] = (i + 1) * h;
     const uS = seams[i];
     const { n, capped } = pointsAround(m, i * h, (i + 1) * h);
-    const firstKind = buf.lastKind() === KIND.inner ? KIND.connector : KIND.outer;
     const start = buf.n;
-    outerLoop(i, uS, n, i > 0, KIND.outer, firstKind, i > 0);
+    minD = Infinity;
+    maxD = -Infinity;
+    if (i === 0) {
+      markSeam(0, uS, h);
+      outerLoop(0, uS, uS + 1, n, 0, KIND.outer, KIND.none, false);
+    } else {
+      const rise = i < firstRamped ? 0 : h * Math.min((i - firstRamped + 1) / RAMP_IN_LAYERS, 1);
+      let ahead = uS - seams[i - 1];
+      ahead -= Math.round(ahead);
+      const u0 = ahead < 0 ? uS - ahead : uS;
+      markSeam(i, u0, i * h);
+      stepOnto(i, u0, i * h, buf.lastKind() === KIND.inner ? KIND.connector : KIND.outer, true);
+      outerLoop(i, u0, uS + 1, n, rise, KIND.outer, KIND.none, true);
+    }
     if (maxD - minD > maxGapMm) maxGapMm = maxD - minD;
     if (walls === 2) innerLoop(i, uS, n, minD, KIND.connector);
     if (capped) {

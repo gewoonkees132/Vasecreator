@@ -5,6 +5,7 @@
 import { numberField, slider, segmented, h } from '../controls.js';
 import { drawSwatch, beadGrid } from '../swatch.js';
 import { PLAIN } from '../../core/patterns.js';
+import { LIMITS } from '../../core/design.js';
 import { footprintAt, limit } from './shape.js';
 
 const SLOT_SUB = { a: 'main pattern', b: 'blends in' };
@@ -25,8 +26,13 @@ function prettyId(id) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// Whole layers, and never under the core's minimum tile height (the core
+// would clamp it on the next load and the design would quietly change).
+const TILE_MIN = LIMITS.tileHeightMm?.min ?? 0;
+const TILE_MAX = LIMITS.tileHeightMm?.max ?? Infinity;
 function snapToLayers(mm, layerHeightMm) {
-  const n = Math.max(1, Math.round(mm / layerHeightMm));
+  let n = Math.max(1, Math.ceil(TILE_MIN / layerHeightMm - 1e-9), Math.round(mm / layerHeightMm));
+  n = Math.min(n, Math.max(1, Math.floor(TILE_MAX / layerHeightMm + 1e-9)));
   return Math.round(n * layerHeightMm * 1000) / 1000;
 }
 
@@ -39,7 +45,7 @@ const section = {
     const lib = ctx?.library;
     const name = (slot) => (lib && findEntry(lib, slot.pattern)?.name) || prettyId(slot.pattern);
     const s = design.surface;
-    if (!s.b) return `${name(s.a)} · ${s.a.depthMm} mm`;
+    if (!s.b) return s.a.pattern === PLAIN.id ? 'plain, no pattern' : `${name(s.a)} · ${s.a.depthMm} mm`;
     return `${name(s.a)} → ${name(s.b)} · ${BLEND_LABELS[s.blend.shape] ?? s.blend.shape}`;
   },
 
@@ -98,9 +104,12 @@ const section = {
           return;
         }
         const defaults = entry.defaults ?? PLAIN_SLOT;
+        const lh = d.layers.layerHeightMm;
         const cur = surf[s];
         if (!cur) {
-          surf[s] = { pattern: id, depthMm: defaults.depthMm ?? 0, repeats: defaults.repeats ?? 1, tileHeightMm: defaults.tileHeightMm ?? surf.a.tileHeightMm };
+          // Pattern rows line up with beads only at whole layers (C7).
+          const tile = snapToLayers(defaults.tileHeightMm ?? surf.a.tileHeightMm, lh);
+          surf[s] = { pattern: id, depthMm: defaults.depthMm ?? 0, repeats: defaults.repeats ?? 1, tileHeightMm: tile };
           if (s === 'b') surf.blend = { ...surf.blend, shape: 'fadesUp', amount: 1 };
           return;
         }
@@ -108,7 +117,10 @@ const section = {
         // Plain (or a flat slot), which has nothing worth keeping.
         const flat = cur.pattern === PLAIN.id || !(cur.depthMm > 0);
         cur.pattern = id;
-        if (flat && entry.defaults) Object.assign(cur, entry.defaults);
+        if (flat && entry.defaults) {
+          Object.assign(cur, entry.defaults);
+          cur.tileHeightMm = snapToLayers(cur.tileHeightMm, lh);
+        }
       });
     };
 
@@ -130,8 +142,9 @@ const section = {
     });
     const tileHeight = numberField({
       label: 'Tile height', unit: 'mm', ...limit(['tileHeightMm', 'surface.tileHeightMm'], { min: 1, max: 400 }), step: 1.5, decimals: 2, value: 20,
-      onInput: editSlot('Tile height', (slot, v) => { slot.tileHeightMm = v; }),
-      // Rows of the pattern line up with beads only at whole layers.
+      // Rows of the pattern line up with beads only at whole layers, live and
+      // at the end of the gesture (which also puts the snapped value in the field).
+      onInput: editSlot('Tile height', (slot, v, d) => { slot.tileHeightMm = snapToLayers(v, d.layers.layerHeightMm); }),
       onCommit: (v) => {
         const lh = store.state.design.layers.layerHeightMm;
         store.change(`Tile height ${S()}`, (d) => {

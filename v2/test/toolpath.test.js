@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normaliseDesign } from '../core/design.js';
-import { KIND, buildToolpath, patternFeatures } from '../core/toolpath.js';
+import { KIND, RAMP_IN_LAYERS, buildToolpath, patternFeatures } from '../core/toolpath.js';
 import { cylinder, distance, library, presets } from './support/fixtures.js';
 
 const build = (d, walls = 1) => {
@@ -59,19 +59,86 @@ test('wall layers start at their seam one layer down and climb over the ramp', (
     const last = tp.layerStarts[i + 1] - 1;
     const zStart = tp.layerZ[i - 1];
     const zTop = tp.layerZ[i];
+    // Over the flat base the ramp grows a quarter layer per layer; the rest is a step up.
+    const rise = h * Math.min((i - 1) / RAMP_IN_LAYERS, 1);
     // The previous layer ends where this one starts (same point, so it is not repeated).
     assert.ok(Math.abs(tp.path[3 * (first - 1) + 2] - zStart) < 1e-12);
     // Climbs linearly over the ramp length, then stays at the top.
     let along = 0;
     for (let p = first; p <= last; p++) {
-      along += distance(tp.path, p, p - 1);
+      along += Math.hypot(tp.path[3 * p] - tp.path[3 * p - 3], tp.path[3 * p + 1] - tp.path[3 * p - 2]);
       const z = tp.path[3 * p + 2];
       if (along > ramp + 0.5) assert.equal(z, zTop);
-      else assert.ok(Math.abs(z - (zStart + (h * Math.min(along, ramp)) / ramp)) < 0.02, `z ${z} at ${along} mm`);
+      else assert.ok(Math.abs(z - (zTop - rise + (rise * Math.min(along, ramp)) / ramp)) < 0.02, `layer ${i}: z ${z} at ${along} mm`);
     }
     assert.equal(tp.path[3 * last + 2], zTop);
     // The loop is closed: it ends on its seam, above where it started.
     assert.ok(Math.hypot(tp.path[3 * last] - tp.path[3 * (first - 1)], tp.path[3 * last + 1] - tp.path[3 * (first - 1) + 1]) < 1e-9);
+  }
+});
+
+// Height of each outer bead (wall or base ring) above the outer bead it sits
+// on: the highest outer point of the two layers below within a third of a
+// bead width. Beads within a bead width of their layer's start are skipped:
+// there the end of the layer below lies beside the bead, not under it.
+function outerGaps(tp, w) {
+  const gaps = [];
+  const L = tp.layerStarts.length - 1;
+  for (let k = 1; k < L; k++) {
+    const first = tp.layerStarts[k];
+    const sx = tp.path[3 * first];
+    const sy = tp.path[3 * first + 1];
+    for (let p = first; p < tp.layerStarts[k + 1]; p += 3) {
+      if (tp.kinds[p] !== KIND.outer) continue;
+      const x = tp.path[3 * p];
+      const y = tp.path[3 * p + 1];
+      if (Math.hypot(x - sx, y - sy) < w) continue;
+      let support = -Infinity;
+      for (let q = tp.layerStarts[Math.max(k - 2, 0)]; q < first; q++) {
+        if (tp.kinds[q] !== KIND.outer) continue;
+        if (Math.hypot(tp.path[3 * q] - x, tp.path[3 * q + 1] - y) < w / 3) support = Math.max(support, tp.path[3 * q + 2]);
+      }
+      if (support > -Infinity) gaps.push({ gap: tp.path[3 * p + 2] - support, layer: k, p });
+    }
+  }
+  return gaps;
+}
+
+const gapCases = [
+  ['three base layers', cylinder({ baseLayers: 3 })],
+  ['a sleeve', cylinder({ baseLayers: 0 })],
+  ['the Classic vase (hidden seam moving back)', presets[0]],
+  ['a fixed seam on a full twist', twistedFixed(360)],
+  ['a fixed seam twisting the other way', twistedFixed(-360)],
+];
+// A plain cylinder, so the wall below is where the bead is; only the seam moves.
+function twistedFixed(degrees) {
+  const d = cylinder({ height: 60, radius: 40 });
+  d.form.twist.degrees = degrees;
+  d.layers.seam = { rampLengthMm: 15, position: 'fixed', angleDeg: 30 };
+  return d;
+}
+for (const [name, d] of gapCases) {
+  test(`${name}: every outer bead sits about one layer height on the bead below`, () => {
+    const { design, tp } = build(d);
+    const h = design.layers.layerHeightMm;
+    const gaps = outerGaps(tp, design.layers.beadWidthMm);
+    assert.ok(gaps.length > 100);
+    for (const { gap, layer, p } of gaps) {
+      assert.ok(gap > (1 - 1 / RAMP_IN_LAYERS) * h - 0.05 && gap < 1.25 * h, `layer ${layer}, point ${p}: ${(gap / h).toFixed(2)} h`);
+    }
+  });
+}
+
+test('an outward base layer starts right above where the inward one ended, on an ellipse too', () => {
+  const d = structuredClone(presets[0]);
+  d.form.plan.depthRatio = 0.6;
+  const { design, tp } = build(d);
+  for (let k = 1; k < design.base.layers; k++) {
+    const first = tp.layerStarts[k];
+    if (tp.kinds[first] !== KIND.none) continue; // inward layers start on the ring
+    const step = Math.hypot(tp.path[3 * first] - tp.path[3 * first - 3], tp.path[3 * first + 1] - tp.path[3 * first - 2]);
+    assert.ok(step < design.layers.beadWidthMm, `layer ${k} starts ${step.toFixed(1)} mm away`);
   }
 });
 

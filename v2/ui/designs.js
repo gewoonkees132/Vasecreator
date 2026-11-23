@@ -76,6 +76,13 @@ function createAsker() {
         })),
       ]),
     ]);
+    // Enter in the name field must not pick the first submit button (Cancel).
+    input?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      e.preventDefault();
+      const primary = form.querySelector('.btn-primary, .btn-danger');
+      if (primary) form.requestSubmit(primary);
+    });
     dialog.replaceChildren(form);
     dialog.returnValue = '';
     return new Promise((resolve) => {
@@ -132,6 +139,23 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
     }),
   ]);
   note.hidden = lsGet(LS_NOTE) === '1';
+
+  // Saving from the top bar happens with the Designs screen closed, so the
+  // confirmation shows as a short note under the top bar instead.
+  const toast = el('div', { class: 'toast', role: 'status', 'aria-live': 'polite' });
+  document.body.append(toast);
+  let toastTimer = 0;
+  function notify(text) {
+    status.textContent = text;
+    if (isOpen()) return;
+    toast.textContent = text;
+    toast.classList.add('is-shown');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('is-shown');
+      toastTimer = setTimeout(() => { toast.textContent = ''; }, 400);
+    }, 2600);
+  }
 
   dialog.replaceChildren(
     el('div', { class: 'designs-head' }, [
@@ -275,6 +299,8 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
   // ---------- Actions ----------
 
   function openDesign(design, name, savedId) {
+    // A new design starts in the design view, not halfway through Prepare print.
+    if (store.state.view.mode !== 'design') store.setView({ mode: 'design', highlight: null });
     store.open(design, `Opened: ${name}`, { savedId });
     ctx.requestFit();
     close();
@@ -335,14 +361,16 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
         buttons: [{ value: 'new', label: 'Save', primary: true }],
       });
     if (!answer) return;
-    const name = answer.name || (current ? current.name : nextName());
+    let name = answer.name || (current ? current.name : nextName());
+    // Save as new with the name left as it was: two tiles of one name would confuse.
+    if (current && answer.action === 'new' && name === current.name) name = `${name} copy`;
     const id = answer.action === 'update' && current ? current.id : newTileId();
     const thumb = await currentThumb();
     const design = structuredClone(store.state.design);
     design.meta = { ...(design.meta || {}), name };
     await putRecord({ id, name, design, thumb, updated: Date.now() });
     store.setSaved(id, name);
-    status.textContent = `Saved "${name}".`;
+    notify(`Saved "${name}".`);
   }
 
   async function renameSaved(rec) {

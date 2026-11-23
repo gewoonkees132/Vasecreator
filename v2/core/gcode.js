@@ -56,6 +56,7 @@ export function profileHash(printer) {
 }
 
 const HEATER = /(^|[\s;])M(104|109|140|190)(?!\d)/im;
+const RESET_E = /^\s*G92\s+E0(\.0*)?\s*(;.*)?$/i;
 const PLACEHOLDERS = new Set([
   'e_mode_cmd', 'pause_cmd', 'prime', 'park_x', 'park_y', 'park_z', 'travel_f', 'z_f', 'bed_width', 'bed_depth',
   'max_height', 'layer_height', 'bead_width', 'layer_z', 'refill_index', 'refill_count', 'resume_x', 'resume_y', 'resume_z',
@@ -108,9 +109,11 @@ function loopsVolume(loops, areaMm2) {
 }
 
 /**
- * Where refill pauses go (research §7, V12): once the clay used since the last
- * fill passes the usable share of the reservoir, pause at the next layer
- * start. A reservoir of 0 never pauses.
+ * Where refill pauses go (research §7, V12): pause at the start of the layer
+ * that would take the clay used since the last fill past the usable share of
+ * the reservoir, so the reservoir is never drawn below its reserve. A layer
+ * bigger than a whole fill still prints after one pause. A reservoir of 0
+ * never pauses.
  * @returns {{ layer: number, zMm: number }[]} zMm is the height printed so far
  */
 export function planRefills(tp, design, printer, skirt) {
@@ -122,7 +125,7 @@ export function planRefills(tp, design, printer, skirt) {
   let used = prime + loopsVolume(skirt, area);
   const pauses = [];
   for (let k = 0; k < volumes.length; k++) {
-    if (k > 0 && used > usable) {
+    if (k > 0 && used + volumes[k] > usable && used > prime) {
       pauses.push({ layer: k, zMm: tp.layerZ[k - 1] });
       used = prime;
     }
@@ -253,15 +256,25 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
     return `G1 ${word} F${lastF}`;
   }
 
+  // A G92 E0 anywhere restarts the E count, so absolute E stays in step with
+  // the machine (a template may reset E after its own prime).
+  const resetE = () => {
+    eTotal = 0;
+    eWritten = 0;
+  };
+
   function expand(name, context) {
     const text = printer.templates[name];
     if (!text) return;
-    const out = text.replace(/\{([a-z_]+)\}/g, (_, key) => {
-      if (key === 'prime' && context.prime) return primeBlock();
-      if (!(key in context)) throw new GcodeError(`The placeholder {${key}} can't be used in the ${name} G-code`);
-      return context[key];
-    });
-    lines.push(...out.split('\n'));
+    for (const raw of text.split('\n')) {
+      const line = raw.replace(/\{([a-z_]+)\}/g, (_, key) => {
+        if (key === 'prime' && context.prime) return primeBlock();
+        if (!(key in context)) throw new GcodeError(`The placeholder {${key}} can't be used in the ${name} G-code`);
+        return context[key];
+      });
+      lines.push(line);
+      if (RESET_E.test(line)) resetE();
+    }
   }
 
   const common = {
@@ -298,7 +311,10 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
   expand('start', { ...common, prime: startHasPrime });
   if (!printer.templates.start.includes('{e_mode_cmd}')) lines.push(common.e_mode_cmd);
   // E counts from zero from here on, whatever the start template did.
-  if (!/^G92 E0\s*$/m.test(printer.templates.start)) lines.push('G92 E0');
+  if (!printer.templates.start.split('\n').some((line) => RESET_E.test(line))) {
+    lines.push('G92 E0');
+    resetE();
+  }
   if (!startHasPrime) {
     lines.push(';TYPE:PRIME', `G1 Z${common.park_z} F${common.z_f}`, `G1 X${common.park_x} Y${common.park_y} F${common.travel_f}`);
     lines.push(primeBlock());
@@ -343,6 +359,12 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
     const dz = path[3 * p + 2] - path[3 * p - 1];
     return Math.sqrt(dx * dx + dy * dy + dz * dz);
   };
+  // A move without clay (a step up at the seam or the base centre) climbs no
+  // faster than the Z speed, however short its sideways part.
+  const travelSpeed = (p) => {
+    const dz = Math.abs(path[3 * p + 2] - path[3 * p - 1]);
+    return dz > 1e-9 ? Math.min(speeds.travelMmS, (speeds.zMmS * segment(p)) / dz) : speeds.travelMmS;
+  };
 
   for (let k = 0; k < L; k++) {
     const first = layerStarts[k];
@@ -369,7 +391,7 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
     // then dwell for whatever is still missing.
     let time = 0;
     for (let p = Math.max(first, 1); p < last; p++) {
-      time += segment(p) / (kinds[p] === KIND.none ? speeds.travelMmS : feed[kinds[p]]);
+      time += segment(p) / (kinds[p] === KIND.none ? travelSpeed(p) : feed[kinds[p]]);
     }
     let slow = 1;
     if (speeds.minLayerTimeS > 0 && time > 0 && time < speeds.minLayerTimeS) slow = time / speeds.minLayerTimeS;
@@ -378,8 +400,7 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
       const kind = kinds[p];
       let speed;
       if (kind === KIND.none) {
-        const flat = p > 0 && path[3 * p + 2] !== path[3 * p - 1] && path[3 * p] === path[3 * p - 3] && path[3 * p + 1] === path[3 * p - 2];
-        speed = flat ? speeds.zMmS : speeds.travelMmS;
+        speed = p > 0 ? travelSpeed(p) : speeds.travelMmS;
       } else {
         setType(kind);
         const nominal = feed[kind];

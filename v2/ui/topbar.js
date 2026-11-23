@@ -97,6 +97,10 @@ export function mountTopbar(header, ctx) {
     else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
   });
+  // Tabbing out of the menu closes it.
+  menu.addEventListener('focusout', (e) => {
+    if (e.relatedTarget && !menu.contains(e.relatedTarget) && e.relatedTarget !== logo) closeMenu();
+  });
   menuDesigns.addEventListener('click', () => { closeMenu(); ctx.designs.open(); });
   menuSave.addEventListener('click', () => { closeMenu(); ctx.designs.promptSave(); });
 

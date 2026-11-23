@@ -92,12 +92,17 @@
 .card-header:hover { background: var(--c-input-bg); }
 .card-header:focus-visible { outline-offset: -2px; }
 .card-title { font-size: 14px; font-weight: 600; white-space: nowrap; }
+/* Up to two lines, so a long summary ("bead 3 mm · layer 1.5 mm · seam
+   hidden") stays readable in the 320 px sidebar. */
 .card-summary {
   min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 12px;
+  line-height: 1.35;
   color: var(--c-text-2);
   text-align: right;
 }
@@ -116,6 +121,7 @@
   align-items: center;
   gap: var(--space-2);
   margin: var(--space-2) var(--space-1) 0;
+  line-height: 1.4;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: .12em;
@@ -139,16 +145,18 @@
 .phone-tabs {
   display: flex;
   flex: none;
-  gap: var(--space-1);
+  gap: 0;
   padding: var(--space-2) var(--space-2) 0;
   overflow-x: auto;
   scrollbar-width: none;
   border-bottom: 1px solid var(--c-border);
 }
+/* Five tabs (with Advanced) fit a 360 px screen (C11); the row still
+   scrolls if a larger text size needs it. */
 .phone-tab {
   flex: 1 0 auto;
   min-height: 44px;
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-2);
   border: 0;
   border-bottom: 3px solid transparent;
   background: none;
@@ -329,8 +337,8 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: 6px var(--space-2) 6px 6px;
+  gap: 6px;
+  padding: 6px 6px 6px 6px;
   border: 1px solid var(--c-input-border);
   border-radius: var(--radius-ctl);
   background: var(--c-input-bg);
@@ -364,7 +372,8 @@
 .slot-text { display: flex; flex-direction: column; min-width: 0; }
 .slot-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slot-sub { font-size: 11px; color: var(--c-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.swap-btn { font-size: 18px; }
+/* Narrow on desktop so "main pattern" fits the slot card; 44 px on touch below. */
+.swap-btn { width: 26px; font-size: 18px; }
 
 .grid-label { margin-bottom: calc(var(--space-2) * -1); font-size: 12px; color: var(--c-text-2); }
 .swatch-grid {
@@ -546,7 +555,8 @@
   font-weight: 700;
   color: var(--c-surface);
 }
-.check--ok .check-icon { background: var(--c-accent); }
+/* The accent green darkened, so the mark keeps 3:1 against the card (WCAG 1.4.11). */
+.check--ok .check-icon { background: color-mix(in srgb, var(--c-accent) 72%, #000); }
 .check--warning .check-icon { background: var(--c-warn); color: var(--c-text); }
 .check--error .check-icon { background: var(--c-error); }
 .check--info .check-icon { background: var(--c-primary-light); }

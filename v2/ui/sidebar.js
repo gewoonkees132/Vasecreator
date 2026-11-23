@@ -38,7 +38,7 @@ export function mountSidebar(el, ctx) {
   const entries = new Map();
   for (const section of [...MAIN, ...ADVANCED]) {
     const host = h('div', { class: 'section-body', id: `section-${section.id}` });
-    entries.set(section.id, { section, host, instance: null, card: null, header: null, summary: null });
+    entries.set(section.id, { section, host, instance: null, card: null, header: null, summary: null, summaryText: null });
   }
 
   const ensureMounted = (entry) => {
@@ -65,7 +65,9 @@ export function mountSidebar(el, ctx) {
   const buildCard = (entry) => {
     const { section, host } = entry;
     const titleId = `section-title-${section.id}`;
-    const summary = h('span', { class: 'card-summary' });
+    // The hidden ": " makes the button read "Shape: 170 × 124 mm · …", not "Shape170 × 124 mm".
+    const summaryText = h('span');
+    const summary = h('span', { class: 'card-summary' }, [h('span', { class: 'visually-hidden', text: ': ' }), summaryText]);
     const header = h('button', { type: 'button', class: 'card-header', 'aria-controls': host.id, id: titleId }, [
       h('span', { class: 'card-title', text: section.title }),
       summary,
@@ -80,13 +82,14 @@ export function mountSidebar(el, ctx) {
     host.setAttribute('role', 'region');
     host.setAttribute('aria-labelledby', titleId);
     const card = h('section', { class: 'panel-card section-card' }, [h('h2', { class: 'card-heading' }, [header]), host]);
-    Object.assign(entry, { card, header, summary });
+    Object.assign(entry, { card, header, summary, summaryText });
     return card;
   };
 
   const buildDesktop = () => {
     const nodes = MAIN.map((s) => buildCard(entries.get(s.id)));
-    const divider = h('div', { class: 'advanced-divider', role: 'separator', text: 'Advanced' });
+    // A heading, not role=separator: a separator's text isn't read out.
+    const divider = h('h2', { class: 'advanced-divider', text: 'Advanced' });
     advancedNodes = [divider, ...ADVANCED.map((s) => buildCard(entries.get(s.id)))];
     el.replaceChildren(...nodes, ...advancedNodes);
   };
@@ -101,7 +104,11 @@ export function mountSidebar(el, ctx) {
       entry.header.setAttribute('aria-expanded', String(isOpen));
       entry.host.hidden = !isOpen;
       entry.summary.hidden = isOpen;
-      if (!isOpen) entry.summary.textContent = summaryOf(entry.section, state.design);
+      if (!isOpen) {
+        const text = summaryOf(entry.section, state.design);
+        entry.summaryText.textContent = text;
+        entry.summary.title = text;
+      }
       if (isOpen) ensureMounted(entry);
     }
   };
@@ -153,6 +160,13 @@ export function mountSidebar(el, ctx) {
     tabPanel.setAttribute('aria-labelledby', `tab-${tab}`);
     if (tab === shownTab) return;
     shownTab = tab;
+    // On a narrow screen the tab row scrolls; keep the chosen tab in sight.
+    const chosen = tabButtons.get(tab);
+    const row = chosen.parentElement;
+    if (row.scrollWidth > row.clientWidth) {
+      const left = chosen.offsetLeft - row.offsetLeft;
+      if (left < row.scrollLeft || left + chosen.offsetWidth > row.scrollLeft + row.clientWidth) row.scrollLeft = left - (row.clientWidth - chosen.offsetWidth) / 2;
+    }
     const show = tab === 'advanced' ? ADVANCED : MAIN.filter((s) => s.id === tab);
     const nodes = show.map((s) => {
       const entry = entries.get(s.id);

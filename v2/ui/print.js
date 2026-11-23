@@ -341,7 +341,15 @@ export function mountPrintPanel(el, ctx) {
   renderChecks();
   scheduleCheck();
 
+  let wasVisible = visible();
   const unsubscribe = store.subscribe((state, what) => {
+    if (what.has('design') || what.has('printer')) {
+      // A "downloaded" note belongs to the file that was written, not to this design.
+      if (exportNote.dataset.kind === 'done' && !exporting) {
+        exportNote.dataset.kind = '';
+        exportNote.textContent = '';
+      }
+    }
     if (what.has('design') || what.has('printer') || what.has('result')) update(state);
     if (what.has('design') || what.has('printer')) {
       // Old checks no longer describe this design.
@@ -349,8 +357,13 @@ export function mountPrintPanel(el, ctx) {
       else printResult = null;
     }
     if (what.has('view')) {
-      if (visible() && !printResult && !running && !timer) scheduleCheck();
-      if (!visible()) {
+      const nowVisible = visible();
+      // Coming back with nothing changed: the checks still hold, but main.js
+      // drew the centreline preview meanwhile, so show the final walls again.
+      if (nowVisible && !wasVisible && printResult?.positions && !running) ctx.renderer?.setToolpath?.(printResult);
+      wasVisible = nowVisible;
+      if (nowVisible && !printResult && !running && !timer) scheduleCheck();
+      if (!nowVisible) {
         clearTimeout(timer);
         timer = 0;
       }

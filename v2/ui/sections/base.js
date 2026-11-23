@@ -21,7 +21,7 @@ const section = {
     const b0 = store.state.design.base;
 
     const layers = numberField({
-      label: 'Base layers', min: 0, max: 10, step: 1, decimals: 0,
+      label: 'Base layers', ...limit(['baseLayers', 'base.layers'], { min: 0, max: 20, step: 1 }), decimals: 0,
       value: b0.layers, info: '',
       onInput: (v) => store.change('Base layers', (d) => { d.base.layers = Math.round(v); }),
       onCommit: () => store.commit(),
@@ -48,7 +48,12 @@ const section = {
       infill.set(b.pattern || 'spiral');
       const dia = b.hole?.diameter ?? 0;
       hole.set(dia);
-      hole.setInfo(dia > 0 ? '' : '0 mm = no hole');
+      // Design §9.4: under two bead widths the hole may close up (checked again in Prepare print).
+      const twoBeads = 2 * state.design.layers.beadWidthMm;
+      const fmt = (v) => String(Math.round(v * 10) / 10);
+      if (!(dia > 0)) hole.setInfo('0 mm = no hole');
+      else if (dia < twoBeads) hole.setInfo(`Narrower than two beads (${fmt(twoBeads)} mm), so it may close up`);
+      else hole.setInfo('');
       hole.setDisabled(!(b.layers > 0));
     };
     update(store.state);

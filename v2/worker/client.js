@@ -38,14 +38,20 @@ export function createEngine({ library, workerUrl } = {}) {
     else job.resolve(msg.result);
   };
 
+  // An error event means the worker itself failed (it didn't load, or threw
+  // outside a request); it answers nothing after that, so later requests
+  // fail at once instead of waiting forever.
+  let broken = null;
   worker.onerror = (event) => {
-    const error = new Error(event.message || 'The engine stopped working');
-    for (const job of waiting.values()) job.reject(error);
+    event.preventDefault?.();
+    broken = new Error(event.message || 'The engine stopped working');
+    for (const job of waiting.values()) job.reject(broken);
     waiting.clear();
   };
 
   function request(type, design, printer, onProgress) {
     if (disposed) return Promise.reject(new Error('The engine has been closed'));
+    if (broken) return Promise.reject(broken);
     const id = nextId++;
     if (type === 'preview') latestPreview = id;
     return new Promise((resolve, reject) => {

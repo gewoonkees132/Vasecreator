@@ -119,6 +119,66 @@ test('a refill pause goes in at a layer start with the firmware pause command', 
   }
 });
 
+test('the reservoir is never drawn past its usable share between refills', () => {
+  for (const ml of [40, 60, 150]) {
+    const printer = defaultPrinter();
+    printer.reservoirMl = ml;
+    const text = gcode(presets[0], printer);
+    const feedArea = (Math.PI * 3.1 * 3.1) / 4;
+    const usableE = (ml * 1000 * printer.usableFraction) / feedArea;
+    let e = 0;
+    let pauses = 0;
+    for (const line of text.split('\n')) {
+      if (line === 'M0') {
+        assert.ok(e <= usableE + 1e-3, `${ml} ml: ${(e * feedArea / 1000).toFixed(1)} ml used before pause ${pauses + 1}`);
+        e = 0;
+        pauses++;
+      }
+      if (line.startsWith('G1 ')) e += word(line, 'E') ?? 0;
+    }
+    assert.ok(e <= usableE + 1e-3, `${ml} ml after the last pause`);
+    assert.ok(pauses > 0);
+  }
+});
+
+test('a G92 E0 in a template restarts absolute E, after its own prime too', () => {
+  const firstE = (printer) => {
+    const lines = gcode(cylinder(), printer).split('\n');
+    const at = lines.findIndex((l) => l.startsWith(';TYPE:SKIRT'));
+    return word(lines.slice(at).find((l) => / X.* E/.test(l)), 'E');
+  };
+  const plain = defaultPrinter();
+  plain.extrusion.eMode = 'absolute';
+  const expected = firstE(plain) - word(gcode(cylinder(), plain).split('\n').find((l) => l.startsWith('G1 E')), 'E');
+  for (const start of ['G21\nG90\n{e_mode_cmd}\nG28\nG92 E0\n{prime}\nG92 E0', 'G21\nG90\n{e_mode_cmd}\nG28\n{prime}']) {
+    const printer = defaultPrinter();
+    printer.extrusion.eMode = 'absolute';
+    printer.templates.start = start;
+    // The prime happened in the template, then E was reset: the skirt starts from zero.
+    assert.ok(Math.abs(firstE(printer) - expected) < 1e-4, start);
+  }
+});
+
+test('moves without clay never climb faster than the Z speed', () => {
+  for (const d of [presets[0], cylinder({ baseLayers: 4 }), { ...structuredClone(presets[0]), form: { ...presets[0].form, plan: { footprint: 'circle', depthRatio: 0.6, cornerRounding: 0 } } }]) {
+    let x = 0, y = 0, z = 0;
+    for (const line of moves(gcode(d))) {
+      const nx = word(line, 'X') ?? x;
+      const ny = word(line, 'Y') ?? y;
+      const nz = word(line, 'Z') ?? z;
+      const f = word(line, 'F');
+      if (f !== undefined) var feed = f;
+      if (word(line, 'E') === undefined && nz > z) {
+        const length = Math.hypot(nx - x, ny - y, nz - z);
+        assert.ok(((nz - z) / length) * feed <= 600 * 1.01, line);
+      }
+      x = nx;
+      y = ny;
+      z = nz;
+    }
+  }
+});
+
 test('V16: heater codes and unknown placeholders block the export', () => {
   const heater = defaultPrinter();
   heater.templates.start = 'G28\nM104 S200';

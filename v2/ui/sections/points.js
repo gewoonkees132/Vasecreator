@@ -3,10 +3,8 @@
 // on the pot are the same thing (view.selectedKnot).
 
 import { numberField, h } from '../controls.js';
-import { moveKnot, insertKnot, deleteKnot } from '../../core/design.js';
+import { moveKnot, insertKnot, deleteKnot, MAX_KNOTS, MIN_KNOTS } from '../../core/design.js';
 import { limit } from './shape.js';
-
-const MAX_KNOTS = 12;
 
 const section = {
   id: 'points',
@@ -41,12 +39,14 @@ const section = {
     };
 
     const build = (knots) => {
-      // Keep focus on the same cell across a rebuild (a point added elsewhere).
+      // Keep focus on the same cell across a rebuild (a point added or
+      // removed), so a keyboard user isn't dropped back at the top of the page.
       const active = document.activeElement;
       let focusAt = null;
       rows.forEach((r, i) => {
         if (r.z.input === active) focusAt = [i, 'z'];
         if (r.r.input === active) focusAt = [i, 'r'];
+        if (r.del === active) focusAt = [i, 'del'];
       });
       rows.forEach((r) => { r.z.destroy(); r.r.destroy(); });
       body.replaceChildren();
@@ -62,6 +62,7 @@ const section = {
           onCommit: () => store.commit(),
         });
         const del = h('button', { type: 'button', class: 'icon-btn del-btn', text: '×', 'aria-label': `Remove point ${i + 1}`, title: 'Remove point' });
+        del.disabled = i === 0 || i === knots.length - 1 || knots.length <= MIN_KNOTS;
         del.addEventListener('click', (e) => {
           e.stopPropagation();
           store.apply('Remove point', (d) => { deleteKnot(d, i); });
@@ -78,7 +79,16 @@ const section = {
         body.append(tr);
         return { tr, z, r, del };
       });
-      if (focusAt && rows[focusAt[0]]) rows[focusAt[0]][focusAt[1]].input.focus();
+      if (focusAt) {
+        const [i, kind] = focusAt;
+        if (kind === 'del') {
+          // The next point's ×, else the one before, else + Add point.
+          const target = [rows[i]?.del, rows[i - 1]?.del].find((b) => b && !b.disabled) ?? add;
+          target.focus();
+        } else if (rows[i]) {
+          rows[i][kind].input.focus();
+        }
+      }
     };
 
     add.addEventListener('click', () => {
@@ -104,7 +114,7 @@ const section = {
         const row = rows[i];
         row.z.set(k.z);
         row.r.set(k.r);
-        row.del.disabled = i === 0 || i === last || knots.length <= 2;
+        row.del.disabled = i === 0 || i === last || knots.length <= MIN_KNOTS;
         const selected = state.view.selectedKnot === i;
         row.tr.classList.toggle('is-selected', selected);
         if (selected) row.tr.setAttribute('aria-current', 'true');

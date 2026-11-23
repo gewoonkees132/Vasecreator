@@ -122,6 +122,8 @@ export function mountHistory(root, ctx) {
     const shown = compact ? steps.slice(0, 3) : steps;
     // Prepare print works on the current design; going back in history happens in the design view.
     const printing = store.state.view.mode === 'print';
+    // Thumbnails and the clock re-render the list; keyboard focus stays put.
+    const focusedId = target.contains(document.activeElement) ? document.activeElement.dataset.step : null;
     target.replaceChildren(...shown.map((step) => {
       const url = thumbUrl(step);
       const time = relativeTime(step.time, now);
@@ -132,6 +134,7 @@ export function mountHistory(root, ctx) {
       const item = el('button', {
         type: 'button',
         class: `history-item${current ? ' is-current' : ''}`,
+        'data-step': step.id,
         title: `${step.label} · ${time}`,
         'aria-label': `${step.label}, ${time === 'now' ? 'just now' : `${time} ago`}${current ? ', current' : ''}`,
         'aria-current': current ? 'step' : false,
@@ -144,6 +147,11 @@ export function mountHistory(root, ctx) {
       }, [img, el('span', { class: 'history-time', text: time })]);
       return el('li', {}, [item]);
     }));
+    if (focusedId) {
+      // The same step keeps the focus; if it fell off the end, the current one takes it.
+      const next = target.querySelector(`[data-step="${CSS.escape(focusedId)}"]`) || target.querySelector('.history-item.is-current');
+      next?.focus({ preventScroll: true });
+    }
   }
 
   function render() {

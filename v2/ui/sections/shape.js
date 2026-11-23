@@ -146,7 +146,8 @@ const section = {
       onInput: (v) => store.change('Depth', (d) => setDepth(d, v)),
       onCommit: commit,
     });
-    const lock = h('button', { type: 'button', class: 'icon-btn lock-btn' });
+    // A toggle button: the name stays put and aria-pressed carries the state.
+    const lock = h('button', { type: 'button', class: 'icon-btn lock-btn', 'aria-label': 'Lock depth to width' });
     lock.addEventListener('click', () => {
       if (isLocked(store.state)) {
         store.setView({ sizeLocked: false });
@@ -163,9 +164,7 @@ const section = {
     const twist = numberField({
       label: 'Twist',
       unit: '°',
-      min: -360,
-      max: 360,
-      step: 1,
+      ...limit(['twist'], { min: -720, max: 720, step: 1 }),
       decimals: 0,
       value: d0.form.twist.degrees,
       onInput: (v) => store.change('Twist', (d) => { d.form.twist.degrees = v; }),
@@ -183,10 +182,11 @@ const section = {
       depth.setLimits({ min: round1(size.widthMm * ratioLimits.min), max: round1(size.widthMm * ratioLimits.max) });
       const locked = isLocked(state);
       depth.setDisabled(locked);
-      lock.setAttribute('aria-pressed', String(locked));
-      lock.setAttribute('aria-label', locked ? 'Depth follows width. Unlock to set depth' : 'Lock depth to width');
-      lock.title = locked ? 'Unlock depth' : 'Lock depth to width';
-      lock.innerHTML = locked ? LOCK_ICON : UNLOCK_ICON;
+      if (lock.getAttribute('aria-pressed') !== String(locked)) {
+        lock.setAttribute('aria-pressed', String(locked));
+        lock.title = locked ? 'Depth follows width. Click to set it apart' : 'Lock depth to width';
+        lock.innerHTML = locked ? LOCK_ICON : UNLOCK_ICON;
+      }
       fp.update(d);
       twist.set(d.form.twist.degrees);
     };

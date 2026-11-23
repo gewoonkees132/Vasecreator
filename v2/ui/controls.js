@@ -16,6 +16,8 @@ const SCRUB_PX = 4;
 const SCRUB_DEADZONE = 3;
 const REPEAT_DELAY = 400;
 const REPEAT_EVERY = 70;
+// Keys a range input steps with.
+const STEP_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End']);
 
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -372,19 +374,43 @@ export function slider(o) {
     setValueText();
     o.onInput?.(v);
   };
+  // A held arrow key fires 'change' on every repeat; the whole hold is one
+  // gesture, so the commit waits for the key to come up.
+  let keyHeld = false;
   const onChange = () => {
-    if (!dirty) return;
+    if (!dirty || keyHeld) return;
     dirty = false;
     o.onCommit?.(value);
   };
   range.addEventListener('input', onInput);
   range.addEventListener('change', onChange);
-  range.addEventListener('pointerup', onChange);
+  range.addEventListener('keydown', (e) => { if (STEP_KEYS.has(e.key)) keyHeld = true; });
+  range.addEventListener('keyup', (e) => {
+    if (!STEP_KEYS.has(e.key)) return;
+    keyHeld = false;
+    onChange();
+  });
+  range.addEventListener('blur', () => {
+    keyHeld = false;
+    onChange();
+  });
 
+  // While pressed, store echoes don't move the thumb. The release is caught on
+  // the window too: a pointer let go off the track must not leave the slider
+  // deaf to undo and every later update.
   let pressed = false;
-  range.addEventListener('pointerdown', () => { pressed = true; });
-  range.addEventListener('pointerup', () => { pressed = false; });
-  range.addEventListener('pointercancel', () => { pressed = false; onChange(); });
+  const release = () => {
+    if (!pressed) return;
+    pressed = false;
+    removeEventListener('pointerup', release, true);
+    removeEventListener('pointercancel', release, true);
+    onChange();
+  };
+  range.addEventListener('pointerdown', () => {
+    pressed = true;
+    addEventListener('pointerup', release, true);
+    addEventListener('pointercancel', release, true);
+  });
 
   return {
     el: root,
@@ -404,6 +430,7 @@ export function slider(o) {
       field.setDisabled(d);
     },
     destroy() {
+      release();
       field.destroy();
       root.remove();
     },
