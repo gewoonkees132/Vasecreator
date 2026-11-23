@@ -77,8 +77,8 @@ const DEFAULT = {
   surface: {
     fromMm: 10,
     toMm: 150,
-    a: { pattern: 'lib:flutes@1', depthMm: 2, repeats: 20, tileHeightMm: 20 },
-    b: { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 20 },
+    a: { pattern: 'lib:flutes@1', depthMm: 2, repeats: 20, tileHeightMm: 19.5 },
+    b: { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 19.5 },
     blend: { shape: 'fadesUp', amount: 1 },
   },
   layers: {
@@ -221,7 +221,7 @@ export function normaliseDesign(json) {
       fromMm,
       toMm,
       a: normaliseSlot(surface.a, D.surface.a),
-      b: isObject(surface.b) ? normaliseSlot(surface.b, { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 20 }) : null,
+      b: isObject(surface.b) ? normaliseSlot(surface.b, { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 19.5 }) : null,
       blend: {
         shape: pick(blend.shape, BLEND_SHAPES, 'fadesUp'),
         amount: num(blend.amount, 1, LIMITS.amount),
@@ -250,7 +250,23 @@ export function normaliseDesign(json) {
       innerWall: pick(finish.innerWall, INNER_WALLS, 'smooth'),
     },
   };
+  // C7: tile heights are whole layers, so pattern rows line up with beads.
+  for (const slot of [out.surface.a, out.surface.b]) {
+    if (slot) slot.tileHeightMm = snapTileHeight(slot.tileHeightMm, layerHeightMm);
+  }
   return out;
+}
+
+/**
+ * A tile height rounded to a whole number of layers (at least one), so
+ * pattern rows line up with beads (design §9.2, C7).
+ * @param {number} mm
+ * @param {number} layerHeightMm
+ * @returns {number}
+ */
+export function snapTileHeight(mm, layerHeightMm) {
+  const layers = Math.max(1, Math.round(mm / layerHeightMm));
+  return Math.round(layers * layerHeightMm * 1e6) / 1e6;
 }
 
 function deepEqual(a, b) {

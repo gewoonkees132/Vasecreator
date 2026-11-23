@@ -178,7 +178,11 @@ async function boot() {
           requestPreview();
         }
       })
-      .catch((err) => console.error('[preview]', err))
+      .catch((err) => {
+        console.error('[preview]', err);
+        // A dead worker answers nothing again; say so instead of freezing the pot.
+        if (err?.engineBroken) showFatal('The 3D preview stopped working. Reload the page to continue; your design and its history are kept.');
+      })
       .finally(() => {
         livePending -= 1;
         if (livePending === 0) {

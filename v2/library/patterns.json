@@ -8,7 +8,7 @@
       "description": "Smooth vertical ribs, the classic fluted vessel.",
       "recipe": { "kind": "shape", "shape": "flutes" },
       "range": [-1, 1],
-      "defaults": { "depthMm": 2, "repeats": 20, "tileHeightMm": 20 }
+      "defaults": { "depthMm": 2, "repeats": 20, "tileHeightMm": 19.5 }
     },
     {
       "id": "lib:pleats@1",
@@ -16,7 +16,7 @@
       "description": "Folded facets with rounded ridges, like pleated paper.",
       "recipe": { "kind": "shape", "shape": "pleats" },
       "range": [-1, 1],
-      "defaults": { "depthMm": 1.5, "repeats": 16, "tileHeightMm": 20 }
+      "defaults": { "depthMm": 1.5, "repeats": 16, "tileHeightMm": 19.5 }
     },
     {
       "id": "lib:ribs@1",
@@ -56,7 +56,7 @@
       "description": "A lattice of raised and sunken diamonds.",
       "recipe": { "kind": "shape", "shape": "diamonds" },
       "range": [-1, 1],
-      "defaults": { "depthMm": 1.6, "repeats": 10, "tileHeightMm": 32 }
+      "defaults": { "depthMm": 1.6, "repeats": 10, "tileHeightMm": 31.5 }
     },
     {
       "id": "lib:out-in-out@1",
@@ -72,7 +72,7 @@
       "description": "Overlapping scales, each row resting on the one below.",
       "recipe": { "kind": "shape", "shape": "scales" },
       "range": [-1, 1],
-      "defaults": { "depthMm": 1.5, "repeats": 12, "tileHeightMm": 40 }
+      "defaults": { "depthMm": 1.5, "repeats": 12, "tileHeightMm": 40.5 }
     },
     {
       "id": "lib:dots@1",
@@ -96,7 +96,7 @@
       "description": "Woven bundles that alternate direction, like a basket.",
       "recipe": { "kind": "shape", "shape": "basket" },
       "range": [-1, 1],
-      "defaults": { "depthMm": 1, "repeats": 6, "tileHeightMm": 40 }
+      "defaults": { "depthMm": 1, "repeats": 6, "tileHeightMm": 40.5 }
     }
   ]
 }

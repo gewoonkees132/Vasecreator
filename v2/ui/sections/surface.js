@@ -5,7 +5,7 @@
 import { numberField, slider, segmented, h } from '../controls.js';
 import { drawSwatch, beadGrid } from '../swatch.js';
 import { PLAIN } from '../../core/patterns.js';
-import { LIMITS } from '../../core/design.js';
+import { LIMITS, snapTileHeight } from '../../core/design.js';
 import { footprintAt, limit } from './shape.js';
 
 const SLOT_SUB = { a: 'main pattern', b: 'blends in' };
@@ -251,7 +251,8 @@ const section = {
         if (d.form.plan.footprint === 'rectangle' && slot.repeats % 4 !== 0) info += ' · a multiple of 4 fits the corners';
         repeats.setInfo(info);
         tileHeight.setLimits({ step: layers.layerHeightMm });
-        tileHeight.set(slot.tileHeightMm);
+        // Show the height that prints: the core snaps it to whole layers (C7).
+        tileHeight.set(snapTileHeight(slot.tileHeightMm, layers.layerHeightMm));
       }
 
       from.set(surf.fromMm);

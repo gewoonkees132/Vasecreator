@@ -677,9 +677,9 @@ dialog::backdrop {
     --topbar-h: 56px;
     --ctl-h: 44px;
     --content-top: calc(var(--gap) * 2 + var(--topbar-h));
-    --stage-h: calc(100dvh - var(--content-top));
-    --view-h: calc(var(--stage-h) * .4);
-    --panel-h: calc(var(--stage-h) * .6);
+    /* D22: the controls get a fixed 60 % of the screen; the top bar and the pot share the top 40 %. */
+    --panel-h: calc(100dvh * .6);
+    --view-h: calc(100dvh - var(--content-top) - var(--panel-h));
     --rightcol-w: 68px;
   }
 

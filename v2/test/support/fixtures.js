@@ -16,7 +16,7 @@ export function cylinder({ height = 30, radius = 30, baseLayers = 2, walls = 1, 
   d.form.profile = { interp: 'linear', tension: 0.5, cornerMm: 0, knots: [{ z: 0, r: radius }, { z: height, r: radius }] };
   d.surface = {
     fromMm: 0, toMm: height,
-    a: { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 20 }, b: null,
+    a: { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 19.5 }, b: null,
     blend: { shape: 'fadesUp', amount: 1 },
   };
   d.layers.seam.position = 'fixed';

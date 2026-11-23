@@ -45,6 +45,7 @@ export function createEngine({ library, workerUrl } = {}) {
   worker.onerror = (event) => {
     event.preventDefault?.();
     broken = new Error(event.message || 'The engine stopped working');
+    broken.engineBroken = true;
     for (const job of waiting.values()) job.reject(broken);
     waiting.clear();
   };

@@ -29,8 +29,8 @@
       "surface": {
         "fromMm": 10,
         "toMm": 150,
-        "a": { "pattern": "lib:flutes@1", "depthMm": 2, "repeats": 20, "tileHeightMm": 20 },
-        "b": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 20 },
+        "a": { "pattern": "lib:flutes@1", "depthMm": 2, "repeats": 20, "tileHeightMm": 19.5 },
+        "b": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 19.5 },
         "blend": { "shape": "fadesUp", "amount": 1 }
       },
       "layers": {
@@ -68,7 +68,7 @@
       "surface": {
         "fromMm": 6,
         "toMm": 144,
-        "a": { "pattern": "lib:pleats@1", "depthMm": 1.5, "repeats": 16, "tileHeightMm": 20 },
+        "a": { "pattern": "lib:pleats@1", "depthMm": 1.5, "repeats": 16, "tileHeightMm": 19.5 },
         "b": null,
         "blend": { "shape": "fadesUp", "amount": 1 }
       },
@@ -106,7 +106,7 @@
       "surface": {
         "fromMm": 8,
         "toMm": 102,
-        "a": { "pattern": "lib:basket@1", "depthMm": 1, "repeats": 8, "tileHeightMm": 40 },
+        "a": { "pattern": "lib:basket@1", "depthMm": 1, "repeats": 8, "tileHeightMm": 40.5 },
         "b": null,
         "blend": { "shape": "fadesUp", "amount": 1 }
       },

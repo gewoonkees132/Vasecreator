@@ -21,6 +21,7 @@ import { TAU, dcos, dsin, radians } from './math.js';
 import { PLAIN, evaluatePattern, findPattern } from './patterns.js';
 import { surfaceWeights } from './surface.js';
 import { createProfile } from './profile.js';
+import { snapTileHeight } from './design.js';
 import { createPlan } from './plan.js';
 import { ISSUE } from './checks.js';
 
@@ -79,7 +80,8 @@ export function resolveSlots(design, library) {
       recipe: entry.recipe,
       depthMm: slot.depthMm,
       repeats: slot.repeats,
-      tileHeightMm: slot.tileHeightMm,
+      // Snapped here too, so a design edited without normalising still lines up.
+      tileHeightMm: snapTileHeight(slot.tileHeightMm, design.layers.layerHeightMm),
       features: patternFeatures(entry.recipe),
       active: slot.depthMm > 0 && entry.recipe.kind !== 'plain',
     });
