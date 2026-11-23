@@ -103,3 +103,61 @@ export function smoothstep(e0, e1, x) {
   const t = clamp((x - e0) / (e1 - e0), 0, 1);
   return t * t * (3 - 2 * t);
 }
+
+// fdlibm atan: reduce |x| into one of five intervals around atan's known
+// values, then a polynomial in x² on what is left.
+const ATAN_HI = [4.63647609000806093515e-1, 7.85398163397448278999e-1, 9.82793723247329054082e-1, 1.57079632679489655800e0];
+const ATAN_LO = [2.26987774529616870924e-17, 3.06161699786838301793e-17, 1.39033110312309984516e-17, 6.12323399573676603587e-17];
+const AT = [
+  3.33333333333329318027e-1, -1.99999999998764832476e-1, 1.42857142725034663711e-1,
+  -1.11111104054623557880e-1, 9.09088713343650656196e-2, -7.69187620504482999495e-2,
+  6.66107313738753120669e-2, -5.83357013379057348645e-2, 4.97687799461593236017e-2,
+  -3.65315727442169155270e-2, 1.62858201153657823623e-2,
+];
+
+/**
+ * Arctangent with bit-identical results in every JavaScript engine.
+ * @param {number} x
+ * @returns {number} radians, in (−π/2, π/2)
+ */
+export function datan(x) {
+  if (x !== x) return x;
+  const negative = x < 0;
+  let t = negative ? -x : x;
+  if (t > 1e17) return negative ? -ATAN_HI[3] : ATAN_HI[3];
+  let id = -1;
+  if (t >= 0.4375) {
+    if (t < 1.1875) {
+      if (t < 0.6875) { id = 0; t = (2 * t - 1) / (2 + t); } else { id = 1; t = (t - 1) / (t + 1); }
+    } else if (t < 2.4375) {
+      id = 2; t = (t - 1.5) / (1 + 1.5 * t);
+    } else {
+      id = 3; t = -1 / t;
+    }
+  }
+  const z = t * t;
+  const w = z * z;
+  const s1 = z * (AT[0] + w * (AT[2] + w * (AT[4] + w * (AT[6] + w * (AT[8] + w * AT[10])))));
+  const s2 = w * (AT[1] + w * (AT[3] + w * (AT[5] + w * (AT[7] + w * AT[9]))));
+  if (id < 0) return negative ? -(t - t * (s1 + s2)) : t - t * (s1 + s2);
+  const r = ATAN_HI[id] - ((t * (s1 + s2) - ATAN_LO[id]) - t);
+  return negative ? -r : r;
+}
+
+/**
+ * Two-argument arctangent with bit-identical results in every engine.
+ * @param {number} y @param {number} x
+ * @returns {number} the angle of (x, y), radians in (−π, π]
+ */
+export function datan2(y, x) {
+  if (x > 0) return datan(y / x);
+  if (x < 0) return y >= 0 ? datan(y / x) + PI : datan(y / x) - PI;
+  if (y > 0) return PI / 2;
+  if (y < 0) return -PI / 2;
+  return 0;
+}
+
+/** @param {number} deg @returns {number} radians */
+export function radians(deg) {
+  return (deg * PI) / 180;
+}

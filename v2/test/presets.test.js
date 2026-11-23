@@ -3,23 +3,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { findPattern } from '../core/patterns.js';
 import { BLEND_SHAPES, surfaceWeights } from '../core/surface.js';
+import { createProfile } from '../core/profile.js';
 import { measureWall, wallLimits } from './support/printability.js';
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 const library = read('../library/patterns.json');
 const { presets } = read('../library/presets.json');
-
-// Straight lines between knots. The core's smooth profile curve doesn't exist
-// yet, so presets keep their knot-to-knot lean well under the limit (below).
-function linearProfile(knots) {
-  return (z) => {
-    let i = 0;
-    while (i < knots.length - 2 && z > knots[i + 1].z) i++;
-    const a = knots[i];
-    const b = knots[i + 1];
-    return a.r + ((b.r - a.r) * (z - a.z)) / (b.z - a.z);
-  };
-}
 
 test('there are three presets with distinct ids and names', () => {
   assert.equal(presets.length, 3);
@@ -42,10 +31,17 @@ for (const design of presets) {
     assert.equal(knots.at(-1).z, form.height);
     for (let i = 1; i < knots.length; i++) {
       assert.ok(knots[i].z - knots[i - 1].z >= layers.layerHeightMm, 'knots at least a layer apart');
-      const lean = (Math.atan(Math.abs(knots[i].r - knots[i - 1].r) / (knots[i].z - knots[i - 1].z)) * 180) / Math.PI;
-      assert.ok(lean <= 35, `knot-to-knot lean ${lean.toFixed(1)}° leaves room for the smooth curve`);
     }
     for (const k of knots) assert.ok(k.r >= 2 * layers.beadWidthMm, 'radius at least two beads');
+    // The evaluated curve, not just the knots, leaves room for the pattern's own lean
+    // and never dips below the minimum radius between knots.
+    const curve = createProfile(form.profile);
+    let lean = 0;
+    for (let z = 0; z + 0.5 <= form.height; z += 0.5) {
+      lean = Math.max(lean, (Math.atan(Math.abs(curve.at(z + 0.5) - curve.at(z)) / 0.5) * 180) / Math.PI);
+      assert.ok(curve.at(z) >= 2 * layers.beadWidthMm);
+    }
+    assert.ok(lean <= 35, `the profile curve leans up to ${lean.toFixed(1)}°`);
 
     assert.ok(['circle', 'rectangle'].includes(form.plan.footprint));
     assert.ok(form.plan.depthRatio > 0 && form.plan.cornerRounding >= 0 && form.plan.cornerRounding <= 1);
@@ -84,7 +80,7 @@ for (const design of presets) {
       });
     }
     const { step, curvature } = measureWall(
-      { heightMm: form.height, radiusAt: linearProfile(form.profile.knots), twistDeg: form.twist.degrees, slots },
+      { heightMm: form.height, radiusAt: createProfile(form.profile).at, twistDeg: form.twist.degrees, slots },
       layers,
     );
     const limits = wallLimits(layers);
