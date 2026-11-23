@@ -5,9 +5,17 @@
 // is one gesture: change() edits live, commit() adds one step. Nothing is ever
 // lost (design C3): undo/redo only move the pointer, and a new step made while
 // the pointer is below the top is appended on top, so older steps all stay.
+//
+// Other open tabs share the stored history. Every save merges (store/db.js),
+// and a tab that saved a new step says so on the channel, so the others pick
+// it up: it shows in their history column, while their pointer and their
+// design stay where they are. Undo and redo skip steps that came in from
+// another tab this way, so they only ever undo this tab's own changes.
 
-const MAX_STEPS = 200;
+import { mergeHistory, MAX_STEPS } from './db.js';
+
 const PERSIST_DELAY_MS = 500;
+const REFRESH_DELAY_MS = 100;
 const LS_ADVANCED = 'vc2.advanced';
 const LS_SECTIONS = 'vc2.openSections';
 
@@ -81,25 +89,50 @@ function defaultView() {
  * @param {object} [options.printer]
  * @param {string} [options.label]  label of the first step when there is no history, e.g. 'Opened: Classic vase'
  * @param {{ saveHistory: Function } | null} [options.db]  persists history when given (store/db.js)
+ * @param {{ postMessage: Function, addEventListener: Function } | null} [options.channel]
+ *   a BroadcastChannel shared by the app's tabs, to hear about their new steps
+ * @param {(design: object) => object | null} [options.normalise]
+ *   applied to steps that come in from other tabs; null skips the step
  */
-export function createStore({ design, history = null, printer = null, label = 'Start', db = null }) {
-  /** @type {Step[]} */
-  let steps;
-  let pointer;
-  if (history && Array.isArray(history.steps) && history.steps.length > 0) {
-    steps = history.steps.map((s) => ({
-      id: String(s.id),
+export function createStore({ design, history = null, printer = null, label = 'Start', db = null, channel = null, normalise = null }) {
+  // One id per page load, so the stored history knows where each tab's pointer is.
+  const tab = `t${newId()}`;
+
+  /** A step record as stored, or null when it can't be used. */
+  function readStep(s, incoming = false) {
+    if (!s || typeof s !== 'object' || typeof s.id !== 'string' || !s.id) return null;
+    let stepDesign = s.design;
+    if (incoming && normalise) {
+      try { stepDesign = normalise(stepDesign); } catch { stepDesign = null; }
+    }
+    if (!stepDesign || typeof stepDesign !== 'object') return null;
+    return {
+      id: s.id,
       label: String(s.label || ''),
-      time: Number(s.time) || Date.now(),
-      design: s.design,
+      time: Number.isFinite(s.time) ? s.time : 0,
+      design: stepDesign,
       savedId: s.savedId ?? null,
-      thumb: s.thumb instanceof Blob ? s.thumb : null,
-    }));
-    pointer = Math.min(Math.max(0, history.pointer | 0), steps.length - 1);
-  } else {
+      thumb: typeof Blob !== 'undefined' && s.thumb instanceof Blob ? s.thumb : null,
+    };
+  }
+
+  /** @type {Step[]} */
+  let steps = [];
+  let pointer = 0;
+  const given = history && Array.isArray(history.steps) ? history.steps : [];
+  if (given.length > 0) {
+    const pointerId = given[Math.min(Math.max(0, history.pointer | 0), given.length - 1)]?.id;
+    steps = given.map((s) => readStep(s)).filter(Boolean);
+    pointer = steps.findIndex((s) => s.id === pointerId);
+    if (pointer < 0) pointer = steps.length - 1;
+  }
+  const restored = steps.length > 0;
+  if (!restored) {
     steps = [{ id: newId(), label, time: Date.now(), design: structuredClone(design), savedId: null, thumb: null }];
     pointer = 0;
   }
+  // Steps another tab made while this one was open: on the list, but not on undo's path.
+  const foreign = new Set();
 
   const state = {
     design: structuredClone(steps[pointer].design),
@@ -114,47 +147,90 @@ export function createStore({ design, history = null, printer = null, label = 'S
   const listeners = new Set();
   let gestureLabel = null;
 
-  // Persistence bookkeeping: steps written since the last flush and ids to delete.
+  // Persistence bookkeeping: steps changed since the last save.
   const dirty = new Set();
-  const removed = new Set();
   let persistTimer = 0;
   let metaDirty = false;
 
-  function schedulePersist() {
+  function schedulePersist(delay = PERSIST_DELAY_MS) {
     if (!db) return;
     metaDirty = true;
     clearTimeout(persistTimer);
-    persistTimer = setTimeout(flush, PERSIST_DELAY_MS);
+    persistTimer = setTimeout(flush, delay);
   }
 
+  // Saves are merges (store/db.js), so one tab never hides another tab's
+  // steps, and the answer brings in the steps other tabs saved meanwhile.
   function flush() {
+    clearTimeout(persistTimer);
     persistTimer = 0;
-    if (!db || (!metaDirty && dirty.size === 0 && removed.size === 0)) return Promise.resolve();
-    const put = steps.filter((s) => dirty.has(s.id)).map((s) => ({ ...s }));
-    const remove = [...removed];
+    if (!db) return Promise.resolve();
+    const sent = steps.map((s) => ({ ...s }));
+    const changed = [...dirty];
     dirty.clear();
-    removed.clear();
     metaDirty = false;
-    return db.saveHistory({ put, remove, order: steps.map((s) => s.id), pointer }).then((ok) => {
-      if (ok !== false) return;
-      // Not written (quota, a closed connection): keep it for the next write.
-      for (const s of put) dirty.add(s.id);
-      for (const id of remove) removed.add(id);
-      metaDirty = true;
+    return db.saveHistory({ steps: sent, dirty: changed, pointer: steps[pointer].id, tab }).then((saved) => {
+      if (!saved) {
+        // Not written (quota, a closed connection): keep it for the next write.
+        for (const id of changed) dirty.add(id);
+        metaDirty = true;
+        return;
+      }
+      adopt(saved, new Set(sent.map((s) => s.id)));
+      if (saved.grew && channel) {
+        try { channel.postMessage({ type: 'steps', tab }); } catch { /* closed */ }
+      }
     });
+  }
+
+  /**
+   * Takes the merged list from a save: other tabs' new steps come in, steps
+   * the cap dropped go. Steps made while the save ran, and the step at the
+   * pointer, always stay. The design and the pointer's step never change.
+   */
+  function adopt(saved, sent) {
+    const byId = new Map(steps.map((s) => [s.id, s]));
+    for (const record of saved.added) {
+      if (byId.has(record.id)) continue;
+      const step = readStep(record, true);
+      if (!step) continue;
+      byId.set(step.id, step);
+      foreign.add(step.id);
+    }
+    const listed = new Set(saved.order);
+    const current = steps[pointer];
+    const ordered = saved.order.map((id) => byId.get(id)).filter(Boolean);
+    const extra = steps.filter((s) => !listed.has(s.id) && (!sent.has(s.id) || s === current));
+    const next = extra.length ? mergeHistory(ordered, extra, { cap: Infinity }).steps : ordered;
+    const same = next.length === steps.length && next.every((s, i) => s === steps[i]);
+    if (same) return;
+    steps = next;
+    pointer = steps.indexOf(current);
+    const live = new Set(steps.map((s) => s.id));
+    for (const id of foreign) if (!live.has(id)) foreign.delete(id);
+    syncPointer();
+    emit('history');
   }
 
   // Write on page hide too, so a quick close doesn't lose the last step.
   // metaDirty also covers a write that failed earlier and waits for a retry.
+  // Coming back to the tab picks up what other tabs did meanwhile.
   if (db && typeof addEventListener === 'function') {
-    addEventListener('pagehide', () => { if (persistTimer || metaDirty) { clearTimeout(persistTimer); flush(); } });
+    addEventListener('pagehide', () => { if (persistTimer || metaDirty) flush(); });
     addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden' && (persistTimer || metaDirty)) { clearTimeout(persistTimer); flush(); }
+      if (document.visibilityState !== 'hidden') schedulePersist(REFRESH_DELAY_MS);
+      else if (persistTimer || metaDirty) flush();
+    });
+  }
+  // Another tab saved a new step: merge it in soon (a burst is one save).
+  if (db && channel) {
+    channel.addEventListener('message', (e) => {
+      if (e?.data?.type === 'steps' && e.data.tab !== tab) schedulePersist(REFRESH_DELAY_MS);
     });
   }
 
   // A fresh start is a step too, so a reload right away finds "Last design".
-  if (!(history && history.steps && history.steps.length)) {
+  if (!restored) {
     dirty.add(steps[0].id);
     schedulePersist();
   }
@@ -176,18 +252,29 @@ export function createStore({ design, history = null, printer = null, label = 'S
   }
 
   function pushStep(stepLabel, design, savedId = state.savedId) {
-    const step = { id: newId(), label: stepLabel, time: Date.now(), design: structuredClone(design), savedId, thumb: null };
+    // Never older than the newest step, so a clock that jumps back can't bury it.
+    const time = Math.max(Date.now(), steps[steps.length - 1].time);
+    const step = { id: newId(), label: stepLabel, time, design: structuredClone(design), savedId, thumb: null };
     steps.push(step);
     dirty.add(step.id);
+    // Memory stays bounded even when saves fail; the next save deletes the records.
     while (steps.length > MAX_STEPS) {
       const old = steps.shift();
       dirty.delete(old.id);
-      removed.add(old.id);
+      foreign.delete(old.id);
     }
     pointer = steps.length - 1;
     syncPointer();
     schedulePersist();
     return step;
+  }
+
+  // The next step in this direction that isn't another tab's, or -1.
+  function ownStep(from, direction) {
+    for (let i = from + direction; i >= 0 && i < steps.length; i += direction) {
+      if (!foreign.has(steps[i].id)) return i;
+    }
+    return -1;
   }
 
   function loadStep(index) {
@@ -264,16 +351,18 @@ export function createStore({ design, history = null, printer = null, label = 'S
 
     undo() {
       if (gestureLabel) store.commit();
-      if (pointer > 0) loadStep(pointer - 1);
+      const i = ownStep(pointer, -1);
+      if (i >= 0) loadStep(i);
     },
 
     redo() {
       if (gestureLabel) store.commit();
-      if (pointer < steps.length - 1) loadStep(pointer + 1);
+      const i = ownStep(pointer, 1);
+      if (i >= 0) loadStep(i);
     },
 
-    canUndo() { return pointer > 0; },
-    canRedo() { return pointer < steps.length - 1; },
+    canUndo() { return ownStep(pointer, -1) >= 0; },
+    canRedo() { return ownStep(pointer, 1) >= 0; },
 
     /**
      * Restores a step as a new step on top ("Restored: 4 min"), so nothing is lost.
@@ -352,7 +441,12 @@ export function createStore({ design, history = null, printer = null, label = 'S
       emit('history');
     },
 
-    /** Writes pending history now (tests, page hide). */
+    /**
+     * Saves now, merging with what other tabs saved, and takes in their new
+     * steps. Otherwise this runs 500 ms after a change, on page hide, when
+     * the tab comes back, and when another tab says it saved a step.
+     * @returns {Promise<void>}
+     */
     flush,
   };
 

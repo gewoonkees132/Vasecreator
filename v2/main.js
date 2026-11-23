@@ -84,6 +84,8 @@ async function boot() {
 
   // Old steps go through normalise too, so a schema migration applies to them.
   // A step that can't be read is dropped; the pointer follows its step, not its index.
+  // loadHistory puts the pointer on the newest step: "Last design" is the
+  // newest step any tab made (design §8.4).
   let history = null;
   if (persisted) {
     const pointerId = persisted.steps[persisted.pointer]?.id;
@@ -93,6 +95,11 @@ async function boot() {
     const pointer = steps.findIndex((s) => s.id === pointerId);
     if (steps.length) history = { steps, pointer: pointer >= 0 ? pointer : steps.length - 1 };
   }
+  // Tabs tell each other about new steps, so each history column shows them all.
+  let channel = null;
+  try {
+    if (db.persistent && typeof BroadcastChannel === 'function') channel = new BroadcastChannel('vc2-history');
+  } catch { /* not supported */ }
   const first = normaliseDesign(presets[0]);
   const store = createStore({
     design: first,
@@ -100,6 +107,8 @@ async function boot() {
     printer: loadPrinter(savedPrinter),
     label: `Opened: ${first.meta?.name || 'preset'}`,
     db,
+    channel,
+    normalise: safeNormalise,
   });
 
   // ---------- Engine, renderer, handles ----------

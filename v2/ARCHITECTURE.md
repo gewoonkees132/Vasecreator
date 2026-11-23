@@ -184,8 +184,9 @@ Handles sit in the vertical plane through the axis that faces the camera, on the
 
 ```js
 // store/store.js
-export function createStore({ design, history?: { steps, pointer }, printer?, label = 'Start', db? }): Store
+export function createStore({ design, history?: { steps, pointer }, printer?, label = 'Start', db?, channel?, normalise? }): Store
   // history: persisted steps, oldest first (db.loadHistory()); without it the store starts with one step `label`
+  // channel: BroadcastChannel('vc2-history') shared by the tabs; normalise(design) → design | null for steps from other tabs
 export function relativeTime(time, now = Date.now()): string   // 'now', '3 min', '2 h', '3 d'
 Store = {
   get state(): { design, view, printer, result, savedId, historyId, historyIndex }   // historyIndex counts from the top: 0 = newest
@@ -194,21 +195,26 @@ Store = {
   commit(): boolean                 // ends the gesture: one step if the design differs from the step at the pointer
   apply(label, mutator): boolean    // change + commit (clicks, typed values)
   open(design, label, { savedId? }) // replaces the design and adds a step ("Opened: <name>") unless nothing changed
-  undo(), redo(), canUndo(), canRedo()   // move the pointer; an open gesture is committed first
+  undo(), redo(), canUndo(), canRedo()   // move the pointer, skipping steps another tab made this session; an open gesture is committed first
   restore(stepId)                   // adds "Restored: <relative time>" on top, reusing that step's thumbnail
   history(): Step[]                 // newest first; Step = { id, label, time, design, savedId, thumb: Blob | null }
   currentStep(): Step               // the step at the pointer
   setView(patch), setPrinter(printer), setResult(result), setThumb(stepId, blob)
   setSaved(savedId, name?)          // the current design is now a saved tile (optionally renamed); no new step
-  flush(): Promise<void>            // writes pending history now; otherwise 500 ms after a change, and on page hide
+  flush(): Promise<void>            // saves now (a merge, see below) and takes in other tabs' steps; otherwise 500 ms
+                                    // after a change, on page hide, when the tab is shown again and when another tab saved a step
 }
 view = { advanced, mode: 'design' | 'print', openSections: string[], slot: 'a' | 'b', selectedKnot: number | null,
          highlight: warningId | null, phoneTab, designsOpen, sizeLocked }   // advanced, openSections kept in localStorage
 ```
 
-History (C3): the history is a list of design snapshots, oldest first, plus a pointer. Undo and redo only move the pointer. A commit, open or restore made below the top is added on top, so no step is ever dropped, except the oldest once there are more than 200. Designs are compared without `meta`, so renaming or saving doesn't count as a step. Camera, view state and printer settings are not in history (§8.4).
+History (C3): the history is a list of design snapshots, oldest first, plus a pointer. Undo and redo only move the pointer. A commit, open or restore made below the top is added on top, so no step is ever dropped, except the oldest once there are more than 200 (`MAX_STEPS`). Designs are compared without `meta`, so renaming or saving doesn't count as a step. Camera, view state and printer settings are not in history (§8.4).
 
-`store/db.js`: `openDb()` never rejects. It returns `{ persistent, get(store, key), put(store, key, value), delete(store, key), all(store), loadHistory(), saveHistory({ put, remove, order, pointer }) }`. The IndexedDB database `vasecreator-v2` has three stores: `history` (one record per step, plus `meta` = `{ order, pointer }`), `designs` (saved tiles, `{ id, name, design, thumb, updated }`) and `settings` (`printer`). Without IndexedDB (some private modes), the same API works in memory for the session. A failing call is logged and returns a fallback; it never throws. `put` and `saveHistory` resolve `false` when the write failed, so the caller can keep the data for a retry or say it wasn't saved.
+**Several tabs share one history.** Each tab keeps its list in memory and saves it in one readwrite transaction that reads what is stored, merges and writes. The merge rule (`mergeHistory`): the union by step id, where this tab's steps keep their order and win over a stored copy, other tabs' steps are slotted in by time, and beyond 200 the oldest go, except any step at a live tab's pointer. The same transaction deletes every record the merged list doesn't hold: steps the cap dropped, records an older build left out of its order, unreadable ones. A step that is gone from storage was dropped by another tab's cap, so only this tab's unsaved changes and its current step are written back; if `meta` itself is gone (site data cleared), the tab writes everything again. A tab that saved a new step posts `{ type: 'steps' }` on the channel; the other tabs then save (merge) 100 ms later, and the answer adds the new steps to their history column. Their design and pointer don't move, and their undo and redo skip those steps, so undo only undoes this tab's own changes. Only new steps are announced, never thumbnails or drops, so tabs can't set each other off in a loop.
+
+**Next visit.** `loadHistory()` puts the pointer on the newest step, so *Last design* is the newest step any tab made (§8.4), also when the last tab had undone a few steps. Undo walks back from there through every tab's steps.
+
+`store/db.js`: `openDb()` never rejects. It returns `{ persistent, get(store, key), put(store, key, value), delete(store, key), all(store), loadHistory(), saveHistory({ steps, dirty, pointer, tab, cap? }) }`; `saveHistory` resolves `{ order, added, grew }` (the merged ids, the stored steps this tab didn't have, whether a step new to storage was written). It also exports `MAX_STEPS` and the pure `mergeHistory(stored, local, { cap, keep })` and `planHistorySave(read, save)`, which the transaction runs on what it read. The IndexedDB database `vasecreator-v2` has three stores: `history` (one record per step, plus `meta` = `{ order, pointers: { [tab]: { id, at } } }`; the pointers of the 8 most recent tabs are protected from the cap, and an older `{ order, pointer }` still reads), `designs` (saved tiles, `{ id, name, design, thumb, updated }`) and `settings` (`printer`). Unreadable step records (no id, no design, stored under another key) are skipped. Without IndexedDB (some private modes), the same API works in memory for the session, and the tabs don't share. A failing call is logged and returns a fallback; it never throws. `put` and `saveHistory` resolve `false` when the write failed, so the caller can keep the data for a retry or say it wasn't saved.
 
 ## UI contracts
 
@@ -239,7 +245,7 @@ body
 
 ## Testing and running
 
-- `cd v2 && npm test` runs `test/*.test.js` with `node:test` (Node 24, no dependencies). The suites cover `core/` only. The store, the renderer and the UI are checked by hand in a browser.
+- `cd v2 && npm test` runs `test/*.test.js` with `node:test` (Node 24, no dependencies). The suites cover `core/` and the store: `test/store.test.js` runs the store against the in-memory database, with two stores on one database standing for two tabs. The renderer and the UI are checked by hand in a browser.
 - **Golden G-code.** `test/golden/*.gcode` holds the output for a plain cylinder and the three presets. Any change to the output fails with the first line that differs. Read the diff, and if the change is intended, rewrite the files with `UPDATE_GOLDEN=1 npm test` (PowerShell: `$env:UPDATE_GOLDEN=1; npm test`). Commit them with the change. A missing golden file is written on the next run.
 - **Determinism.** A test in `test/math.test.js` scans `core/*.js`, with comments stripped, for the banned `Math` functions and `**` (see Rules).
 - **Run the app.** From the repository root, run `node v2/tools/serve.mjs [port]` and open <http://localhost:8020/v2/>. The server serves the repository root without caching, so `/v2/` sits at the same path as on the live site. You need a server because module workers don't load from `file://`. The browser needs WebGL 2, plus network access for three.js and the Inter font.
