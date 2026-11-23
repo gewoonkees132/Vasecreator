@@ -1,79 +1,50 @@
 # Vasecreator v2: design brainstorm prompt
 
-Paste the block below into a new Claude Code session opened in the Vasecreator repository.
+Paste the block below into a new Claude Code session opened in the Vasecreator repository, on a branch that contains `docs/research/toolpath-foundation.md`. The first line starts the `brainstorming` skill, which runs the conversation itself. The prompt only describes the goal.
 
 ```text
-# Brainstorm: the Vasecreator v2 design experience
+/brainstorming
 
-## Context
-You are working in the Vasecreator repository: a vanilla JavaScript + three.js vase configurator, live at vasecreator.com, GPL-3.0 and free for the public. Version 2 moves from mesh-based to toolpath-based design: the nozzle path is the single source of truth and G-code is the primary output.
+I want to design the Vasecreator v2 design experience: everything a user does before G-code is generated. The goal is a design doc concrete enough to start implementation planning from. It should cover who the app is for, the interface concept (desktop and Android), how each part works, the finish step, and the MVP cut.
 
-Before anything else:
-- Read docs/research/toolpath-foundation.md. Read these sections closely: §1 (summary), §2.7 (feature mapping), §3.6–3.7 (patterns to adopt, mistakes to avoid), §5 (toolpath model and data model), §6 (pattern system), §7 (printability checks) and §11 (decisions and open questions). Use the rest as reference.
-- Look at index.html, style.css and script.js so you know the current interface, including how it behaves on phones.
+Context
+- Vasecreator (this repo) is a free, GPL-3.0 vase configurator written in vanilla JS and three.js, live at vasecreator.com. Today it builds a mesh and exports OBJ. v2 is toolpath-first: the nozzle path is the single source of truth and G-code is the primary output.
+- The research is done, in docs/research/toolpath-foundation.md. It covers:
+  - the current code (§2);
+  - other tools, and what to copy or avoid (§3);
+  - the toolpath and data model (§5);
+  - the pattern system (§6);
+  - printability checks (§7);
+  - architecture (§8);
+  - open questions (§11.3).
+  Build on it rather than redoing it.
 
-## Decisions already made
-Do not reopen these unless I ask.
-- D0: The app stays free for the public. No accounts, paywalls or gated exports.
-- D1: Both clay and FDM are targets.
-- D2: Walls and thickness are chosen at the end, never during design.
+Already decided (§11.1, not up for discussion)
+- D0: The app is free for the public. No accounts, paywalls or gated exports.
+- D1: Clay and FDM are both targets.
+- D2: Walls and thickness are set at the end, never while designing.
   - Clay: 1 or 2 walls.
   - FDM: several thickness methods, applied at G-code export or by building a mesh afterwards.
-  - The live design loop only evaluates the single centreline wall, so it stays fast.
-- D3: three.js. It must work on Android like the current app: WebGL 2 baseline and touch editing.
-- D4: Physical printer verification is deferred. The focus is the pre-G-code design step and a really good interface.
+  - While designing, only the single centreline wall is computed, so editing stays quick.
+- D3: three.js. It must work on Android like the current app does, which means WebGL 2 and touch editing.
+- D4: No printer verification for now. The focus is the design step before G-code, with a really good interface.
 - D5: Web only.
 
-## Goal
-Design the v2 design experience, meaning everything before G-code, well enough that implementation planning can start. I want a concrete interface concept and an interaction spec, not a feature list.
+What the design has to cover
+- Who uses it (clay potters, FDM vase makers, beginners and students, educators), and what "a really nice interface" means for each of them.
+- The interface concept, for desktop and for an Android phone.
+- Shape editing: profile, plan shape and twist.
+- The pattern system: effect stack, images, rules, and curves over height.
+- The preview: bead and lines views, scrubber, heatmaps.
+- Printability feedback, undo and presets.
+- The finish step: choosing clay or FDM, the printer, the wall or thickness method, the stats, and export.
+- The MVP, and the order of what follows. Revise the phases in §9.4 to match.
+- A recommendation for each remaining question in §11.3, and which of them need my decision.
 
-## Agenda
-Take one topic at a time, in this order.
-1. Users and jobs. Cover potters with clay printers, FDM vase makers, students and beginners, and educators. Settle 2–3 primary personas, their top jobs, and what "a really nice interface" means for each.
-2. Interface concept (§11.3 Q1).
-   - Propose 2–3 clearly different layouts, for example tabbed panels as in Potterware, a single canvas with contextual panels, or a guided step flow.
-   - Draw ASCII wireframes for desktop and for an Android phone.
-   - Give the trade-offs and a recommendation, then let me choose.
-3. Core interactions, for the chosen concept:
-   - Profile editing: in 3D or as a 2D side profile, handles, numeric entry.
-   - Plan shape and twist.
-   - The effect stack: add, reorder, enable, mask.
-   - Image mapping: placement, tiling, aspect lock, the printable-resolution readout from §6.3.
-   - Rules: layer ranges, fades and bands, with chips showing layers, mm and %.
-   - Curves over height: a vertical editor aligned with the model (§6.6).
-   - The preview: bead and lines modes, scrubber, heatmaps.
-   - Validation feedback (§7), undo/redo, presets.
-   - Touch versions of all of the above.
-4. The finish step (D2, §11.3 Q3 and Q4).
-   - How the user picks clay or FDM, a printer profile and a wall or thickness method.
-   - How they see the stats and export G-code or a mesh.
-   - How the finish step avoids slowing the design loop.
-5. MVP cut (§11.3 Q2). What is in the first release and what comes next. Revise the phases in §9.4 to match.
-6. Remaining questions in §11.3. Give a recommendation for each one the earlier topics didn't settle, and flag the ones that need my decision.
-7. Risks and the first prototypes, for example the bead renderer on a mid-range Android phone and the curve editor on touch.
-
-## How to work
-- This is a conversation. Ask me when a decision is mine, keeping to one topic at a time.
-- Give options with your recommendation first, and keep them concrete: ASCII wireframes, interaction sketches, example values.
-- Ground proposals in the research doc and cite its sections (for example "§6.4"). Label new assumptions as assumptions.
-- Keep facts and recommendations separate. If you need a new fact, such as how another tool solves an interaction, verify it with a web search and cite it.
-- Use the `brainstorming` skill for this session, with these overrides:
-  - Write the design doc to docs/design/v2-design-brainstorm.md, not docs/superpowers/specs/.
-  - superpowers:writing-plans is not installed. After I approve the design, stop and summarise instead of moving on to a plan.
-  - The visual companion is welcome for wireframes and layout options. Keep its .superpowers/ folder out of git by adding it to .git/info/exclude, not to .gitignore.
-- Write no implementation code. Pseudocode and JSON sketches are fine. Do not modify source files.
-
-## Output
-- Create docs/design/v2-design-brainstorm.md, containing:
-  - A decisions log, numbered from D6 onwards.
-  - The personas.
-  - The chosen interface concept, with desktop and Android wireframes.
-  - An interaction spec per area.
-  - The finish-step spec.
-  - The MVP scope and revised phases.
-  - The questions that are still open.
-  - The prototype plan.
-- In docs/research/toolpath-foundation.md, change §11 only: mark questions as resolved and link them to the brainstorm doc.
-- Git: commit only those two docs, with a plain message. No Co-Authored-By trailers, no "Generated with" lines and no AI attribution anywhere (commits, PRs or documents).
-- Finish with a short summary and the list of decisions that still need me.
+Ground rules
+- Save the design doc as docs/design/v2-design-brainstorm.md, not under docs/superpowers/specs/. Number new decisions from D6.
+- superpowers:writing-plans isn't installed. Once I approve the design, stop and summarise.
+- If you use the visual companion, add .superpowers/ to .git/info/exclude, not to .gitignore.
+- Write no implementation code, and don't change source files. In toolpath-foundation.md, update only §11, to mark questions as resolved.
+- Git: commit only those docs, with a plain message. No Co-Authored-By trailers, no "Generated with" lines and no AI attribution anywhere.
 ```
