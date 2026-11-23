@@ -1,0 +1,9 @@
+{
+  "name": "vasecreator-v2",
+  "private": true,
+  "type": "module",
+  "description": "Vasecreator v2, the toolpath-first clay vessel designer. See docs/design/v2-design-brainstorm.md.",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\""
+  }
+}

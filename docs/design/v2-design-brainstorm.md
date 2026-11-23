@@ -213,7 +213,7 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 
 - **When it opens:** on every visit, and from the *Designs* button. On the very first visit, *Last design* is missing and the presets lead.
 - **Tiles are rectangular,** with a white bead thumbnail of the pot and its name (D13). One click loads the design and closes the screen.
-- **Three built-in presets.** "Classic vase", "Fluted cylinder" and "Square planter" are placeholders until the owner picks the final three (§16).
+- **Three built-in presets,** suggested on 2026-11-23 and waiting for the owner to confirm: **Classic vase** (flutes fading into a smooth neck), **Twisted column** (pleats with a 60° twist) and **Square planter** (basket weave on a square footprint, with a drainage hole). They are in `v2/library/presets.json` (§16).
 - **Save design** asks for a name (default "Design 1", "Design 2"…) and adds a tile under *Saved*. Saving an already-saved design updates its tile. A *Save as new* option keeps both.
 - **Tile menu (⋯)** on saved tiles: rename, duplicate, delete (with confirmation), and *Download design file*. The Designs screen also has *Open design file*, which adds a tile from a `.json` file. Design files are how designs move between devices and how students hand work in.
 - **Storage.** Saved designs and their thumbnails live in the browser (IndexedDB, with `navigator.storage.persist()`). Because browsers may clear storage, the Designs screen reminds users once to download important designs (research §8.4).
@@ -289,14 +289,14 @@ Amount          ──●──   [1.0 ×]
 ```
 
 - **The swatch library (D16).** About 12 small, seamless patterns. Each is a *recipe* for the pattern generator, not an image file:
-  - Diamonds, Out·In·Out (brick), Flutes, Scales, Weave, Checker, Zigzag, Dots and Ribs are the working list. The final list is the owner's pick (§16).
+  - The suggested twelve, waiting for the owner to confirm (§16): **Flutes, Pleats, Ribs, Ripple, Spiral, Chevron, Diamonds, Out·In·Out (brick), Scales, Dots, Honeycomb and Basket.** They are in `v2/library/patterns.json`, each with starting values that pass the 45° and bead checks on a 90 mm pot.
   - Because the patterns are recipes made in-house, the library has no third-party image licences to track (research §8.6).
   - Selecting a swatch keeps the slot's depth, repeats and tile height, so switching patterns feels like trying a new texture, not starting over.
 - **Slot B starts as *None*:** blending is off and only A shows, so a new design has one pattern. Picking any swatch for B turns blending on, with *Fades up* and amount 1.0 as defaults. *Plain* is a real choice for B, with no texture, so A fades into a smooth surface. *None* (blending off) is the first option in B's grid. My call (C18).
 - **Depth** (mm): how far the pattern pushes the bead out and pulls it in. It is real millimetres, as research §6.5 requires: 2.5 mm is 2.5 mm wherever the pattern is fully on.
 - **Repeats around:** a whole number, always (D16). The pattern therefore meets itself with no seam. The panel shows the resulting cell size at the widest point as information ("≈ 16 mm per repeat"), not as a control. My call.
 - **Tile height** (mm): the height of one repeat. It snaps to whole layers so pattern rows line up with beads. My call.
-- **From / to** (mm): where the surface pattern starts and stops. It applies to A and B together. Each end always gets a soft edge of two layers, so a pattern never starts with a hard step. By default the pattern starts above the base (8 mm) and stops 10 mm below the rim.
+- **From / to** (mm): where the surface pattern starts and stops. It applies to A and B together. Each end always gets a soft edge, so a pattern never starts with a hard step. The edge is at least two layers long, or 3 × the pattern depth in mm if that is longer, so the pattern grows by no more than half a layer height per layer (`v2/core/surface.js`). By default the pattern starts above the base (8 mm) and stops 10 mm below the rim.
 - **Blend (D17).** Let *t* run from 0 at *From* to 1 at *To*, and *a* be the amount (0–1). The amount is B's peak share. Next to the slider, the panel shows the resulting split, for example "A 50 % · B 50 %".
   - **Even:** B's weight w = a everywhere. With a = 0.5 the surface is half A and half B, and with a = 1.0 it is all B. Switching to *Even* sets the amount to 0.5 if it was 1.0, so the first click shows a real mix.
   - **Fades up:** w = a · smoothstep(0, 1, t). A at the bottom changes gradually into B at the top.
@@ -470,7 +470,7 @@ The research's design JSON (§5.2) stays the basis: mm everywhere, a versioned s
   }
   ```
 
-  `pattern` is a library id, a user recipe id (phase 2) or an image asset (phase 2). A **pattern recipe** is a small JSON object (`{ "kind": "motif", "cells": [1,-1,1], "layout": "brick", "cellsPerRepeat": 3, "rowLayers": 6, "edges": "soft" }` or `{ "kind": "shape", "shape": "diamonds", … }`). The exact recipe schema is left to the builder (§18).
+  `pattern` is a library id, a user recipe id (phase 2) or an image asset (phase 2). A **pattern recipe** is a small JSON object (`{ "kind": "motif", "cells": [1,-1,1], "layout": "brick", "edges": "soft" }` or `{ "kind": "shape", "shape": "diamonds", … }`). The recipe schema is now defined by `v2/core/patterns.js` (`kind`: `shape`, `motif` or `plain`).
 - **`layers`** replaces `slicing`: `{ "beadWidthMm": 3.0, "layerHeightMm": 1.5, "overhangLimitDeg": 45, "seam": { "rampLengthMm": 15, "position": "fixed" | "followTwist" | "hidden", "angleDeg": 0 } }`. There is no `layerChange` field (D10). `pointsPerLayer: "auto"` stays internal.
 - **`base`** as in the research, with `pattern: "spiral"` only in phase 1.
 - **`finish`** becomes clay only: `{ "walls": 1 | 2, "wallSpacingMm": 2.7, "innerWall": "smooth" | "followPattern" }` (D6, D27). The FDM block is dropped until FDM returns.
@@ -570,7 +570,7 @@ Each line is meant to become one issue. Its title is in bold, followed by its sc
 | Q7 | Default layer change | **Planar with a seam ramp** (D10). No spiral mode. | No, decided |
 | Q8 | Any server component? | **None.** Everything is static and local. Share links later via the URL fragment. | No |
 | Q9 | Mesh import | **Out.** Listed in §15.4. | No |
-| Q10 | Pattern library | **About 12 in-house generator recipes** for phase 1, so there are no third-party licences. Working list in §9.2. | **Yes, light:** pick the final 12, and the three preset designs. |
+| Q10 | Pattern library | **12 in-house generator recipes,** so there are no third-party licences. Suggested set and three presets in `v2/library/` (§9.2, §8.3). | **Yes, light:** confirm or swap the suggested 12 and the three presets. |
 | Q11 | First printer profiles | **One generic gantry clay profile** (D9). Named drafts later. | No, decided |
 | Q12 | When to adopt WebGPURenderer | **Keep the research's trigger.** WebGL 2 stays the guaranteed path. | No |
 | Q13 | Shrinkage compensation | **Later** (§15.4). | No |
@@ -589,11 +589,11 @@ These were not explicitly decided by the owner. A builder should treat them as t
 | C1 | With 2 walls, the default **wall spacing is 0.9 × bead width**, so the walls fuse where they meet. The inner-wall behaviour is the owner's (D27) | A thick wall is the usual reason to choose 2 walls |
 | C2 | Defaults: **bead 3.0 mm, layer 1.5 mm, seam ramp 15 mm, base 3 layers** | Mid-range values from research §3.4 and §5.2 |
 | C3 | **Clicking a history step restores it as a new step;** about 200 steps; history survives reloads; opening a design adds a step | Nothing is ever lost, which matters when going back is the point |
-| C4 | Presets **Classic vase, Fluted cylinder, Square planter** (placeholders) | Covers smooth, patterned and rectangular starting points |
-| C5 | **About 12 in-house pattern recipes;** working list in §9.2 | No licence risk; swatches stay exact at any bead size |
+| C4 | Presets **Classic vase, Twisted column, Square planter** (suggested, `v2/library/presets.json`) | Covers a smooth profile with a blend, a twist, and a rectangle with a drainage hole |
+| C5 | **12 in-house pattern recipes** (suggested, `v2/library/patterns.json`) | No licence risk; swatches stay exact at any bead size |
 | C6 | **Width** = widest diameter and scales the profile; **depth** is a locked ratio; rectangle **corner rounding** is a fraction | Width and depth read as overall sizes. The profile keeps its character, and the corners stay valid where the pot narrows |
 | C7 | **Repeats** are the control, and cell size is shown as information; **tile height** snaps to whole layers | Whole repeats keep the pattern seamless (D16); rows line up with beads |
-| C8 | **From / to** is shared by A and B, with a fixed two-layer soft edge at both ends | One range keeps the blend simple; "always gradual" (D17) |
+| C8 | **From / to** is shared by A and B, with a soft edge at both ends of at least two layers or 3 × the depth | One range keeps the blend simple; "always gradual" (D17); a two-layer edge on a 2 mm pattern used most of the 45° allowance on its own |
 | C9 | The phase 1 warning set is the five in §11; the overhang limit sits under *Layers & seam* | Covers what the owner named (45°), plus the failures the research ranks highest |
 | C10 | Prepare print replaces the sidebar with four numbered steps; **size is the only statistic** | Matches "layers and material don't matter" (D15) |
 | C11 | On a phone, Advanced adds **one** extra tab holding all the advanced sections; *Designs* and *Save* move behind the logo menu | Keeps the tab row readable at 360 px |
@@ -610,7 +610,7 @@ These were not explicitly decided by the owner. A builder should treat them as t
 
 ## 18. Left to the builder
 
-- **The pattern recipe schema** and the exact analytic functions for each library pattern. The requirements: they are deterministic, evaluated per point, seamless with whole repeats, and give values from −1 to 1.
+- **Analytic functions for new patterns** added later. The requirements, as met by the first twelve: deterministic, evaluated per point, seamless with whole repeats, and giving values from −1 to 1.
 - **The exact folder layout** inside `v2/`, module boundaries apart from the core/worker/renderer split, and the choice of test runner (research §8.5).
 - **The store and rendering approach** for the UI: plain modules and a small store, with no framework (§7, §14).
 - **Thumbnail capture:** size, timing and caching for history and tiles.
