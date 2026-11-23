@@ -1,7 +1,7 @@
 # Vasecreator v2: the design experience
 
 - **Date:** 2026-11-23
-- **Status:** Design for owner review. Once approved, this is the input for implementation planning.
+- **Status:** Approved by the owner on 2026-11-23. This is the input for implementation planning.
 - **Builds on:** [`docs/research/toolpath-foundation.md`](../research/toolpath-foundation.md), the "research" below. Section numbers such as §5.2 refer to it. This document doesn't repeat the research; it says what to build on top of it and where it departs from it.
 - **Decisions:** D0–D5 are in research §11.1. New decisions start at D6 (§3). Calls I made without an explicit owner decision are listed separately (§17), so they can be checked.
 
