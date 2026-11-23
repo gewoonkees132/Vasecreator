@@ -5,6 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="robots" content="noindex">
   <title>Vase Creator v2 (preview)</title>
+  <script>
+    // Every URL below is relative to /v2/. Served as /v2 without the slash, they
+    // would resolve against the site root, so add the slash before loading anything.
+    if (!/\/$|\.html$/.test(location.pathname)) location.replace(location.pathname + '/' + location.search + location.hash);
+  </script>
   <link rel="icon" type="image/png" href="/Favicon/favicon-96x96.png" sizes="96x96">
   <link rel="icon" type="image/svg+xml" href="/Favicon/favicon.svg">
   <link rel="shortcut icon" href="/Favicon/favicon.ico">
