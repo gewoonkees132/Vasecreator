@@ -8,7 +8,7 @@ import { drawSwatch, drawRasterSwatch, beadGrid } from '../swatch.js';
 import { PLAIN } from '../../core/patterns.js';
 import { LIMITS, snapTileHeight } from '../../core/design.js';
 import { footprintAt, limit } from './shape.js';
-import { listPatterns, onPatternsChanged, loadImage, cachedImage } from '../../store/assets.js';
+import { listPatterns, deletePattern, onPatternsChanged, loadImage, cachedImage } from '../../store/assets.js';
 import { printableResolution } from '../../core/raster.js';
 
 // The editor and the image decoder load on first use.
@@ -38,6 +38,11 @@ function findEntry(library, id, assets, saved) {
   if (a?.kind === 'recipe' && a.recipe) return { id, name: a.name || 'My pattern', recipe: a.recipe, own: true };
   if (a?.kind === 'image') return { id, name: a.name || 'Image', image: a, own: true };
   return library.patterns.find((p) => p.id === id) ?? saved?.find((p) => p.id === id) ?? null;
+}
+
+// Whether the design draws with an asset (a slot or the morph map uses it).
+function usesAsset(d, id) {
+  return d.surface?.a?.pattern === id || d.surface?.b?.pattern === id || d.form?.morph?.map === id;
 }
 
 // "Prints at ≈ 39 × 100 beads per tile".
@@ -193,14 +198,13 @@ const section = {
 
     // My patterns: saved in this browser, plus your own assets in this design.
     let saved = [];
-    const refreshSaved = () => {
+    const refreshSaved = () =>
       Promise.resolve(listPatterns())
         .then((list) => {
           saved = Array.isArray(list) ? list : [];
           update(store.state);
         })
         .catch((err) => console.warn('My patterns not loaded', err));
-    };
     const mineLabel = h('div', { class: 'grid-label', id: `mine-label-${Math.random().toString(36).slice(2, 8)}`, text: 'My patterns' });
     const mineGrid = h('div', { class: 'swatch-grid mine-grid', role: 'group', 'aria-labelledby': mineLabel.id });
     let mineTiles = [];
@@ -213,6 +217,58 @@ const section = {
     const editBtn = h('button', { type: 'button', class: 'btn edit-pattern-btn', text: 'Edit pattern…' });
     const imageMsg = h('p', { class: 'panel-note image-msg', role: 'alert', hidden: true });
     const actions = h('div', { class: 'pattern-actions' }, [editBtn]);
+
+    // Deleting one of My patterns, after a confirmation under the grid. The
+    // design keeps its own copy when it uses the pattern, so the pot never
+    // changes; an unused copy goes too, so the swatch leaves the grid.
+    const confirmText = h('p', { class: 'mine-confirm-text', id: `mine-confirm-${Math.random().toString(36).slice(2, 8)}` });
+    const confirmCancel = h('button', { type: 'button', class: 'btn', text: 'Cancel' });
+    const confirmDelete = h('button', { type: 'button', class: 'btn btn-danger', text: 'Delete' });
+    const confirmBox = h('div', { class: 'mine-confirm', role: 'group', 'aria-labelledby': confirmText.id, hidden: true }, [
+      confirmText,
+      h('div', { class: 'mine-confirm-actions' }, [confirmCancel, confirmDelete]),
+    ]);
+    let pendingDelete = null;
+    const closeConfirm = (refocus) => {
+      const p = pendingDelete;
+      pendingDelete = null;
+      confirmBox.hidden = true;
+      if (refocus && p?.from?.isConnected) p.from.focus();
+    };
+    const askDelete = (entry, from) => {
+      showImageMsg('');
+      pendingDelete = { id: entry.id, name: entry.name, from };
+      const used = usesAsset(store.state.design, entry.id);
+      confirmText.textContent = `Delete “${entry.name}” from My patterns?${used ? ' This design keeps its own copy, so the pot doesn’t change.' : ''}`;
+      confirmBox.hidden = false;
+      confirmCancel.focus();
+    };
+    confirmCancel.addEventListener('click', () => closeConfirm(true));
+    confirmBox.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        closeConfirm(true);
+      }
+    });
+    confirmDelete.addEventListener('click', async () => {
+      const p = pendingDelete;
+      if (!p) return;
+      closeConfirm(false);
+      try {
+        await deletePattern(p.id);
+      } catch (err) {
+        console.warn('Pattern not deleted', err);
+        showImageMsg('That pattern couldn’t be deleted. Try again.');
+        return;
+      }
+      const d = store.state.design;
+      const used = usesAsset(d, p.id);
+      if (!used && d.assets?.[p.id]) store.apply(`Delete pattern ${p.name}`, (dd) => { delete dd.assets[p.id]; });
+      await refreshSaved();
+      showImageMsg(used ? `“${p.name}” is no longer in My patterns. This design keeps its own copy.` : '');
+      imageBtn.focus();
+    });
 
     const showImageMsg = (text) => {
       imageMsg.textContent = text;
@@ -300,16 +356,24 @@ const section = {
     };
     const renderMine = (d, fp, layers, slot) => {
       const list = mineEntries(d);
-      const key = list.map((e) => `${e.id}|${e.name}`).join(';');
+      const savedIds = new Set(saved.map((p) => p.id));
+      const key = list.map((e) => `${e.id}|${e.name}|${savedIds.has(e.id) ? 1 : 0}`).join(';');
       if (key !== mineKey) {
         mineKey = key;
         mineTiles = list.map((e) => {
           const canvas = h('canvas', { class: 'swatch-canvas', width: 1, height: 1, 'aria-hidden': 'true' });
           const btn = h('button', { type: 'button', class: 'swatch', title: e.name }, [canvas, h('span', { class: 'swatch-name', text: e.name })]);
           btn.addEventListener('click', () => pick(e.id));
-          return { id: e.id, btn, canvas, drawn: '' };
+          // Saved in this browser: a corner button deletes it (after a confirmation).
+          if (!savedIds.has(e.id)) return { id: e.id, el: btn, btn, canvas, drawn: '' };
+          const del = h('button', { type: 'button', class: 'swatch-del', title: 'Delete from My patterns', 'aria-label': `Delete ${e.name} from My patterns` }, [
+            h('span', { class: 'swatch-del-dot', 'aria-hidden': 'true', text: '×' }),
+          ]);
+          del.addEventListener('click', () => askDelete(e, del));
+          return { id: e.id, el: h('div', { class: 'swatch-item' }, [btn, del]), btn, canvas, drawn: '' };
         });
-        mineGrid.replaceChildren(...mineTiles.map((t) => t.btn), imageBtn);
+        mineGrid.replaceChildren(...mineTiles.map((t) => t.el), imageBtn);
+        if (pendingDelete && !savedIds.has(pendingDelete.id)) closeConfirm(false);
       }
       for (const t of mineTiles) {
         const e = list.find((x) => x.id === t.id);
@@ -388,7 +452,7 @@ const section = {
     });
     const blendBox = h('div', { class: 'blend-settings' }, [blend.el, amount.el]);
 
-    el.append(slots, gridLabel, grid, mineLabel, mineGrid, fileInput, imageMsg, actions, emptyNote, plainNote, slotBox, rangeRow, blendBox);
+    el.append(slots, gridLabel, grid, mineLabel, mineGrid, confirmBox, fileInput, imageMsg, actions, emptyNote, plainNote, slotBox, rangeRow, blendBox);
 
     const update = (state) => {
       const d = state.design;

@@ -659,6 +659,49 @@
 }
 .swatch-action:hover .swatch-add { border-color: var(--c-primary-light); color: var(--c-text); }
 .swatch-action:disabled { opacity: .5; cursor: progress; }
+/* One of My patterns: the swatch plus a small delete button on its corner. */
+.swatch-item { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.swatch-del {
+  position: absolute;
+  top: -4px;
+  right: calc(50% - 34px);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.swatch-del-dot {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--c-input-bg);
+  box-shadow: 0 0 0 1px var(--c-input-border), var(--shadow-1);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--c-text-2);
+}
+.swatch-del:hover .swatch-del-dot { color: var(--c-text); box-shadow: 0 0 0 1px var(--c-primary-light), var(--shadow-1); }
+.swatch-del:focus-visible { outline: none; }
+.swatch-del:focus-visible .swatch-del-dot { box-shadow: var(--focus-ring); }
+.mine-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-ctl);
+  background: var(--c-input-bg);
+}
+.mine-confirm[hidden] { display: none; }
+.mine-confirm-text { font-size: 13px; color: var(--c-text); }
+.mine-confirm-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 .pattern-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .edit-pattern-btn { flex: 1 1 auto; }
 .image-msg { color: var(--c-text); }
@@ -722,6 +765,10 @@
   .pe-row-input, .pe-name { height: 44px; font-size: 16px; }
   .swatch-add { width: 60px; height: 60px; }
   .edit-pattern-btn { min-height: 44px; }
+  /* A 44 px target whose dot stays on the swatch's corner. */
+  .swatch-del { top: -14px; right: calc(50% - 48px); width: 44px; height: 44px; }
+  .swatch-del-dot { width: 24px; height: 24px; font-size: 15px; }
+  .mine-confirm-actions .btn { min-height: 44px; }
 }
 
 @media (max-width: 760px) {
