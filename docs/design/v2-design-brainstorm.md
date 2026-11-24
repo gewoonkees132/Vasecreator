@@ -213,7 +213,7 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 
 - **When it opens:** on every visit, and from the *Designs* button. On the very first visit, *Last design* is missing and the presets lead.
 - **Tiles are rectangular,** with a white bead thumbnail of the pot and its name (D13). One click loads the design and closes the screen.
-- **Three built-in presets,** suggested on 2026-11-23 and waiting for the owner to confirm: **Classic vase** (flutes fading into a smooth neck), **Twisted column** (pleats with a 60° twist) and **Square planter** (basket weave on a square footprint, with a drainage hole). They are in `v2/library/presets.json` (§16).
+- **Three built-in presets,** suggested on 2026-11-23 and confirmed by the owner on 2026-11-24: **Classic vase** (flutes fading into a smooth neck), **Twisted column** (pleats with a 60° twist) and **Square planter** (basket weave on a square footprint, with a drainage hole). They are in `v2/library/presets.json` (§16).
 - **Save design** asks for a name (default "Design 1", "Design 2"…) and adds a tile under *Saved*. Saving an already-saved design updates its tile. A *Save as new* option keeps both.
 - **Tile menu (⋯)** on saved tiles: rename, duplicate, delete (with confirmation), and *Download design file*. The Designs screen also has *Open design file*, which adds a tile from a `.json` file. Design files are how designs move between devices and how students hand work in.
 - **Storage.** Saved designs and their thumbnails live in the browser (IndexedDB, with `navigator.storage.persist()`). Because browsers may clear storage, the Designs screen reminds users once to download important designs (research §8.4).
@@ -289,7 +289,7 @@ Amount          ──●──   [1.0 ×]
 ```
 
 - **The swatch library (D16).** About 12 small, seamless patterns. Each is a *recipe* for the pattern generator, not an image file:
-  - The suggested twelve, waiting for the owner to confirm (§16): **Flutes, Pleats, Ribs, Ripple, Spiral, Chevron, Diamonds, Out·In·Out (brick), Scales, Dots, Honeycomb and Basket.** They are in `v2/library/patterns.json`, each with starting values that pass the 45° and bead checks on a 90 mm pot.
+  - The twelve, confirmed by the owner on 2026-11-24 (§16): **Flutes, Pleats, Ribs, Ripple, Spiral, Chevron, Diamonds, Out·In·Out (brick), Scales, Dots, Honeycomb and Basket.** They are in `v2/library/patterns.json`, each with starting values that pass the 45° and bead checks on a 90 mm pot.
   - Because the patterns are recipes made in-house, the library has no third-party image licences to track (research §8.6).
   - Selecting a swatch keeps the slot's depth, repeats and tile height, so switching patterns feels like trying a new texture, not starting over.
 - **Slot B starts as *None*:** blending is off and only A shows, so a new design has one pattern. Picking any swatch for B turns blending on, with *Fades up* and amount 1.0 as defaults. *Plain* is a real choice for B, with no texture, so A fades into a smooth surface. *None* (blending off) is the first option in B's grid. My call (C18).
@@ -502,7 +502,7 @@ Research §8.8, option A, stands. This section only adds what the design and D25
 
   So the site is almost certainly on Cloudflare Pages, and a `v2/` folder will be served at `/v2/`. Everything is static and needs no `SharedArrayBuffer`.
 
-  Under D25, `/v2/` is an open preview, so work-in-progress appearing there is intended. Cloudflare Pages' per-branch preview URLs are available as well, if wanted. **At phase 0 the owner confirms** whether deploys run automatically from `main` or are uploaded by hand. That decides the release routine, not what gets built.
+  Under D25, `/v2/` is an open preview, so work-in-progress appearing there is intended. Cloudflare Pages' per-branch preview URLs are available as well, if wanted. **Confirmed by the owner on 2026-11-24:** deploys run automatically from `main` (Cloudflare Pages). Whatever reaches `main` is live, so the swap (phase 1 item 9) ships by merging it into `main`.
 - **UI code** is plain JavaScript modules with a small store, from which views render. There's no UI framework (§7). Pointer Events replace v1's touch-*or*-mouse handler (research §9.2).
 
 ---
@@ -570,13 +570,13 @@ Each line is meant to become one issue. Its title is in bold, followed by its sc
 | Q7 | Default layer change | **Planar with a seam ramp** (D10). No spiral mode. | No, decided |
 | Q8 | Any server component? | **None.** Everything is static and local. Share links later via the URL fragment. | No |
 | Q9 | Mesh import | **Out.** Listed in §15.4. | No |
-| Q10 | Pattern library | **12 in-house generator recipes,** so there are no third-party licences. Suggested set and three presets in `v2/library/` (§9.2, §8.3). | **Yes, light:** confirm or swap the suggested 12 and the three presets. |
+| Q10 | Pattern library | **12 in-house generator recipes,** so there are no third-party licences. Set and three presets in `v2/library/` (§9.2, §8.3). | No, decided: the owner confirmed the suggested 12 and the three presets on 2026-11-24. |
 | Q11 | First printer profiles | **One generic gantry clay profile** (D9). Named drafts later. | No, decided |
 | Q12 | When to adopt WebGPURenderer | **Keep the research's trigger.** WebGL 2 stays the guaranteed path. | No |
 | Q13 | Shrinkage compensation | **Later** (§15.4). | No |
 | Q14 | Multi-copy layout | **Later** (§15.4). | No |
 
-The one remaining owner decision (Q10) doesn't block planning. Phase 0 doesn't need it, and phase 1 can start with the placeholders.
+Every open question is now decided. Q10 was the last; the owner confirmed it on 2026-11-24.
 
 ---
 
@@ -589,8 +589,8 @@ These were not explicitly decided by the owner. A builder should treat them as t
 | C1 | With 2 walls, the default **wall spacing is 0.9 × bead width**, so the walls fuse where they meet. The inner-wall behaviour is the owner's (D27) | A thick wall is the usual reason to choose 2 walls |
 | C2 | Defaults: **bead 3.0 mm, layer 1.5 mm, seam ramp 15 mm, base 3 layers** | Mid-range values from research §3.4 and §5.2 |
 | C3 | **Clicking a history step restores it as a new step;** about 200 steps; history survives reloads; opening a design adds a step | Nothing is ever lost, which matters when going back is the point |
-| C4 | Presets **Classic vase, Twisted column, Square planter** (suggested, `v2/library/presets.json`) | Covers a smooth profile with a blend, a twist, and a rectangle with a drainage hole |
-| C5 | **12 in-house pattern recipes** (suggested, `v2/library/patterns.json`) | No licence risk; swatches stay exact at any bead size |
+| C4 | Presets **Classic vase, Twisted column, Square planter** (confirmed 2026-11-24, `v2/library/presets.json`) | Covers a smooth profile with a blend, a twist, and a rectangle with a drainage hole |
+| C5 | **12 in-house pattern recipes** (confirmed 2026-11-24, `v2/library/patterns.json`) | No licence risk; swatches stay exact at any bead size |
 | C6 | **Width** = widest diameter and scales the profile; **depth** is a locked ratio; rectangle **corner rounding** is a fraction | Width and depth read as overall sizes. The profile keeps its character, and the corners stay valid where the pot narrows |
 | C7 | **Repeats** are the control, and cell size is shown as information; **tile height** snaps to whole layers | Whole repeats keep the pattern seamless (D16); rows line up with beads |
 | C8 | **From / to** is shared by A and B, with a soft edge at both ends of at least two layers or 3 × the depth | One range keeps the blend simple; "always gradual" (D17); a two-layer edge on a 2 mm pattern used most of the 45° allowance on its own |

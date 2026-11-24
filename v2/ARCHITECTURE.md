@@ -8,12 +8,14 @@ Read these first: `docs/design/v2-design-brainstorm.md` (the approved design, ca
 
 **Phase 1 (§15.2), items 1–8, is built in code:** the Designs screen (1); dragging, adding and removing profile points in the view, plus height, width, depth, footprint, corner rounding and twist (2); 12 swatches in slots A and B with blending (3); layers, seam and base (4); the Advanced sections for curve, points and footprint (5); live white beads, with warnings that colour them (6); history, undo, redo, and saving as tiles or files (7); Prepare print with walls, inner wall, printer, checks, and the G-code and design-file downloads (8).
 
+**Phase 2 (§15.3) is built in code:** the pattern editor with "My patterns", images as swatches with the printable-resolution readout, and geometry morph with five built-in maps and image maps (see "Phase 2 contracts" below). Checked by scripted journeys in headless Chrome on desktop and a touch phone viewport.
+
 Still open:
 - **Phone check (D3).** A phase only counts as done once it works on desktop and on a real mid-range Android phone in Chrome, within the research §10.3 budgets. The phone check hasn't been done yet, so neither phase counts as done.
-- **The swap (item 9, §14).** v2 moves to the root and v1 to `/v1/`. That is the owner's call. Until then, v2 changes no v1 file.
-- **Patterns and presets (Q10).** The 12 patterns in `library/patterns.json` and the 3 presets in `library/presets.json` are suggestions. The owner still has to confirm or swap them.
+- **The swap (item 9, §14).** Built and verified on branch `t3/v2-swap`: v2 at the root with v1's SEO meta, v1 at `/v1/` with `noindex`. The owner chose to keep it separate until the phone check; until it is merged, v2 changes no v1 file.
+- **Patterns and presets (Q10).** Decided: the owner confirmed the 12 patterns in `library/patterns.json` and the 3 presets in `library/presets.json` on 2026-11-24.
 - **Printer profile (D4).** The generic gantry values are a draft that hasn't been tested on a printer. The app labels it that way.
-- **Deploy routine (§14).** The owner still has to confirm whether deploys run automatically from `main` or are uploaded by hand.
+- **Deploy routine (§14).** Decided: deploys run automatically from `main` (owner, 2026-11-24). Merging into `main` publishes; the swap waits on branch `t3/v2-swap` by the owner's choice until a real Android phone check (D3).
 
 ## Rules for every module
 
