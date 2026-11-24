@@ -413,9 +413,15 @@ async function boot() {
 
   // ---------- Store wiring ----------
 
+  // Only when it changes: setHighlight redraws the whole pot, and view changes
+  // (a point picked on touch-down, a step or a part) mustn't cost a frame.
+  let shownHighlight = null;
   function applyHighlight() {
     const { view: v, result } = store.state;
     const w = v.highlight != null ? result?.warnings?.find((x) => x.id === v.highlight) : null;
+    const key = w && w.bit ? `${w.bit}|${w.severity}` : '';
+    if (key === shownHighlight) return;
+    shownHighlight = key;
     if (w && w.bit) renderer.setHighlight(w.bit, w.severity === 'error' ? 'error' : 'warning');
     else renderer.setHighlight(0, null);
   }
