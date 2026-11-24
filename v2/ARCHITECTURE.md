@@ -282,7 +282,7 @@ body
 --topbar-h: 64px; --sidebar-w: 320px; --rightcol-w: 132px;
 ```
 
-Derived layout values (`--gap`, `--ctl-h`, `--focus-ring`, the `-bg` tints) follow in the same block. v1's look carries over (design §8.7): Inter, white translucent cards with 12 px corners, buttons and chips with 8 px corners. The background is v1's teal gradient (primary-light → primary) as plain CSS.
+Derived layout values (`--gap`, `--ctl-h`, `--focus-ring`, the `-bg` tints) follow in the same block. The phone block adds the step frame's sizes (journey §7.5): `--bar-h` (64 px), `--controls-h` (`clamp(200px, 30dvh, 260px)`, 160 px under 520 px tall), `--panel-h` (the two plus the safe area; the warnings card and the full history open at this height) and `--view-h` (what is left for the pot). The light-grey steps use `rgba(18,47,45,.66)` for labels and `.5` for emblems on a white bar (WCAG AA, journey §4). v1's look carries over (design §8.7): Inter, white translucent cards with 12 px corners, buttons and chips with 8 px corners. The background is v1's teal gradient (primary-light → primary) as plain CSS.
 
 ## Phase 2 contracts (design §15.3: pattern editor, images as swatches, geometry morph)
 
