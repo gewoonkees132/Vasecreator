@@ -23,6 +23,16 @@ const SIDES = 10;
 const SHAPE_EXP = 2.6;
 /** Beads are drawn a little taller than the layer so stacked layers overlap and never show hairline cracks. */
 const HEIGHT_OVERLAP = 1.06;
+/**
+ * Shading level of detail. Once one layer covers fewer screen pixels than
+ * LOD_FULL_PX, the bead's cross-section normals ease towards the smooth wall
+ * normal, reaching LOD_HINT of their full relief at LOD_FLAT_PX. Sampled
+ * finer than that the layer lines alias into moire bands; flattened, they
+ * fade to an even texture with a hint of lines.
+ */
+const LOD_FLAT_PX = 1.0;
+const LOD_FULL_PX = 5.0;
+const LOD_HINT = 0.1;
 
 const FOV = 35;
 const FIT_MARGIN = 0.84;
@@ -48,6 +58,7 @@ attribute vec3 aNext;
 attribute vec3 aKinds;   // kind of the previous, this and the next segment (0 = no bead)
 attribute float aIssue;  // issue bits of the bead ending at aEnd
 uniform vec2 uBead;      // bead width, drawn bead height (mm)
+uniform vec2 uHalfPx;    // half the size of the final image, px (NDC to pixels)
 uniform int uMask;
 varying float vHighlight;
 // Horizontal normal of a direction; a vertical move has none, so any
@@ -89,16 +100,34 @@ if ( bdNbKind > 0.5 && bdNbLen > 1e-5 ) {
 // on the normal there, so the joints don't show as stripes.
 vec3 bdNT = bdMitred ? bdM : bdT;
 vec3 bdNSide = bdSideOf( bdNT );
+// z is the top of the bead, so its centre is half a layer lower.
+vec3 bdCentre = ( bdAtEnd ? aEnd : aStart ) - vec3( 0.0, 0.0, 0.5 * uBead.y / ${HEIGHT_OVERLAP.toFixed(3)} );
+// Level of detail: how many pixels apart this bead and its neighbours land
+// on screen. Wall beads stack a layer apart; base beads lie side by side.
+bool bdBase = abs( aKinds.y - 3.0 ) < 0.5;
+float bdPitch = bdBase ? uBead.x : uBead.y / ${HEIGHT_OVERLAP.toFixed(3)};
+vec3 bdStep = ( bdBase ? bdNSide : cross( bdNSide, bdNT ) ) * bdPitch;
+vec4 bdClip = projectionMatrix * modelViewMatrix * vec4( bdCentre, 1.0 );
+vec4 bdDClip = projectionMatrix * modelViewMatrix * vec4( bdStep, 0.0 );
+float bdW = max( bdClip.w, 1e-3 );
+float bdPx = length( ( bdDClip.xy * bdW - bdClip.xy * bdDClip.w ) / ( bdW * bdW ) * uHalfPx );
+// Seen from above, the layers of a flared wall spread sideways more than up.
+// Allow for a flare of up to about 45 degrees, so bowls and flared rims seen
+// from above keep their relief.
+if ( !bdBase ) bdPx = max( bdPx, bdPitch * abs( normalize( cameraPosition - bdCentre ).z ) * projectionMatrix[1][1] * uHalfPx.y / bdW );
+float bdDetail = mix( ${LOD_HINT.toFixed(3)}, 1.0, smoothstep( ${LOD_FLAT_PX.toFixed(3)}, ${LOD_FULL_PX.toFixed(3)}, bdPx ) );
 // The template normal belongs to a unit shape; scaling it to width x height
-// needs the inverse-transpose, i.e. a divide.
-vec2 bdN = normalize( normal.xy / uBead );
+// needs the inverse-transpose, i.e. a divide. Easing the relief off is the
+// same as shading a bead stretched along the stacking direction: walls lose
+// their up/down tilt, base beads their sideways one.
+vec2 bdN = normalize( normal.xy * ( bdBase
+  ? vec2( bdDetail / uBead.x, 1.0 / uBead.y )
+  : vec2( 1.0 / uBead.x, bdDetail / uBead.y ) ) );
 vec3 objectNormal = bdNSide * bdN.x + cross( bdNSide, bdNT ) * bdN.y;
 vHighlight = ( uMask != 0 && ( int( aIssue + 0.5 ) & uMask ) != 0 ) ? 1.0 : 0.0;
 `;
 
 const VERT_POSITION = /* glsl */`
-// z is the top of the bead, so its centre is half a layer lower.
-vec3 bdCentre = ( bdAtEnd ? aEnd : aStart ) - vec3( 0.0, 0.0, 0.5 * uBead.y / ${HEIGHT_OVERLAP.toFixed(3)} );
 vec3 bdOff = bdSide * ( position.x * uBead.x ) + bdUp * ( position.y * uBead.y );
 // Mitred: slide the ring along the tangent onto the bisecting plane. Both
 // neighbours land on the same plane, so the joint is closed and nothing
@@ -183,6 +212,7 @@ export class BeadRenderer {
 
     this._uniforms = {
       uBead: { value: new THREE.Vector2(3, 1.5 * HEIGHT_OVERLAP) },
+      uHalfPx: { value: new THREE.Vector2(1, 1) },
       uMask: { value: 0 },
       uHighlightColor: { value: new THREE.Color(COLOR_WARNING) },
     };
@@ -198,7 +228,7 @@ export class BeadRenderer {
         .replace('vec4 diffuseColor = vec4( diffuse, opacity );',
           'vec4 diffuseColor = vec4( mix( diffuse, uHighlightColor, vHighlight ), opacity );');
     };
-    this._material.customProgramCacheKey = () => 'vc-beads-1';
+    this._material.customProgramCacheKey = () => 'vc-beads-2';
 
     this._mesh = new THREE.Mesh(new THREE.InstancedBufferGeometry(), this._material);
     // The template's own bounds mean nothing; the beads are placed in the shader.
@@ -474,7 +504,7 @@ export class BeadRenderer {
     // anything else can draw.
     const saved = {
       geometry: this._mesh.geometry, visible: this._mesh.visible, bead: this._uniforms.uBead.value.clone(),
-      mask: this._uniforms.uMask.value, seam: this._seam.visible, bed: this._bedGroup.visible,
+      halfPx: this._uniforms.uHalfPx.value.clone(), mask: this._uniforms.uMask.value, seam: this._seam.visible, bed: this._bedGroup.visible,
       shadow: { visible: this._shadow.visible, position: this._shadow.position.clone(), scale: this._shadow.scale.clone() },
       target: r.getRenderTarget(),
     };
@@ -483,6 +513,8 @@ export class BeadRenderer {
       this._mesh.visible = true;
       this._setBeadUniform(result);
       this._uniforms.uMask.value = 0;
+      // Level of detail by the pixels of the final, averaged-down image.
+      this._uniforms.uHalfPx.value.set(size / 2, size / 2);
       this._seam.visible = false;
       this._bedGroup.visible = false;
       placeShadow(this._shadow, bounds);
@@ -494,6 +526,7 @@ export class BeadRenderer {
       this._mesh.geometry = saved.geometry;
       this._mesh.visible = saved.visible;
       this._uniforms.uBead.value.copy(saved.bead);
+      this._uniforms.uHalfPx.value.copy(saved.halfPx);
       this._uniforms.uMask.value = saved.mask;
       this._seam.visible = saved.seam;
       this._bedGroup.visible = saved.bed;
@@ -552,6 +585,7 @@ export class BeadRenderer {
     setClipping(this._camera, this._camera.position.distanceTo(this._controls.target), this._bounds, this._bed);
     this._camera.updateProjectionMatrix();
     this._renderer.setRenderTarget(null);
+    this._renderer.getDrawingBufferSize(this._uniforms.uHalfPx.value).multiplyScalar(0.5);
     this._renderWith(this._camera, this._controls.target);
     for (const fn of this._afterRender) {
       try { fn(); } catch (err) { console.error(err); }
