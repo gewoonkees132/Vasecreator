@@ -390,7 +390,7 @@ const section = {
     });
     const depthLim = limit(['depthMm', 'surface.depthMm', 'patternDepth'], { min: 0, max: 8, step: 0.1 });
     const depth = slider({
-      label: 'Depth', unit: 'mm', ...depthLim, decimals: 1, value: 0,
+      label: 'Depth', unit: 'mm', ...depthLim, snap: 0.5, decimals: 1, value: 0,
       onInput: editSlot('Depth', (slot, v) => { slot.depthMm = v; }),
       onCommit: commit,
     });
@@ -446,7 +446,7 @@ const section = {
       }),
     });
     const amount = slider({
-      label: 'Amount', unit: '×', min: 0, max: 1, step: 0.05, decimals: 2, value: 1, info: '',
+      label: 'Amount', unit: '×', min: 0, max: 1, step: 0.01, snap: 0.05, decimals: 2, value: 1, info: '',
       onInput: (v) => store.change('Amount', (d) => { d.surface.blend.amount = v; }),
       onCommit: commit,
     });

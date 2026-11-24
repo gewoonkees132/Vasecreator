@@ -44,7 +44,7 @@ export function mountTopbar(header, ctx) {
     onclick: () => store.redo(),
   });
   const designsBtn = el('button', {
-    type: 'button', class: 'btn', text: 'Designs', 'data-desk-only': true,
+    type: 'button', class: 'btn designs-btn', text: 'Designs', 'data-desk-only': true,
     onclick: () => ctx.designs.open(),
   });
   const saveBtn = el('button', {

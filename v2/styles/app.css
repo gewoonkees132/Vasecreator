@@ -377,6 +377,37 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .warn-item.is-info .warn-dot { background: var(--c-primary-light); }
 .warn-hint { padding: var(--space-2) var(--space-2) var(--space-1); font-size: 12px; color: var(--c-text-2); }
 
+/* The size chip opens the size card (issue #5). It shares the warnings
+   card's frame, so on a phone it also opens over the controls (D22). */
+.chip-size { cursor: pointer; color: var(--c-text); }
+.chip-size:hover { background: #fff; }
+.chip-size[aria-expanded="true"] { border-color: var(--c-primary-dark); }
+.chip-size.is-static { cursor: default; }
+.chip-size.is-static:hover { background: var(--c-surface); }
+.size-card { width: 260px; }
+.size-fields { display: grid; gap: var(--space-2); padding: 0 var(--space-2); }
+
+/* ---------- First-visit tip (issue #2) ---------- */
+
+.designs-tip {
+  margin-bottom: var(--gap);
+  padding: var(--space-3);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-card);
+  background: #fff;
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.designs-tip-text { margin: 0 0 var(--space-2); }
+.designs-tip-actions { display: flex; gap: var(--space-2); }
+/* The ring shows where Designs lives: the button on desktop, the logo on a phone. */
+.designs-hinted .designs-btn { box-shadow: 0 0 0 3px var(--c-accent); animation: designs-ring 2.4s ease-in-out 3; }
+@keyframes designs-ring {
+  0%, 100% { box-shadow: 0 0 0 3px var(--c-accent); }
+  50% { box-shadow: 0 0 0 6px rgba(63,166,106,.25); }
+}
+
 /* ---------- History and Advanced (design §8.4, §8.6) ---------- */
 
 .history-card {
@@ -737,6 +768,12 @@ dialog::backdrop {
   .warn-item { min-height: 44px; padding: var(--space-3); font-size: 15px; align-items: center; }
   .warn-dot { margin-top: 0; }
   .warn-hint { font-size: 13px; }
+  .size-card { width: auto; }
+  .size-fields { padding: 0; }
+
+  .designs-tip { margin: var(--space-2) var(--space-2) 0; padding: var(--space-2) var(--space-3); box-shadow: none; }
+  .designs-tip-text { margin-bottom: var(--space-1); }
+  .designs-hinted .logo-button { border-radius: var(--radius-ctl); box-shadow: 0 0 0 3px var(--c-accent); animation: designs-ring 2.4s ease-in-out 3; }
 
   #rightcol {
     top: calc(var(--content-top) + var(--space-2));

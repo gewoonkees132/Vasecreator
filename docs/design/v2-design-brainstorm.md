@@ -211,7 +211,7 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-- **When it opens:** on every visit, and from the *Designs* button. On the very first visit, *Last design* is missing and the presets lead.
+- **When it opens:** from the *Designs* button (on a phone, from the logo menu). It no longer opens by itself (issue #2, C20): the app opens straight into the designer, on the first preset for a first visit and on the last design after that. A one-time tip at the top of the controls points at *Designs*, and the button gets a ring (on a phone, the logo). The tip goes for good once Designs has been opened or the tip is closed. On the very first visit, *Last design* is missing and the presets lead.
 - **Tiles are rectangular,** with a white bead thumbnail of the pot and its name (D13). One click loads the design and closes the screen.
 - **Three built-in presets,** suggested on 2026-11-23 and confirmed by the owner on 2026-11-24: **Classic vase** (flutes fading into a smooth neck), **Twisted column** (pleats with a 60° twist) and **Square planter** (basket weave on a square footprint, with a drainage hole). They are in `v2/library/presets.json` (§16).
 - **Save design** asks for a name (default "Design 1", "Design 2"…) and adds a tile under *Saved*. Saving an already-saved design updates its tile. A *Save as new* option keeps both.
@@ -231,7 +231,7 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 ### 8.5 The chips at the top right
 
 - **Warnings chip.** It shows "⚠ n warnings", or a muted "No warnings" so the layout doesn't jump. Clicking it opens a small card that lists each warning in plain words. Clicking a warning colours the affected beads on the pot (§11).
-- **Size chip.** Overall height × width × depth in mm, measured on the final outer surface, patterns included. It sits to the right of the warnings chip (D21).
+- **Size chip.** Overall height × width × depth in mm, measured on the final outer surface, patterns included. It sits to the right of the warnings chip (D21). Clicking it opens a small *Outer size* card with the three numbers as fields (issue #5, C21). A typed or dragged number is the finished outer size: the form scales until the measured size matches. Height is exact to within half a layer, and depth stays read-only while it follows width.
 - **Style.** The same small corner radius as the buttons (8 px), not pill-shaped (D21).
 
 ### 8.6 The Advanced button
@@ -340,7 +340,8 @@ Fixed behaviour, from research §5.4 stage 6: the infill alternates direction pe
 ### 9.5 Advanced sections (phase 1)
 
 - **Profile curve.**
-  - **Smooth** is a centripetal Catmull-Rom or monotone curve with a **tension** setting. **Angular** is straight segments with a **corner radius** in mm. These are v1's spline and polyline, with tension and fillet radius (research §2.7).
+  - **Smooth** is a centripetal Catmull-Rom curve with a **tension** setting. **Gentle** is the monotone curve, which never bulges past the points (issue #6, C22). **Angular** is straight segments with a **corner radius** in mm. Smooth and Angular are v1's spline and polyline, with tension and fillet radius (research §2.7). Switching type keeps the points.
+  - **Per point** (in *Profile points*): on Angular, each inner point can have its own corner radius, and the section's *Corner radius* sets every corner at once. On Smooth and Gentle, each inner point can be made **sharp**, a corner in an otherwise smooth curve. A sharp point splits the curve into two curves that meet there, so the rest keeps its shape. Corner points show as diamonds on the pot.
   - The angular corner is a **true tangent arc.** v1's fillet draws a notch and must not be copied (research §2.3).
 - **Profile points.** A table of every point's height and radius in mm, editable, with × to remove a point. Selecting a row highlights the handle on the pot, and the other way round.
 - **Footprint.** Circle and rectangle in phase 1, the same control as in Shape. Polygon and *Custom* (a 2D outline) appear here later (D11).
@@ -605,6 +606,9 @@ These were not explicitly decided by the owner. A builder should treat them as t
 | C17 | Profile handles sit in a plane through the axis that faces the camera | Dragging works from any viewing angle, which v1's fixed plane doesn't allow |
 | C18 | **Slot B starts as *None*** (blending off). Picking a B swatch turns blending on (*Fades up*, 1.0). The amount is B's peak share, with the split shown, and *Even* starts at 0.5 | A new design shows one pattern, and the first click on each blend option shows something sensible |
 | C19 | **Process settings live in the printer profile:** prime, skirt, lift and wipe, speeds, minimum layer time, flow, an optional reservoir for refill pauses, and firmware (Marlin by default) | Keeps the design free of printing concerns (D7, D15). These are machine habits, not design choices |
+| C20 | **Issue #2, first visit:** the Designs screen never opens by itself. A first visit opens on Classic vase, and a later one on the last design. The nudge is a one-time tip at the top of the controls with *Show designs* and *Got it*, plus a ring on *Designs* (on a phone, the logo). It never covers the pot (D22) and never comes back once Designs has been opened or the tip closed. The "download your designs" reminder stays on the Designs screen. Presets in the top bar and "Start with Shape" wait for #1 | The owner asked to open straight into the designer and point to the top bar. A tip in the panel is the only place that doesn't cover the pot on a phone |
+| C21 | **Issue #5, sidebar usability:** every number can be dragged by its label or its value, in whole steps (12.3 → 13 → 14), Shift ×10, Alt ÷10; a click on the value types. Only sideways drags scrub, so a phone panel still scrolls. Sliders snap to coarse steps with tick marks (5 %, 0.5 mm, 0.05), and Shift drags fine. − / + stay touch-only, because scrubbing and arrow keys cover desktop. Fields are spinbuttons for screen readers. The size chip opens an *Outer size* card rather than editing inline, which gives phones 44 px fields over the controls (D22) and keeps the chip compact. A chip edit sets the finished outer size, and Shape's *Width* stays the profile's widest diameter (C6) | The owner asked for stepped sliders, drag with steps and an editable chip. Two meanings of "width" stay apart by place: the chip is the outside of the finished pot, and Shape is the form you draw |
+| C22 | **Issue #6, curve editing (first slice):** *Gentle* (monotone) joins Smooth and Angular; a corner radius per point on Angular; sharp points on Smooth and Gentle. Bézier handles, B-splines, a tension per point and a flat 2D editor are not built: each needs the rules in §9.1 revisited (Bézier handles can break one radius per height) | The core already had monotone curves and per-point corners; sharp points reuse them by splitting the curve. These add control without changing the rules or any existing design |
 
 ---
 

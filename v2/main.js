@@ -17,6 +17,7 @@ import { mountTopbar } from './ui/topbar.js';
 import { mountChips } from './ui/chips.js';
 import { mountHistory } from './ui/history.js';
 import { mountDesigns } from './ui/designs.js';
+import { mountDesignsTip } from './ui/designs-tip.js';
 
 const PHONE = matchMedia('(max-width: 760px)');
 const THUMB_SETTLE_MS = 600;
@@ -226,6 +227,8 @@ async function boot() {
     thumbnailFor,
     /** Fit the camera once the next preview arrives (after opening a design). */
     requestFit() { fitPending = true; },
+    /** The design object store.state.result was computed from (the size chip matches them up). */
+    resultDesign: () => shownDesign,
     designs: null,
   };
 
@@ -239,7 +242,6 @@ async function boot() {
   let idleWaiters = [];
   let shownDesign = null;      // the design object the newest shown result was made from
   let fitPending = true;       // fit the camera when the next result arrives (load, open)
-  let firstResult = true;
 
   function requestPreview() {
     const seq = ++liveSeq;
@@ -422,9 +424,9 @@ async function boot() {
   addEventListener('pagehide', flushPrinter);
   addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushPrinter(); });
 
-  // The Designs screen opens by itself once, with the first preview, unless
-  // the visitor already went there.
-  let designsSeen = false;
+  // The app opens straight into the designer (issue #2): a first visit on the
+  // first preset, a later one on the last design. A one-time tip points at
+  // Designs in the top bar (ui/designs-tip.js); the screen never opens by itself.
   store.subscribe((state, what) => {
     if (what.has('design') || what.has('printer')) {
       clearTimeout(thumbTimer);
@@ -450,11 +452,6 @@ async function boot() {
           layout('reset');
         }
       }
-      if (firstResult) {
-        firstResult = false;
-        // The Designs screen opens on every visit, once there is a pot to show.
-        if (!designsSeen) ctx.designs.open();
-      }
       scheduleStepThumb();
       scheduleBackfill();
     }
@@ -463,7 +460,6 @@ async function boot() {
       scheduleBackfill();
     }
     if (what.has('view')) {
-      if (state.view.designsOpen) designsSeen = true;
       applyHighlight();
       applySeam();
       handles.setSelected(state.view.selectedKnot);
@@ -515,6 +511,7 @@ async function boot() {
   mount('history', () => mountHistory(rightcol, ctx));
   mount('sidebar', () => mountSidebar(designPanel, ctx));
   mount('print', () => mountPrintPanel(printPanel, ctx));
+  mount('designs-tip', () => mountDesignsTip(panel, ctx));
 
   renderer.setBed(bedOf(store.state.printer));
   applyMode();

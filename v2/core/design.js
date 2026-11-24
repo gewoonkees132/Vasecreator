@@ -146,6 +146,7 @@ function normaliseKnots(input, height, h, rMin, fallbackKnots) {
     .map((k) => {
       const out = { z: k.z, r: k.r };
       if (Number.isFinite(k.corner)) out.corner = Math.min(Math.max(k.corner, 0), LIMITS.cornerMm.max);
+      if (k.sharp === true) out.sharp = true;
       return out;
     })
     .sort((a, b) => a.z - b.z);

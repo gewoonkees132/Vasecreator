@@ -10,10 +10,12 @@
 let uid = 0;
 const nextId = (prefix) => `${prefix}-${++uid}`;
 
-// Pixels of horizontal drag per step when scrubbing a label.
+// Pixels of horizontal drag per step when scrubbing a label or a value.
 const SCRUB_PX = 4;
-// Below this the pointer press is a click (focus the field), not a scrub.
+// Below this the pointer press is a click (focus the field), not a scrub. A
+// finger wobbles more than a mouse, so a tap gets more room.
 const SCRUB_DEADZONE = 3;
+const SCRUB_DEADZONE_TOUCH = 8;
 const REPEAT_DELAY = 400;
 const REPEAT_EVERY = 70;
 // Keys a range input steps with.
@@ -52,6 +54,23 @@ function roundTo(v, decimals) {
   return Math.round(v * f) / f;
 }
 
+/**
+ * Steps n times along the grid of whole multiples of `step`, the way a native
+ * number input steps: 12.3 plus one step of 1 gives 13, not 13.3, so a drag or
+ * an arrow press lands on round numbers. A value already on the grid moves by
+ * exactly n steps.
+ * @param {number} v @param {number} n whole steps, negative goes down @param {number} step
+ * @returns {number}
+ */
+export function stepOnGrid(v, n, step) {
+  if (!n || !(step > 0)) return v;
+  const q = v / step;
+  // The tolerance keeps 0.3 / 0.1 = 2.9999… on the grid.
+  const near = Math.round(q);
+  const base = Math.abs(q - near) < 1e-6 ? near : n > 0 ? Math.floor(q) : Math.ceil(q);
+  return (base + n) * step;
+}
+
 // Shows at most `decimals` places and drops trailing zeros ("170", "2.5").
 function formatNumber(v, decimals) {
   if (!Number.isFinite(v)) return '';
@@ -60,9 +79,11 @@ function formatNumber(v, decimals) {
 }
 
 /**
- * A labelled number with a unit. Drag the label sideways to scrub (Shift ×10),
- * ArrowUp/Down to step, type and press Enter or leave the field to commit,
- * Escape to revert. − / + steppers show on touch screens.
+ * A labelled number with a unit. Drag the label or the value sideways to
+ * scrub in whole steps (Shift ×10, Alt ÷10 where the decimals show it);
+ * ArrowUp/Down step the same way. Click the value to type, then press Enter
+ * or leave the field to commit; Escape reverts. − / + steppers show on touch
+ * screens. Screen readers get a spinbutton, so every step is announced.
  *
  * @param {object} o
  * @param {string} o.label visible label (also the accessible name)
@@ -95,6 +116,7 @@ export function numberField(o) {
     inputMode: 'decimal',
     autocomplete: 'off',
     class: 'nf-input',
+    role: 'spinbutton',
     'aria-label': o.compact ? o.label : null,
   });
   input.readOnly = disabled;
@@ -104,6 +126,7 @@ export function numberField(o) {
   const plus = o.compact ? null : el('button', { type: 'button', class: 'nf-step', text: '+', 'aria-label': `Increase ${o.label}`, tabIndex: -1 });
   const box = el('div', { class: 'nf-box' }, [minus, el('div', { class: 'nf-field' }, [input, unit]), plus]);
   const label = o.compact ? null : el('label', { class: 'nf-label', htmlFor: id, text: o.label, title: 'Drag sideways to change' });
+  const fieldBox = box.querySelector('.nf-field');
   const infoEl = el('div', { class: 'nf-info', id: `${id}-info`, hidden: !o.info, text: o.info || '' });
   if (o.info !== undefined) input.setAttribute('aria-describedby', infoEl.id);
   const root = el('div', { class: `nf${o.compact ? ' nf--compact' : ''}` }, [label, box, o.compact ? null : infoEl]);
@@ -111,31 +134,54 @@ export function numberField(o) {
   // Only rewrite the text when the person isn't typing in the field, so a
   // store echo never clobbers what they typed.
   let typing = false;
+  const unitText = o.unit ? ` ${o.unit}` : '';
+  const setAria = (name, v) => (v == null ? input.removeAttribute(name) : input.setAttribute(name, v));
+  const syncAria = () => {
+    setAria('aria-valuemin', Number.isFinite(min) ? String(min) : null);
+    setAria('aria-valuemax', Number.isFinite(max) ? String(max) : null);
+    const known = Number.isFinite(value);
+    setAria('aria-valuenow', known ? String(roundTo(value, decimals)) : null);
+    setAria('aria-valuetext', known ? `${formatNumber(value, decimals)}${unitText}` : null);
+  };
   const show = () => {
     if (!(typing && document.activeElement === input)) input.value = formatNumber(value, decimals);
+    syncAria();
   };
   show();
 
+  // The last number this field sent, which ends the gesture even when an
+  // echo through set() has replaced `value` meanwhile.
+  let lastSent = value;
   const emitInput = (v) => {
     if (v === value) return false;
     value = v;
+    lastSent = v;
     input.value = formatNumber(value, decimals);
-    o.onInput?.(value);
+    syncAria();
+    o.onInput?.(v);
     return true;
   };
+
+  // Shift takes ten steps at once; Alt (Option) a tenth of one, but only
+  // where the field shows that many decimals.
+  const fineStep = () => {
+    const fine = step / 10;
+    return roundTo(fine, decimals) === fine && fine > 0 ? fine : step;
+  };
+  const stepSize = (mods) => (mods?.shiftKey ? step * 10 : mods?.altKey ? fineStep() : step);
 
   // A gesture (scrub, arrows, steppers) is "dirty" once it changed the value;
   // only then does it end with onCommit.
   let gestureDirty = false;
-  const stepBy = (n, big) => {
+  const stepBy = (n, mods) => {
     if (disabled) return;
     const base = Number.isFinite(value) ? value : 0;
-    if (emitInput(clampRound(base + n * step * (big ? 10 : 1)))) gestureDirty = true;
+    if (emitInput(clampRound(stepOnGrid(base, n, stepSize(mods))))) gestureDirty = true;
   };
   const endGesture = () => {
     if (gestureDirty) {
       gestureDirty = false;
-      o.onCommit?.(value);
+      o.onCommit?.(lastSent);
     }
   };
 
@@ -154,8 +200,11 @@ export function numberField(o) {
     input.value = formatNumber(v, decimals);
     if (v !== value) {
       value = v;
-      o.onInput?.(value);
-      o.onCommit?.(value);
+      syncAria();
+      // The typed number goes to both: onInput's store echo may call set()
+      // with an older value before onCommit runs.
+      o.onInput?.(v);
+      o.onCommit?.(v);
     }
   };
 
@@ -180,7 +229,7 @@ export function numberField(o) {
         const typed = parseNumber(input.value);
         if (Number.isFinite(typed) && emitInput(clampRound(typed))) gestureDirty = true;
       }
-      stepBy(e.key === 'ArrowUp' ? 1 : -1, e.shiftKey);
+      stepBy(e.key === 'ArrowUp' ? 1 : -1, e);
       input.select();
     }
   };
@@ -198,52 +247,72 @@ export function numberField(o) {
   input.addEventListener('blur', onBlur);
   input.addEventListener('focus', onFocus);
 
-  // Scrub by dragging the label.
+  // Scrub by dragging the label or the value. Both take only horizontal
+  // drags (touch-action: pan-y in the CSS), so on a phone a vertical swipe
+  // still scrolls the panel. A press on the value that doesn't move is a
+  // click and focuses the field for typing. While the field has focus, a
+  // press in it places the caret as usual.
   let scrub = null;
   let suppressClick = false;
-  const onLabelDown = (e) => {
+  const typingInField = () => document.activeElement === input;
+  const onScrubDown = (e) => {
     if (disabled || e.button !== 0) return;
-    scrub = { x: e.clientX, start: Number.isFinite(value) ? value : 0, active: false, id: e.pointerId };
-    label.setPointerCapture(e.pointerId);
+    const onValue = e.currentTarget === fieldBox;
+    if (onValue) {
+      if (typingInField()) return;
+      // No focus and no text selection until it's clear this is a click.
+      e.preventDefault();
+    }
+    scrub = {
+      x: e.clientX, start: Number.isFinite(value) ? value : 0, active: false, id: e.pointerId, onValue,
+      deadzone: e.pointerType === 'mouse' ? SCRUB_DEADZONE : SCRUB_DEADZONE_TOUCH,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
   };
-  const onLabelMove = (e) => {
+  const onScrubMove = (e) => {
     if (!scrub || e.pointerId !== scrub.id) return;
     const dx = e.clientX - scrub.x;
-    if (!scrub.active && Math.abs(dx) < SCRUB_DEADZONE) return;
+    if (!scrub.active && Math.abs(dx) < scrub.deadzone) return;
     if (!scrub.active) {
       scrub.active = true;
+      // Count from the edge of the dead zone, so the first step takes as
+      // much travel as every later one.
+      scrub.x += Math.sign(dx) * scrub.deadzone;
       root.classList.add('is-scrubbing');
       // Typed-but-uncommitted text would be lost; commit it first.
-      if (document.activeElement === input) input.blur();
+      if (typingInField()) input.blur();
     }
-    const steps = Math.trunc(dx / SCRUB_PX);
-    if (emitInput(clampRound(scrub.start + steps * step * (e.shiftKey ? 10 : 1)))) gestureDirty = true;
+    const steps = Math.trunc((e.clientX - scrub.x) / SCRUB_PX);
+    if (emitInput(clampRound(stepOnGrid(scrub.start, steps, stepSize(e))))) gestureDirty = true;
   };
-  const onLabelUp = (e) => {
+  const onScrubUp = (e) => {
     if (!scrub || e.pointerId !== scrub.id) return;
-    const wasActive = scrub.active;
+    const { active, onValue } = scrub;
     scrub = null;
     root.classList.remove('is-scrubbing');
-    if (wasActive) {
+    if (active) {
       suppressClick = true;
       endGesture();
+    } else if (onValue && e.type === 'pointerup') {
+      input.focus(); // the focus handler selects the text, ready to type over
     }
   };
-  const onLabelClick = (e) => {
+  const onScrubClick = (e) => {
     if (suppressClick) {
       e.preventDefault();
       suppressClick = false;
     }
   };
-  if (label) {
-    label.addEventListener('pointerdown', onLabelDown);
-    label.addEventListener('pointermove', onLabelMove);
-    label.addEventListener('pointerup', onLabelUp);
-    label.addEventListener('pointercancel', onLabelUp);
+  for (const target of [label, fieldBox]) {
+    if (!target) continue;
+    target.addEventListener('pointerdown', onScrubDown);
+    target.addEventListener('pointermove', onScrubMove);
+    target.addEventListener('pointerup', onScrubUp);
+    target.addEventListener('pointercancel', onScrubUp);
     // Capture also goes when the field moves to the other layout mid-scrub;
     // an unfinished scrub would leave set() ignoring the store for good.
-    label.addEventListener('lostpointercapture', onLabelUp);
-    label.addEventListener('click', onLabelClick);
+    target.addEventListener('lostpointercapture', onScrubUp);
+    target.addEventListener('click', onScrubClick);
   }
 
   // Steppers repeat while held, and the hold is one gesture.
@@ -259,10 +328,10 @@ export function numberField(o) {
       if (e.button !== 0 || disabled) return;
       e.preventDefault(); // keeps focus where it is
       button.setPointerCapture(e.pointerId);
-      stepBy(dir, e.shiftKey);
+      stepBy(dir, e);
       stopRepeat();
       repeatTimer = setTimeout(() => {
-        repeatTimer = setInterval(() => stepBy(dir, false), REPEAT_EVERY);
+        repeatTimer = setInterval(() => stepBy(dir, null), REPEAT_EVERY);
       }, REPEAT_DELAY);
     });
     const release = () => {
@@ -276,7 +345,7 @@ export function numberField(o) {
     // Keyboard or assistive-tech activation arrives as a click without a pointer press.
     button.addEventListener('click', (e) => {
       if (e.detail !== 0) return;
-      stepBy(dir, false);
+      stepBy(dir, null);
       endGesture();
     });
   };
@@ -285,6 +354,8 @@ export function numberField(o) {
 
   const applyDisabled = () => {
     input.readOnly = disabled;
+    setAria('aria-readonly', disabled ? 'true' : null);
+    fieldBox.title = disabled ? '' : 'Drag sideways, or click to type';
     root.classList.toggle('is-disabled', disabled);
     if (minus) minus.disabled = disabled;
     if (plus) plus.disabled = disabled;
@@ -312,6 +383,7 @@ export function numberField(o) {
       if (limits.min !== undefined) min = limits.min;
       if (limits.max !== undefined) max = limits.max;
       if (limits.step !== undefined) step = limits.step;
+      syncAria();
     },
     destroy() {
       stopRepeat();
@@ -321,9 +393,27 @@ export function numberField(o) {
 }
 
 /**
+ * The values a slider snaps to while its thumb is dragged: every `snap` from
+ * min to max, plus max itself when the range isn't a whole number of snaps.
+ * Exported for the tests.
+ * @param {number} min @param {number} max @param {number} snap @param {number} decimals
+ * @returns {number[]} empty when snap is missing or would give more than 41 marks
+ */
+export function snapMarks(min, max, snap, decimals) {
+  if (!(snap > 0) || !(max > min) || (max - min) / snap > 40) return [];
+  const marks = [];
+  for (let i = 0; min + i * snap <= max + snap * 1e-6; i++) marks.push(roundTo(min + i * snap, decimals));
+  if (marks.at(-1) < max) marks.push(roundTo(max, decimals));
+  return marks;
+}
+
+/**
  * A range slider with a compact number field beside it (Depth ──●── [2.5 mm]).
- * Same options as numberField; `format` is not needed because the field shows the value.
+ * Same options as numberField, plus `snap`: dragging the thumb moves in steps
+ * of `snap`, shown as tick marks under the track, and holding Shift drags in
+ * the finer `step`. Arrow keys and the number field always use `step`.
  * @param {object} o see numberField
+ * @param {number} [o.snap] coarse step for dragging the thumb
  * @returns {{ el: HTMLElement, set(v: number): void, setInfo(text: string): void, setDisabled(d: boolean): void, destroy(): void }}
  */
 export function slider(o) {
@@ -332,6 +422,7 @@ export function slider(o) {
   let value = o.value;
   const id = nextId('sl');
   let dirty = false;
+  const marks = snapMarks(o.min, o.max, o.snap, decimals);
 
   const range = el('input', {
     id,
@@ -343,6 +434,14 @@ export function slider(o) {
     'aria-valuetext': null,
   });
   range.value = String(value);
+  // Native tick marks: the browser lines them up with the thumb's travel.
+  const ticks = marks.length
+    ? el('datalist', { id: `${id}-ticks` }, marks.map((m) => el('option', { value: String(m) })))
+    : null;
+  if (ticks) {
+    range.setAttribute('list', ticks.id);
+    range.classList.add('has-ticks');
+  }
   const setValueText = () => range.setAttribute('aria-valuetext', `${formatNumber(value, decimals)}${o.unit ? ` ${o.unit}` : ''}`);
   setValueText();
 
@@ -366,10 +465,21 @@ export function slider(o) {
   const label = el('label', { class: 'sl-label', htmlFor: id, text: o.label });
   const infoEl = el('div', { class: 'nf-info', id: `${id}-info`, hidden: !o.info, text: o.info || '' });
   if (o.info !== undefined) range.setAttribute('aria-describedby', infoEl.id);
-  const root = el('div', { class: 'sl' }, [label, el('div', { class: 'sl-row' }, [range, field.el]), infoEl]);
+  const root = el('div', { class: 'sl' }, [label, el('div', { class: 'sl-row' }, [range, ticks, field.el]), infoEl]);
+
+  // While the thumb is dragged (not on arrow keys) it snaps to the marks,
+  // unless Shift is held for the fine steps.
+  let fineDrag = false;
+  const snapped = (v) => {
+    if (!marks.length || !pressed || fineDrag) return v;
+    let best = marks[0];
+    for (const m of marks) if (Math.abs(m - v) < Math.abs(best - v)) best = m;
+    return best;
+  };
 
   const onInput = () => {
-    const v = roundTo(Number(range.value), decimals);
+    const v = snapped(roundTo(Number(range.value), decimals));
+    if (String(v) !== range.value) range.value = String(v);
     if (v === value) return;
     value = v;
     dirty = true;
@@ -409,11 +519,13 @@ export function slider(o) {
     removeEventListener('pointercancel', release, true);
     onChange();
   };
-  range.addEventListener('pointerdown', () => {
+  range.addEventListener('pointerdown', (e) => {
     pressed = true;
+    fineDrag = e.shiftKey;
     addEventListener('pointerup', release, true);
     addEventListener('pointercancel', release, true);
   });
+  range.addEventListener('pointermove', (e) => { if (pressed) fineDrag = e.shiftKey; });
 
   return {
     el: root,

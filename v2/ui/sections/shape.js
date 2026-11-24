@@ -72,6 +72,7 @@ export function footprintControls(store, opts = {}) {
     min: 0,
     max: 100,
     step: 1,
+    snap: 5,
     decimals: 0,
     value: Math.round((store.state.design.form.plan.cornerRounding ?? 0) * 100),
     info: '',
@@ -99,7 +100,9 @@ export function footprintControls(store, opts = {}) {
 const LOCK_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 const UNLOCK_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 5.8-1" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
 
-const isLocked = (state) => state.view.sizeLocked !== false && (state.design.form.plan.depthRatio ?? 1) === 1;
+/** Depth follows width: the lock is on and the footprint is round or square. Shared with the size chip. */
+export const depthLocked = (state) => state.view.sizeLocked !== false && (state.design.form.plan.depthRatio ?? 1) === 1;
+const isLocked = depthLocked;
 
 const section = {
   id: 'shape',

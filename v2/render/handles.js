@@ -32,6 +32,9 @@ const CSS = `
 .vc-ph-handle:hover::before { transform: scale(1.15); }
 .vc-ph-handle.is-selected::before { box-shadow: 0 0 0 2px #fff, 0 0 0 4.5px #3fa66a, 0 1px 4px rgba(0,0,0,.35); }
 .vc-ph-handle:focus-visible::before { box-shadow: 0 0 0 2px #fff, 0 0 0 4.5px #3fa66a, 0 0 0 8px rgba(63,166,106,.35); }
+.vc-ph-handle.is-corner::before { width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 2px; transform: rotate(45deg); }
+.vc-ph-handle.is-corner:hover::before { transform: rotate(45deg) scale(1.15); }
+.vc-ph-handle.is-corner.is-dragging::before { transform: rotate(45deg) scale(1.2); }
 .vc-ph-handle.is-dragging { cursor: grabbing; }
 .vc-ph-handle.is-dragging::before { transform: scale(1.2); }
 .vc-ph-remove { position: absolute; left: 0; top: 0; height: 36px; min-width: 44px; padding: 0 14px; margin-top: -18px;
@@ -345,6 +348,10 @@ export function createProfileHandles(renderer, overlayEl, callbacks = {}) {
       const ks = design?.form?.profile?.knots || [];
       if (ks.length !== knots.length) hideRemove();
       knots = ks.map((k) => ({ z: +k.z || 0, r: +k.r || 0 }));
+      // A diamond marks a corner in the curve: every inner point of an
+      // Angular curve, and a sharp point on a Smooth or Gentle one.
+      const angular = design?.form?.profile?.interp === 'linear';
+      const corner = ks.map((k, i) => i > 0 && i < ks.length - 1 && (angular || k.sharp === true));
       line = profileLine || null;
       const focusedIndex = els.indexOf(document.activeElement);
       while (els.length > knots.length) els.pop().remove();
@@ -356,6 +363,7 @@ export function createProfileHandles(renderer, overlayEl, callbacks = {}) {
       for (let i = 0; i < els.length; i++) {
         label(i);
         els[i].classList.toggle('is-selected', i === selected);
+        els[i].classList.toggle('is-corner', corner[i]);
       }
       // A removed last point took the focus with it; hand it to its neighbour.
       if (focusedIndex >= els.length && els.length) els[els.length - 1].focus({ preventScroll: true });

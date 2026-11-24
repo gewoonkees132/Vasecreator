@@ -215,6 +215,14 @@
   background: var(--c-input-bg);
 }
 .nf-field:focus-within { border-color: var(--c-primary-dark); box-shadow: 0 0 0 3px var(--c-primary); }
+/* The value scrubs too (controls.js): only sideways, so a vertical swipe
+   still scrolls the panel. Once the field has focus it's a text field again. */
+.nf-field { cursor: ew-resize; touch-action: pan-y; }
+.nf-field .nf-input:not(:focus) { cursor: ew-resize; }
+.nf-field:focus-within { cursor: text; touch-action: auto; }
+.nf.is-disabled .nf-field, .nf.is-disabled .nf-input:not(:focus) { cursor: default; }
+.nf.is-scrubbing .nf-field { border-color: var(--c-primary-dark); }
+.nf.is-scrubbing, .nf.is-scrubbing * { cursor: ew-resize; user-select: none; -webkit-user-select: none; }
 .nf-input {
   flex: 1;
   min-width: 0;
@@ -447,6 +455,16 @@
 .points-table .nf, .points-table .nf-box { display: flex; width: 100%; }
 .points-table .nf-field { width: 100%; min-width: 0; }
 .del-btn { width: 28px; height: 28px; font-size: 18px; color: var(--c-text-2); }
+/* Corner (Angular) or Sharp (Smooth, Gentle), issue #6. */
+.points-table th.point-extra { width: 70px; white-space: nowrap; }
+/* The unit sits in the column heading, so the numbers get the room. */
+.points-table .nf-unit { display: none; }
+.points-table .nf-input { padding-right: var(--space-2); }
+.th-unit { font-weight: 400; }
+.points-table td.point-extra { text-align: center; }
+.sharp-btn { color: var(--c-text-2); }
+.sharp-btn[aria-pressed="true"] { color: var(--c-text); border-color: var(--c-input-border); background: var(--c-input-bg); }
+.point-end { color: var(--c-text-2); }
 .add-point { align-self: flex-start; }
 
 /* ---------- Prepare print ---------- */

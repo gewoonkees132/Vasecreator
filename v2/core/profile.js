@@ -6,8 +6,13 @@
 // multiplications, cheap enough to call for every toolpath point.
 //
 //   'catmullRomCentripetal' (shown as Smooth): cubic Hermite through the knots.
-//   'monotone': Fritsch–Carlson, never overshoots between knots.
+//   'monotone' (shown as Gentle): Fritsch–Carlson, never overshoots between knots.
 //   'linear' (shown as Angular): straight segments with true tangent-arc corners.
+//
+// Per knot: `corner` (mm) overrides the Angular corner radius at that knot,
+// and `sharp: true` puts a corner in a Smooth or Gentle curve. A sharp knot
+// splits the curve into two curves that meet there, each with the same end
+// rule as the curve's own ends, so the rest of the curve stays as it was.
 
 import { clamp } from './math.js';
 
@@ -65,6 +70,20 @@ function monotoneTangents(knots) {
     }
   }
   return m;
+}
+
+// The knots from one sharp knot (or an end) to the next; one run without any.
+function smoothRuns(knots) {
+  const runs = [];
+  let start = 0;
+  for (let i = 1; i < knots.length - 1; i++) {
+    if (knots[i].sharp === true) {
+      runs.push(knots.slice(start, i + 1));
+      start = i;
+    }
+  }
+  runs.push(start === 0 ? knots : knots.slice(start));
+  return runs;
 }
 
 function hermitePieces(knots, m, out) {
@@ -144,16 +163,21 @@ function linearPieces(knots, cornerMm, out) {
 /**
  * Compiles a profile into a fast r(z) evaluator.
  * @param {{ interp: string, tension: number, cornerMm?: number,
- *           knots: { z: number, r: number, corner?: number }[] }} profile knots sorted, z strictly increasing
+ *           knots: { z: number, r: number, corner?: number, sharp?: boolean }[] }} profile knots sorted, z strictly increasing
  * @returns {{ at(z: number): number, heightMm: number, knots: object[] }}
  *   at() clamps z to [0, height] and returns the radius in mm
  */
 export function createProfile(profile) {
   const knots = profile.knots;
   const pieces = [];
-  if (profile.interp === 'linear') linearPieces(knots, profile.cornerMm ?? 0, pieces);
-  else if (profile.interp === 'monotone') hermitePieces(knots, monotoneTangents(knots), pieces);
-  else hermitePieces(knots, smoothTangents(knots, profile.tension ?? 0.5), pieces);
+  if (profile.interp === 'linear') {
+    linearPieces(knots, profile.cornerMm ?? 0, pieces);
+  } else {
+    for (const run of smoothRuns(knots)) {
+      const m = profile.interp === 'monotone' ? monotoneTangents(run) : smoothTangents(run, profile.tension ?? 0.5);
+      hermitePieces(run, m, pieces);
+    }
+  }
 
   const count = pieces.length;
   const type = new Uint8Array(count);

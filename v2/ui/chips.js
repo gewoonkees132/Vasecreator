@@ -1,7 +1,16 @@
 // The chips at the top of the view (design §8.5, D21): the warnings chip and,
 // to its right, the size chip. Clicking a warning colours its beads (§11).
+// Clicking the size chip opens a small card where the outer height, width and
+// depth can be typed or dragged (issue #5, ui/size-fit.js).
+
+import { numberField } from './controls.js';
+import { LIMITS } from '../core/design.js';
+import { depthLocked } from './sections/shape.js';
+import { SIZE_AXES, fitOuterSize } from './size-fit.js';
 
 const PHONE = '(max-width: 760px)';
+// A preview that never comes (a broken engine) mustn't keep a size edit open.
+const RESULT_WAIT_MS = 8000;
 
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -86,10 +95,35 @@ export function mountChips(root, ctx) {
   // the count changes (only then, not on every preview).
   const announce = el('span', { class: 'visually-hidden', role: 'status', 'aria-live': 'polite' });
   const wrap = el('div', { class: 'chip-wrap' }, [chip, card, announce]);
-  // Not a live region: it changes on every preview during a drag, which would
-  // flood a screen reader. The title names the three numbers.
-  const size = el('span', { class: 'chip chip-size', title: 'Size: height × width × depth' });
-  root.replaceChildren(wrap, size);
+
+  // The size chip opens the size card. Not a live region: it changes on every
+  // preview during a drag, which would flood a screen reader.
+  const sizeText = el('span');
+  const sizeChip = el('button', {
+    type: 'button', class: 'chip chip-size',
+    'aria-expanded': 'false', 'aria-controls': 'size-card',
+    onclick: () => (sizeCard.hidden ? openSize() : closeSize({ focusChip: true })),
+  }, [sizeText]);
+  const fields = {};
+  for (const axis of Object.keys(SIZE_AXES)) {
+    const lim = LIMITS[axis] ?? { min: 1, max: 600 };
+    fields[axis] = numberField({
+      label: SIZE_AXES[axis].name, unit: 'mm', min: lim.min, max: lim.max + 40, step: 1, decimals: 0, value: NaN, info: '',
+      onInput: (v) => sizeInput(axis, v),
+      onCommit: (v) => sizeCommit(axis, v),
+    });
+  }
+  const sizeClose = el('button', {
+    type: 'button', class: 'icon-close', 'aria-label': 'Close size', text: '×',
+    onclick: () => closeSize({ focusChip: true }),
+  });
+  const sizeCard = el('div', { class: 'warn-card size-card', id: 'size-card', role: 'region', 'aria-label': 'Outer size', hidden: true }, [
+    el('div', { class: 'warn-card-head' }, [el('span', { text: 'Outer size' }), sizeClose]),
+    el('div', { class: 'size-fields' }, Object.values(fields).map((f) => f.el)),
+    el('p', { class: 'warn-hint', text: 'The finished outside, patterns included. Shape scales to match.' }),
+  ]);
+  const sizeWrap = el('div', { class: 'chip-wrap' }, [sizeChip, sizeCard]);
+  root.replaceChildren(wrap, sizeWrap);
 
   let lastKey = '';
   let lastCount = null;
@@ -97,6 +131,7 @@ export function mountChips(root, ctx) {
   function openCard() {
     if (listed(store.state.result).length === 0) return;
     const fromKeyboard = document.activeElement === chip && chip.matches(':focus-visible');
+    closeSize();
     card.hidden = false;
     chip.setAttribute('aria-expanded', 'true');
     document.addEventListener('pointerdown', outside, true);
@@ -127,6 +162,143 @@ export function mountChips(root, ctx) {
   card.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.stopPropagation(); closeCard({ focusChip: true }); }
   });
+
+  // ---------- Size card ----------
+
+  // A finger on the chip mustn't pop up the keyboard; a mouse or the keyboard
+  // lands straight in Height, ready to type.
+  let sizePointer = '';
+  sizeChip.addEventListener('pointerdown', (e) => { sizePointer = e.pointerType; });
+
+  function openSize() {
+    if (store.state.view.mode !== 'design') return;
+    closeCard();
+    sizeCard.hidden = false;
+    sizeChip.setAttribute('aria-expanded', 'true');
+    document.addEventListener('pointerdown', outsideSize, true);
+    syncSize(store.state, { values: true });
+    if (sizePointer !== 'touch' && sizePointer !== 'pen') fields.height.input.focus();
+    sizePointer = '';
+  }
+
+  function closeSize({ focusChip = false } = {}) {
+    if (sizeCard.hidden) return;
+    const hadFocus = sizeCard.contains(document.activeElement);
+    // Leaving a field commits what was typed in it (its blur handler).
+    if (hadFocus) document.activeElement.blur();
+    sizeCard.hidden = true;
+    sizeChip.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', outsideSize, true);
+    if (focusChip || hadFocus) sizeChip.focus({ preventScroll: true });
+  }
+
+  function outsideSize(e) {
+    // Turning the pot to look at the new size keeps the card open.
+    if (e.target.closest?.('#scene, #overlay')) return;
+    if (!sizeWrap.contains(e.target)) closeSize();
+  }
+
+  sizeCard.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); closeSize({ focusChip: true }); }
+  });
+
+  // Resolves with the preview made from exactly this design, or null once
+  // the design moved on (another edit) or the engine took too long.
+  function resultFor(design) {
+    return new Promise((resolve) => {
+      let unsubscribe = null;
+      let timer = 0;
+      let settled = false;
+      const done = (result) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        unsubscribe?.();
+        resolve(result);
+      };
+      const check = () => {
+        if (store.state.design !== design) done(null);
+        else if (store.state.result && ctx.resultDesign?.() === design) done(store.state.result);
+      };
+      check();
+      if (settled) return;
+      timer = setTimeout(() => done(null), RESULT_WAIT_MS);
+      unsubscribe = store.subscribe((state, what) => {
+        if (what.has('result') || what.has('design')) check();
+      });
+    });
+  }
+
+  // Live edits (a drag or arrow keys in a field) move the form by the typed
+  // number minus what patterns and the bead add, taken from the last preview.
+  // Ending the edit then corrects until the measured size matches.
+  let sizeGesture = null;
+  let fitToken = 0;
+  const stepLabel = (axis) => `Outer ${SIZE_AXES[axis].name.toLowerCase()}`;
+
+  function outerOffset(axis) {
+    const ax = SIZE_AXES[axis];
+    if (!ax.offset) return 0;
+    const measured = store.state.result?.size?.[ax.key];
+    const source = ctx.resultDesign?.() || store.state.design;
+    return Number.isFinite(measured) ? measured - ax.get(source) : 0;
+  }
+
+  function sizeInput(axis, v) {
+    if (sizeGesture?.axis !== axis) {
+      fitToken += 1; // a correction still running for an older edit stops
+      sizeGesture = { axis, offset: outerOffset(axis) };
+    }
+    const ax = SIZE_AXES[axis];
+    store.change(stepLabel(axis), (d) => ax.set(d, v - sizeGesture.offset));
+  }
+
+  function sizeCommit(axis, target) {
+    sizeGesture = null;
+    const token = ++fitToken;
+    const ax = SIZE_AXES[axis];
+    const live = () => token === fitToken;
+    fitOuterSize({
+      target,
+      x: ax.get(store.state.design),
+      m: null,
+      tolerance: ax.tolerance(store.state.design),
+      apply: (x) => {
+        if (live()) store.change(stepLabel(axis), (d) => ax.set(d, x));
+        return ax.get(store.state.design);
+      },
+      measure: async () => {
+        if (!live()) return null;
+        const result = await resultFor(store.state.design);
+        return live() ? result?.size?.[ax.key] ?? null : null;
+      },
+    }).catch((err) => console.warn('[size]', err))
+      .finally(() => {
+        // One history step for the whole edit; a newer edit commits its own.
+        if (live()) store.commit();
+      });
+  }
+
+  // The fields only take new numbers from a new preview: a design change
+  // alone still carries the old measurements, and echoing them into a field
+  // mid-edit would undo what was just typed.
+  function syncSize(state, { values = false } = {}) {
+    const s = state.result?.size;
+    const text = formatSize(s);
+    sizeText.textContent = text;
+    const printing = state.view.mode !== 'design';
+    sizeChip.setAttribute('aria-label', printing ? `Size ${text}` : `Size ${text}. Change size`);
+    sizeChip.title = printing ? 'Size: height × width × depth' : 'Size: height × width × depth. Click to change it';
+    sizeChip.classList.toggle('is-static', printing);
+    if (printing) closeSize();
+    if (sizeCard.hidden) return;
+    const locked = depthLocked(state);
+    for (const [axis, field] of Object.entries(fields)) {
+      if (values && s && Number.isFinite(s[SIZE_AXES[axis].key])) field.set(Math.round(s[SIZE_AXES[axis].key]));
+      field.setDisabled(axis === 'depth' && locked);
+    }
+    fields.depth.setInfo(locked ? 'Follows the width. Unlock it under Shape.' : '');
+  }
 
   function pick(w) {
     const on = store.state.view.highlight !== w.id;
@@ -185,7 +357,6 @@ export function mountChips(root, ctx) {
       icon.hidden = n === 0;
       chip.classList.remove('is-none', 'is-error', 'is-warn');
       chip.classList.add(n === 0 ? 'is-none' : errors ? 'is-error' : 'is-warn');
-      size.textContent = formatSize(state.result?.size);
       if (n === 0) closeCard();
       // The problem was fixed: stop colouring beads for a warning that's gone.
       const hl = state.view.highlight;
@@ -201,13 +372,18 @@ export function mountChips(root, ctx) {
 
   const unsubscribe = store.subscribe((state, what) => {
     if (what.has('result') || what.has('view')) update(state, what);
+    if (what.has('result') || what.has('view') || what.has('design')) syncSize(state, { values: what.has('result') });
   });
   update(store.state, new Set(['result']));
+  syncSize(store.state);
 
   return {
     destroy() {
       unsubscribe();
+      fitToken += 1;
       document.removeEventListener('pointerdown', outside, true);
+      document.removeEventListener('pointerdown', outsideSize, true);
+      Object.values(fields).forEach((f) => f.destroy());
       root.replaceChildren();
     },
   };
