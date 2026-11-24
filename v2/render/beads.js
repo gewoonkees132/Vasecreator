@@ -19,6 +19,21 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /** Sides around the bead cross-section. 10 keeps the outer face round enough to catch the light per layer. */
 const SIDES = 10;
+/**
+ * Geometry level of detail. A bead is 4·SIDES − 4 triangles (36 at 10 sides,
+ * 20 at 6). Phones and tablets (coarse pointer or a small screen) draw
+ * LOD_SIDES-sided beads above LOD_SEGMENTS_COMPACT segments, about 2 M
+ * triangles at full detail; every device does above LOD_SEGMENTS_ANY. Beads
+ * that many are only a few pixels tall, where the shading LOD below has
+ * already flattened most of their relief. The low template is scaled to the
+ * full one's width and height, so layers still overlap and the pot keeps its
+ * size. Display only: the toolpath and the G-code don't change.
+ */
+const LOD_SIDES = 6;
+const LOD_SEGMENTS_COMPACT = 60000;
+const LOD_SEGMENTS_ANY = 300000;
+/** Once switched, stay switched until the count drops this far below the limit, so a drag near it doesn't flicker. */
+const LOD_HYSTERESIS = 0.9;
 /** Superellipse exponent of the cross-section: 2 is an ellipse, higher is a flatter, squarer (squashed clay) bead. */
 const SHAPE_EXP = 2.6;
 /** Beads are drawn a little taller than the layer so stacked layers overlap and never show hairline cracks. */
@@ -179,6 +194,7 @@ export class BeadRenderer {
     this._afterRender = new Set();
     this._seamVisible = false;
     this._bed = null;
+    this._sides = SIDES;
 
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
     this._renderer.setClearColor(0x000000, 0);
@@ -294,7 +310,9 @@ export class BeadRenderer {
    * @param {PreviewResult | null} result
    */
   setToolpath(result) {
-    const geometry = result ? buildGeometry(result) : null;
+    const n = result?.positions ? Math.floor(result.positions.length / 3) : 0;
+    this._sides = sidesFor(n - 1, this._sides);
+    const geometry = result ? buildGeometry(result, this._sides) : null;
     this._mesh.geometry.dispose();
     this._mesh.geometry = geometry || new THREE.InstancedBufferGeometry();
     this._mesh.visible = !!geometry;
@@ -694,51 +712,86 @@ export class BeadRenderer {
  * z = ring 0 at the segment start, 1 at its end), smooth normals, and flat
  * caps that close the open ends of a bead run (mitred joints hide them).
  */
-function templateData() {
-  const pos = new Float32Array(2 * SIDES * 3);
-  const nrm = new Float32Array(2 * SIDES * 3);
+function templateData(sides) {
+  const pos = new Float32Array(2 * sides * 3);
+  const nrm = new Float32Array(2 * sides * 3);
   const e = 2 / SHAPE_EXP, f = 2 * (SHAPE_EXP - 1) / SHAPE_EXP;
   const spow = (v, p) => Math.sign(v) * Math.abs(v) ** p;
+  // Half the width and height a ring of this many sides reaches.
+  const extent = (n) => {
+    let x = 0, y = 0;
+    for (let k = 0; k < n; k++) {
+      const a = (2 * Math.PI * k) / n;
+      x = Math.max(x, 0.5 * Math.abs(Math.cos(a)) ** e);
+      y = Math.max(y, 0.5 * Math.abs(Math.sin(a)) ** e);
+    }
+    return { x, y };
+  };
+  // A coarser ring is stretched to the full one's extent (the full one is
+  // left exactly as it is), with its normals corrected for the stretch.
+  const want = extent(SIDES), have = extent(sides);
+  const sx = want.x / have.x, sy = want.y / have.y;
   for (let ring = 0; ring < 2; ring++) {
-    for (let k = 0; k < SIDES; k++) {
-      const a = (2 * Math.PI * k) / SIDES;
+    for (let k = 0; k < sides; k++) {
+      const a = (2 * Math.PI * k) / sides;
       const c = Math.cos(a), s = Math.sin(a);
-      const o = (ring * SIDES + k) * 3;
-      pos[o] = 0.5 * spow(c, e);
-      pos[o + 1] = 0.5 * spow(s, e);
+      const o = (ring * sides + k) * 3;
+      pos[o] = 0.5 * spow(c, e) * sx;
+      pos[o + 1] = 0.5 * spow(s, e) * sy;
       pos[o + 2] = ring;
       // Gradient of |2x|^n + |2y|^n, which is the outward normal.
-      const nx = spow(c, f), ny = spow(s, f), nl = Math.hypot(nx, ny) || 1;
+      const nx = spow(c, f) / sx, ny = spow(s, f) / sy, nl = Math.hypot(nx, ny) || 1;
       nrm[o] = nx / nl;
       nrm[o + 1] = ny / nl;
     }
   }
   const idx = [];
-  for (let k = 0; k < SIDES; k++) {
-    const a0 = k, b0 = (k + 1) % SIDES, a1 = a0 + SIDES, b1 = b0 + SIDES;
+  for (let k = 0; k < sides; k++) {
+    const a0 = k, b0 = (k + 1) % sides, a1 = a0 + sides, b1 = b0 + sides;
     idx.push(a0, b1, b0, a0, a1, b1);
   }
-  for (let k = 1; k < SIDES - 1; k++) {
+  for (let k = 1; k < sides - 1; k++) {
     idx.push(0, k, k + 1);                                // start cap faces back
-    idx.push(SIDES, SIDES + k + 1, SIDES + k);            // end cap faces forward
+    idx.push(sides, sides + k + 1, sides + k);            // end cap faces forward
   }
   return { position: pos, normal: nrm, index: new Uint16Array(idx) };
 }
 
-let templateArrays = null;
+/** Template arrays by side count, built on first use. */
+const templates = new Map();
+
+/**
+ * Sides per bead for a toolpath of this many segments (see LOD_SIDES).
+ * @param {number} segments
+ * @param {number} current the side count in use, for the hysteresis
+ */
+function sidesFor(segments, current) {
+  const limit = isCompactDevice() ? LOD_SEGMENTS_COMPACT : LOD_SEGMENTS_ANY;
+  const low = current === LOD_SIDES ? segments > limit * LOD_HYSTERESIS : segments > limit;
+  return low ? LOD_SIDES : SIDES;
+}
+
+/** A phone or tablet: touch as the main pointer, or a small screen. */
+function isCompactDevice() {
+  if (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) return true;
+  const s = typeof screen === 'object' && screen ? Math.min(screen.width, screen.height) : 0;
+  return s > 0 && s < 600;
+}
 
 /**
  * Instanced geometry over a toolpath. Two memcpy-style copies pad the arrays
  * by one point at each end so every segment can read both neighbours; there
  * is no per-segment JavaScript.
  * @param {PreviewResult} result
+ * @param {number} [sides] around the bead cross-section
  * @returns {THREE.InstancedBufferGeometry | null}
  */
-function buildGeometry(result) {
+function buildGeometry(result, sides = SIDES) {
   const positions = result?.positions;
   const n = positions ? Math.floor(positions.length / 3) : 0;
   if (n < 2) return null;
-  templateArrays ||= templateData();
+  if (!templates.has(sides)) templates.set(sides, templateData(sides));
+  const templateArrays = templates.get(sides);
   const pos = new Float32Array(3 * (n + 2));
   pos.set(positions.subarray(0, 3), 0);
   pos.set(positions.subarray(0, 3 * n), 3);

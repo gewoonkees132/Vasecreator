@@ -13,6 +13,7 @@ export function createEngine({ library, workerUrl } = {}) {
   const waiting = new Map(); // id → { resolve, reject, kind, onProgress }
   let nextId = 1;
   let latestPreview = 0;
+  let lastDelivered = 0;
   let disposed = false;
 
   worker.postMessage({ type: 'init', library });
@@ -34,8 +35,16 @@ export function createEngine({ library, workerUrl } = {}) {
       else job.reject(error);
       return;
     }
-    if (msg.superseded || (job.kind === 'preview' && msg.id !== latestPreview)) job.resolve(null);
-    else job.resolve(msg.result);
+    // A preview the worker finished is still the newest one computed, so it is
+    // delivered even when a newer request is waiting: on a slow phone every
+    // request is overtaken during a drag, and dropping them would freeze the pot
+    // until the finger lifts (D20). Only results older than one already
+    // delivered are dropped.
+    if (msg.superseded || (job.kind === 'preview' && msg.id < lastDelivered)) job.resolve(null);
+    else {
+      if (job.kind === 'preview') lastDelivered = msg.id;
+      job.resolve(msg.result);
+    }
   };
 
   // An error event means the worker itself failed (it didn't load, or threw
@@ -50,7 +59,7 @@ export function createEngine({ library, workerUrl } = {}) {
     waiting.clear();
   };
 
-  function request(type, design, printer, onProgress) {
+  function request(type, design, printer, onProgress, extra) {
     if (disposed) return Promise.reject(new Error('The engine has been closed'));
     if (broken) return Promise.reject(broken);
     const id = nextId++;
@@ -58,7 +67,8 @@ export function createEngine({ library, workerUrl } = {}) {
     return new Promise((resolve, reject) => {
       waiting.set(id, { resolve, reject, kind: type, onProgress });
       try {
-        worker.postMessage({ type, id, design, printer });
+        // Posted without a transfer list: the worker gets a copy and the caller keeps its raster.
+        worker.postMessage(extra ? { type, id, ...extra } : { type, id, design, printer });
       } catch (error) {
         waiting.delete(id);
         reject(error);
@@ -73,6 +83,16 @@ export function createEngine({ library, workerUrl } = {}) {
     print: (design, printer) => request('print', design, printer),
     /** @returns {Promise<Blob>} text/plain G-code; rejects when an error blocks the export */
     gcode: (design, printer, onProgress) => request('gcode', design, printer, onProgress),
+    /**
+     * Stores a copy of a Raster in the worker's image cache, once per image.
+     * Resolves after the worker has it, so a preview asked for afterwards sees it.
+     * @param {string} hash hashRaster(raster)
+     * @param {{ width: number, height: number, data: Uint8Array }} raster
+     * @returns {Promise<void>}
+     */
+    setImage: (hash, raster) => request('setImage', null, null, undefined, {
+      hash, raster: { width: raster.width, height: raster.height, data: raster.data },
+    }).then(() => undefined),
     dispose() {
       disposed = true;
       worker.terminate();

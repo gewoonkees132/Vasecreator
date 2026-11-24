@@ -181,6 +181,9 @@ export function designChecks(tp, design, printer) {
   if (tp.model.missing.length) {
     warnings.push({ id: 'missingPattern', severity: 'warning', bit: 0, message: "A pattern in this design isn't available, so it prints plain" });
   }
+  if (tp.model.missingImages?.length) {
+    warnings.push({ id: 'missingImage', severity: 'warning', bit: 0, message: 'An image pattern is missing on this device' });
+  }
   return warnings;
 }
 
@@ -258,7 +261,9 @@ export function printChecks(tp, design, printer, { skirt, refills, designWarning
 
   for (const warning of designWarnings) {
     if (warning.id === 'bed') continue; // the print-time bed check above replaces it
-    checks.push({ ...warning });
+    // Printing without the image would print a different pot, so it blocks export.
+    if (warning.id === 'missingImage') checks.push({ ...warning, severity: 'error' });
+    else checks.push({ ...warning });
   }
   return { checks, canExport: !checks.some((c) => c.severity === 'error') };
 }

@@ -54,7 +54,7 @@ export function mountHistory(root, ctx) {
 
   const advanced = el('button', {
     type: 'button', class: 'advanced-btn', 'aria-pressed': 'false',
-    title: 'Show the advanced sections: profile curve, profile points and footprint',
+    title: 'Show the advanced sections: profile curve, profile points, footprint and geometry morph',
     onclick: () => store.setView({ advanced: !store.state.view.advanced }),
   }, [
     el('span', { class: 'advanced-long', text: 'Advanced' }),

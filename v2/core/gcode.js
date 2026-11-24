@@ -13,6 +13,7 @@
 import { PI } from './math.js';
 import { E_MODE_COMMANDS, PAUSE_COMMANDS, printerLabel } from './printer.js';
 import { KIND } from './toolpath.js';
+import { compactDesign } from './design.js';
 
 /** A G-code sanity failure (research §7, V16). Blocks the export. */
 export class GcodeError extends Error {
@@ -351,7 +352,7 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
     `; Bead width ${f3(w)} mm, layer height ${f3(h)} mm`,
     `;FLAVOR:${FLAVORS[machine.firmware]}`,
     `;LAYER_COUNT:${L}`,
-    `; design: ${JSON.stringify(design)}`,
+    `; design: ${JSON.stringify(compactDesign(design))}`,
   );
 
   // Start, then prime: a stationary volume at the park point, then a lift.

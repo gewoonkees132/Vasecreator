@@ -3,12 +3,12 @@
 // live in IndexedDB (store/db.js); design files move them between devices.
 
 import { looksLikeDesign, normaliseDesign } from '../core/design.js';
+import { designFileBlob, takeFileImages, FILE_MAX_BYTES } from './design-file.js';
 
 const LS_NOTE = 'vc2.storageNoteDismissed';
 const FILE_SUFFIX = '.vasecreator.json';
 const NAME_MAX = 80;
-// A design file is a few KB; anything this big isn't one, and reading it would stall the page.
-const FILE_MAX_BYTES = 2 * 1024 * 1024;
+// A design file is a few KB plus its images (ui/design-file.js caps those at 8 MB).
 
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
@@ -417,9 +417,9 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
     status.textContent = `Deleted "${rec.name}".`;
   }
 
-  function downloadSaved(rec) {
-    const text = JSON.stringify(rec.design, null, 2);
-    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  async function downloadSaved(rec) {
+    // The file carries the pixels of the images the design uses.
+    const url = URL.createObjectURL(await designFileBlob(rec.design));
     const a = el('a', { href: url, download: fileName(rec.name) });
     document.body.append(a);
     a.click();
@@ -437,7 +437,8 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
       const json = JSON.parse(await file.text());
       // normaliseDesign() fills anything missing, so check it is a design first.
       if (!looksLikeDesign(json)) throw new TypeError('Not a design file');
-      design = normaliseDesign(json);
+      // Its images go into this browser's storage first; normalising drops the field.
+      design = normaliseDesign(await takeFileImages(json));
     } catch (err) {
       console.warn('[designs] not a design file', err);
       status.textContent = `"${file.name}" isn't a Vase Creator design file.`;

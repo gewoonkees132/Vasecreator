@@ -16,9 +16,10 @@ import base from './sections/base.js';
 import curve from './sections/curve.js';
 import points from './sections/points.js';
 import footprint from './sections/footprint.js';
+import morph from './sections/morph.js';
 
 const MAIN = [shape, surface, layers, base];
-const ADVANCED = [curve, points, footprint];
+const ADVANCED = [curve, points, footprint, morph];
 const TAB_TITLES = { shape: 'Shape', surface: 'Surface', layers: 'Layers', base: 'Base', advanced: 'Advanced' };
 const PHONE_QUERY = '(max-width: 760px)';
 

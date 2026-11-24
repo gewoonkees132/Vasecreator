@@ -161,3 +161,30 @@ export function datan2(y, x) {
 export function radians(deg) {
   return (deg * PI) / 180;
 }
+
+const LN2 = 0.6931471805599453;
+
+/**
+ * e^x from + − × ÷ only (range reduction by ln 2, then a Taylor polynomial),
+ * so every engine gives the same bits. Accurate to about 1e-15 relative;
+ * meant for blur weights and other smooth falloffs, not for long chains.
+ * @param {number} x
+ * @returns {number}
+ */
+export function dexp(x) {
+  if (x !== x) return x;
+  if (x < -745) return 0;
+  if (x > 709) return Infinity;
+  const k = Math.round(x / LN2);
+  const r = x - k * LN2;
+  let sum = 1;
+  let term = 1;
+  for (let n = 1; n <= 16; n++) {
+    term = (term * r) / n;
+    sum += term;
+  }
+  let scale = 1;
+  if (k > 0) for (let i = 0; i < k; i++) scale *= 2;
+  else for (let i = 0; i < -k; i++) scale /= 2;
+  return sum * scale;
+}

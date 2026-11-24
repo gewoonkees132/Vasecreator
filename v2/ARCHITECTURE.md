@@ -214,7 +214,7 @@ History (C3): the history is a list of design snapshots, oldest first, plus a po
 
 **Next visit.** `loadHistory()` puts the pointer on the newest step, so *Last design* is the newest step any tab made (§8.4), also when the last tab had undone a few steps. Undo walks back from there through every tab's steps.
 
-`store/db.js`: `openDb()` never rejects. It returns `{ persistent, get(store, key), put(store, key, value), delete(store, key), all(store), loadHistory(), saveHistory({ steps, dirty, pointer, tab, cap? }) }`; `saveHistory` resolves `{ order, added, grew }` (the merged ids, the stored steps this tab didn't have, whether a step new to storage was written). It also exports `MAX_STEPS` and the pure `mergeHistory(stored, local, { cap, keep })` and `planHistorySave(read, save)`, which the transaction runs on what it read. The IndexedDB database `vasecreator-v2` has three stores: `history` (one record per step, plus `meta` = `{ order, pointers: { [tab]: { id, at } } }`; the pointers of the 8 most recent tabs are protected from the cap, and an older `{ order, pointer }` still reads), `designs` (saved tiles, `{ id, name, design, thumb, updated }`) and `settings` (`printer`). Unreadable step records (no id, no design, stored under another key) are skipped. Without IndexedDB (some private modes), the same API works in memory for the session, and the tabs don't share. A failing call is logged and returns a fallback; it never throws. `put` and `saveHistory` resolve `false` when the write failed, so the caller can keep the data for a retry or say it wasn't saved.
+`store/db.js`: `openDb()` never rejects. It returns `{ persistent, get(store, key), put(store, key, value), delete(store, key), all(store), loadHistory(), saveHistory({ steps, dirty, pointer, tab, cap? }) }`; `saveHistory` resolves `{ order, added, grew }` (the merged ids, the stored steps this tab didn't have, whether a step new to storage was written). It also exports `MAX_STEPS` and the pure `mergeHistory(stored, local, { cap, keep })` and `planHistorySave(read, save)`, which the transaction runs on what it read. The IndexedDB database `vasecreator-v2` has five stores: `history` (one record per step, plus `meta` = `{ order, pointers: { [tab]: { id, at } } }`; the pointers of the 8 most recent tabs are protected from the cap, and an older `{ order, pointer }` still reads), `designs` (saved tiles, `{ id, name, design, thumb, updated }`) and `settings` (`printer`). Unreadable step records (no id, no design, stored under another key) are skipped. Without IndexedDB (some private modes), the same API works in memory for the session, and the tabs don't share. A failing call is logged and returns a fallback; it never throws. `put` and `saveHistory` resolve `false` when the write failed, so the caller can keep the data for a retry or say it wasn't saved.
 
 ## UI contracts
 
@@ -265,3 +265,23 @@ body
 ```
 
 Derived layout values (`--gap`, `--ctl-h`, `--focus-ring`, the `-bg` tints) follow in the same block. v1's look carries over (design §8.7): Inter, white translucent cards with 12 px corners, buttons and chips with 8 px corners. The background is v1's teal gradient (primary-light → primary) as plain CSS.
+
+## Phase 2 contracts (design §15.3: pattern editor, images as swatches, geometry morph)
+
+Design JSON additions (schema version stays 2; both fields are optional and `normaliseDesign` fills them):
+
+```jsonc
+"assets": {                                    // default {}; ids are keys, referenced by slot.pattern and form.morph.map
+  "user:1a2b3c4d": { "kind": "recipe", "name": "My ribs", "recipe": { "kind": "motif", "cells": [1,-1,0], "layout": "brick", "edges": "soft" } },
+  "img:9f86d081884c7d65": { "kind": "image", "name": "bark.jpg", "hash": "9f86d081884c7d65", "width": 256, "height": 256 }
+},
+"form": { …, "morph": null }                   // or { "map": "lib:lobes@1" | "img:<hash>", "softnessMm": 24, "strengthMm": 16, "repeats": 4, "blend": 0.8 }
+```
+
+- `slot.pattern` is `'plain'`, a library id `lib:…@1`, or a key of `design.assets` (`user:…` recipe, `img:…` image). Recipes travel inside the design (they are tiny). Image pixels never do: history snapshots carry only the reference (research §8.4).
+- `Raster = { width, height, data: Uint8Array }`: 8-bit greyscale, row 0 = top of the image, at most 512 px on the long side. Built by `core/raster.js` `rasterFromRGBA(rgba, width, height, maxSide = 512)` (Rec. 709 luminance of linearised sRGB, re-encoded perceptually; alpha ignored), hashed by `hashRaster(raster)` → 16 hex chars (deterministic, FNV-1a 64 over width, height and data).
+- Image patterns map like recipes (u around in whole repeats, v up by tile height; research §6.3), sampled bilinearly with wrap from a copy prefiltered for the bead grid (Gaussian, research §6.3), giving −1 (black, in) … +1 (white, out). The printable resolution "≈ 39 × 100 beads per tile" comes from `core/raster.js` `printableResolution(slot, perimeterMm, layers)`.
+- Morph (design §9.6): `core/morph.js` exports `MORPH_MAPS = [{ id: 'lib:lobes@1', name: 'Lobes' }, … 'lean', 'waist', 'swirl', 'blobs']` and evaluates a map at (u around in whole repeats, v = z / H over the full height) → −1…1; images are blurred by `softnessMm` (converted to texels per axis). Radial push = strengthMm × blend × value, added to the profile radius before patterns, so checks, size and the base see the morphed form.
+- Engine: `computePreview/computePrint/emitGcode(…, { library, printer, images })` with `images: Map<hash, Raster>`. Client: `engine.setImage(hash, raster) → Promise<void>` posts a copy to the worker cache once. A referenced image that the worker doesn't have prints plain and adds warning `missingImage` (an error in Prepare print, so it blocks export).
+- Browser storage (`store/assets.js`, IndexedDB stores `images` and `patterns` in the same database, version 2): `saveImage(raster, name) → hash`, `loadImage(hash) → Raster | null`, `listPatterns() → [{ id, name, recipe }]`, `savePattern({ id, name, recipe })`, `deletePattern(id)`. "My patterns" are the user's own swatches across designs.
+- Design files (`<name>.vasecreator.json`) embed the pixels of every referenced image under a top-level `"images": { "<hash>": { "width", "height", "data": "<base64>" } }`; opening a file stores them with `saveImage` before normalising (which drops the field).

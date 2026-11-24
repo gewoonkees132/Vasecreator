@@ -16,6 +16,12 @@
 // XY, and D the surface pattern displacement in mm. Pattern coordinates are
 // x = repeats·u and y = z / tile height, with u riding on the outline, so whole
 // repeats meet without a seam and the pattern follows the twist.
+//
+// Phase 2: the geometry morph M(z, u) (core/morph.js) is added to the profile
+// radius before the footprint, D and the minimum-radius clamp, so the walls,
+// the base, the checks and the size all see the morphed form. Slots may also
+// name a recipe from design.assets ('user:…') or an image ('img:…', sampled
+// from the Raster passed in `images`, prefiltered for the bead grid).
 
 import { TAU, dcos, dsin, radians } from './math.js';
 import { PLAIN, evaluatePattern, findPattern } from './patterns.js';
@@ -24,6 +30,8 @@ import { createProfile } from './profile.js';
 import { snapTileHeight } from './design.js';
 import { createPlan } from './plan.js';
 import { ISSUE } from './checks.js';
+import { preparedRaster } from './raster.js';
+import { createMorph } from './morph.js';
 
 /** What the move ending at a point is (ARCHITECTURE.md, PreviewResult.kinds). */
 export const KIND = Object.freeze({ none: 0, outer: 1, inner: 2, base: 3, connector: 4 });
@@ -70,41 +78,89 @@ export function patternFeatures(recipe) {
 }
 
 /**
- * Resolves the surface slots against the pattern library. A pattern missing
- * from the library prints plain and is reported, so an old design still opens.
+ * Resolves the surface slots: library ids against the pattern library,
+ * 'user:…' against the recipes in design.assets, 'img:…' against the rasters
+ * in `images` (by the asset's hash). A pattern that can't be found prints
+ * plain and is reported (missing, or missingImages for an image this device
+ * doesn't have), so an old design still opens.
+ * @param {object} design
+ * @param {{ patterns: object[] }} library
+ * @param {{ images?: Map<string, object>, perimeterMm?: number }} [options] perimeterMm at the widest
+ *   radius, for an image's prefilter
  */
-export function resolveSlots(design, library) {
+export function resolveSlots(design, library, { images, perimeterMm = 0 } = {}) {
   const slots = [];
   const missing = [];
+  const missingImages = [];
+  const assets = design.assets ?? {};
+  const h = design.layers.layerHeightMm;
+  const w = design.layers.beadWidthMm;
   for (const key of ['a', 'b']) {
     const slot = design.surface[key];
     if (!slot) continue;
-    let entry = PLAIN;
-    try {
-      entry = findPattern(library ?? { patterns: [] }, slot.pattern);
-    } catch {
-      missing.push(slot.pattern);
+    let recipe = PLAIN.recipe;
+    let evaluate = null;
+    let features = null;
+    // Snapped here too, so a design edited without normalising still lines up.
+    const tileHeightMm = snapTileHeight(slot.tileHeightMm, h);
+    const id = slot.pattern;
+    if (typeof id === 'string' && id.startsWith('img:')) {
+      const asset = assets[id];
+      const hash = asset?.kind === 'image' ? asset.hash : id.slice(4);
+      const raster = images?.get?.(hash);
+      if (raster) {
+        // Prefilter for the bead grid (research §6.3): σ of half a sample,
+        // the bead spacing w/2 around and the layer height up, in texels.
+        const tileWidthMm = Math.max(perimeterMm / slot.repeats, 1e-6);
+        const spacingU = ((w / 2) * raster.width) / tileWidthMm;
+        const spacingV = (h * raster.height) / tileHeightMm;
+        const image = preparedRaster(raster, spacingU > 1 ? spacingU / 2 : 0, spacingV > 1 ? spacingV / 2 : 0, true);
+        recipe = { kind: 'image', hash };
+        evaluate = image.sample;
+        features = image.features;
+      } else {
+        missingImages.push(id);
+      }
+    } else if (typeof id === 'string' && id.startsWith('user:')) {
+      const asset = assets[id];
+      if (asset?.kind === 'recipe') recipe = asset.recipe;
+      else missing.push(id);
+    } else {
+      try {
+        recipe = findPattern(library ?? { patterns: [] }, id).recipe;
+      } catch {
+        missing.push(id);
+      }
     }
+    const r = recipe;
     slots.push({
       key,
-      recipe: entry.recipe,
+      recipe,
       depthMm: slot.depthMm,
       repeats: slot.repeats,
-      // Snapped here too, so a design edited without normalising still lines up.
-      tileHeightMm: snapTileHeight(slot.tileHeightMm, design.layers.layerHeightMm),
-      features: patternFeatures(entry.recipe),
-      active: slot.depthMm > 0 && entry.recipe.kind !== 'plain',
+      tileHeightMm,
+      features: features ?? patternFeatures(recipe),
+      active: slot.depthMm > 0 && recipe.kind !== 'plain',
+      evaluate: evaluate ?? ((x, y) => evaluatePattern(r, x, y)),
     });
   }
-  return { slots, missing };
+  return { slots, missing, missingImages };
+}
+
+// Widest radius of the profile curve over the layer tops (and the ends).
+function widestProfileRadius(profile, H, h) {
+  let widest = Math.max(profile.at(0), profile.at(H));
+  for (let z = h; z < H; z += h) widest = Math.max(widest, profile.at(z));
+  return widest;
 }
 
 /**
  * Everything needed to evaluate wall points for one design, precomputed once.
  * @param {object} design a normalised design
  * @param {{ patterns: object[] }} library
+ * @param {{ images?: Map<string, object> }} [options]
  */
-export function createWallModel(design, library) {
+export function createWallModel(design, library, { images } = {}) {
   const { form, surface, layers, base } = design;
   const h = layers.layerHeightMm;
   const w = layers.beadWidthMm;
@@ -116,7 +172,27 @@ export function createWallModel(design, library) {
   const plan = createPlan(form.plan);
   const twistPerMm = radians(form.twist.degrees) / H;
   const rMin = 2 * w;
-  const { slots, missing } = resolveSlots(design, library);
+  const needsWidest = design.form.morph || ['a', 'b'].some((k) => String(design.surface[k]?.pattern ?? '').startsWith('img:'));
+  const widestMm = needsWidest ? widestProfileRadius(profile, H, h) * plan.unitPerimeter : 0;
+  const morph = createMorph(design, { images, perimeterMm: widestMm });
+  const { slots, missing, missingImages } = resolveSlots(design, library, { images, perimeterMm: widestMm });
+  if (morph?.missingImage) missingImages.push(design.form.morph.map);
+  const morphOn = !!morph && morph.amplitude > 0;
+  const morphAmp = morphOn ? morph.amplitude : 0;
+  /** The morph's radial push in mm at height z, position u (0 without a morph). */
+  const morphAt = morphOn ? morph.at : () => 0;
+  // Least and most push around at height z, for the base spiral and the skirt.
+  function morphRange(z) {
+    if (!morphOn) return { lo: 0, hi: 0 };
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let k = 0; k < 256; k++) {
+      const v = morphAt(z, k / 256);
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    return { lo, hi };
+  }
   const active = slots.filter((s) => s.active);
   const limit = radians(layers.overhangLimitDeg);
   const stepLimit = (h * dsin(limit)) / dcos(limit);
@@ -144,7 +220,7 @@ export function createWallModel(design, library) {
     for (let k = 0; k < active.length; k++) {
       const s = active[k];
       const ws = s.key === 'a' ? wt.a : wt.b;
-      if (ws > 0) d += ws * s.depthMm * evaluatePattern(s.recipe, s.repeats * u, z / s.tileHeightMm);
+      if (ws > 0) d += ws * s.depthMm * s.evaluate(s.repeats * u, z / s.tileHeightMm);
     }
     return d;
   }
@@ -166,7 +242,8 @@ export function createWallModel(design, library) {
 
   return {
     design, h, w, H, layerCount, baseLayers, baseTop, profile, plan, twistPerMm, rMin,
-    slots, active, missing, stepLimit, displacement, weightsAt, twistAt,
+    slots, active, missing, missingImages, stepLimit, displacement, weightsAt, twistAt,
+    morph: morphOn ? morph : null, morphAmp, morphAt, morphRange,
   };
 }
 
@@ -288,8 +365,9 @@ function groove(m, z, centre, w) {
  * @returns {{ n: number, capped: boolean }}
  */
 function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
-  const perimeter = m.profile.at(zTop) * m.plan.unitPerimeter;
+  const perimeter = (m.profile.at(zTop) + m.morphAmp) * m.plan.unitPerimeter;
   let need = Math.max(Math.ceil(perimeter / (m.w / 2)), MIN_POINTS_PER_LAYER);
+  if (m.morph) need = Math.max(need, 8 * m.morph.repeats * m.morph.featuresAround);
   const lo = m.weightsAt(zStart);
   const loA = lo.a;
   const loB = lo.b;
@@ -306,11 +384,12 @@ function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
  * Builds the full toolpath for a design.
  * @param {object} design a normalised design
  * @param {{ patterns: object[] }} library
- * @param {{ walls?: 1 | 2, maxPoints?: number }} [options] walls defaults to 1 (the design
- *   view's centreline wall); maxPoints is the point budget (MAX_TOOLPATH_POINTS)
+ * @param {{ walls?: 1 | 2, maxPoints?: number, images?: Map<string, object> }} [options] walls defaults
+ *   to 1 (the design view's centreline wall); maxPoints is the point budget (MAX_TOOLPATH_POINTS);
+ *   images are the Rasters by hash for 'img:' patterns and morph maps
  */
-export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOLPATH_POINTS } = {}) {
-  const m = createWallModel(design, library);
+export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOLPATH_POINTS, images } = {}) {
+  const m = createWallModel(design, library, { images });
   const { h, w, layerCount: L, baseLayers: nb, profile, plan, rMin, stepLimit } = m;
   const spacing = design.finish.wallSpacingMm;
   const innerWall = design.finish.innerWall;
@@ -344,19 +423,27 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
 
   // One outer wall point at outline position u and height z, into wx, wy, wIssue.
   let wx = 0, wy = 0, wIssue = 0;
+  const morphed = !!m.morph;
   function wallPoint(u, z, checkOverhang) {
     plan.unitPoint(u, unit);
     const unitLength = Math.sqrt(unit[0] * unit[0] + unit[1] * unit[1]);
     const D = m.displacement(z, u);
     if (D < minD) minD = D;
     if (D > maxD) maxD = D;
-    let radius = profile.at(z) * unitLength + D;
     let issue = 0;
+    let base = profile.at(z);
+    if (morphed) {
+      base += m.morphAt(z, u);
+      if (base < rMin) { base = rMin; issue |= ISSUE.narrow; }
+    }
+    let radius = base * unitLength + D;
     // A hair of slack: a circle of exactly r_min must not flag itself.
     if (radius < rMin - 1e-9) { radius = rMin; issue |= ISSUE.narrow; }
     if (checkOverhang) {
       const zb = z - h;
-      let below = profile.at(zb) * unitLength + m.displacement(zb, u);
+      let baseBelow = profile.at(zb);
+      if (morphed) baseBelow = Math.max(baseBelow + m.morphAt(zb, u), rMin);
+      let below = baseBelow * unitLength + m.displacement(zb, u);
       if (below < rMin - 1e-9) below = rMin;
       if (Math.abs(radius - below) > stepLimit) issue |= ISSUE.overhang;
     }
@@ -424,7 +511,9 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       plan.unitPoint(u, unit);
       const unitLength = Math.sqrt(unit[0] * unit[0] + unit[1] * unit[1]);
       const D = innerWall === 'smooth' ? layerMinD : m.displacement(zTop, u);
-      let radius = profile.at(zTop) * unitLength + D - spacing;
+      let base = profile.at(zTop);
+      if (morphed) base = Math.max(base + m.morphAt(zTop, u), rMin);
+      let radius = base * unitLength + D - spacing;
       let issue = 0;
       if (radius < floor) { radius = floor; issue |= ISSUE.narrow; }
       const t = m.twistAt(zTop);
@@ -444,7 +533,10 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
     const step = design.base.spacingRatio * w;
     const hole = design.base.hole.diameter;
     const stop = hole > 0 ? hole / 2 + w / 2 : step / 2;
-    const own = (Math.min(a, b) - stop - inset) / step - 1;
+    // A morph that pulls in narrows the base: the spiral stops short of the
+    // narrowest part and follows the morphed outline (spiralPoint).
+    const pull = morphed ? Math.min(Math.max(r + m.morphRange(zTop).lo, rMin) - r, 0) : 0;
+    const own = (Math.min(a + pull, b + pull * plan.ratio) - stop - inset) / step - 1;
     const end = endTurns >= 0 ? endTurns : own;
     const ps = [];
     if (own < 0) return { ps, a, b, step, zTop, end: own };
@@ -460,7 +552,13 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   }
 
   function spiralPoint(spiral, inset, uS, p, kind, layer) {
-    plan.point(uS + p, spiral.a, spiral.b, inset + spiral.step * (1 + p), xy);
+    if (morphed) {
+      const u = uS + p;
+      const r = Math.max(spiral.a + m.morphAt(spiral.zTop, u - Math.floor(u)), rMin);
+      plan.point(u, r, r * plan.ratio, inset + spiral.step * (1 + p), xy);
+    } else {
+      plan.point(uS + p, spiral.a, spiral.b, inset + spiral.step * (1 + p), xy);
+    }
     const t = m.twistAt(spiral.zTop);
     buf.push(xy[0] * t.c - xy[1] * t.s, xy[0] * t.s + xy[1] * t.c, spiral.zTop, kind, 0, layer);
   }
@@ -573,7 +671,7 @@ export function buildSkirt(m, printer) {
   const loops = [];
   const { offsetMm, loops: count } = printer.skirt;
   const z = m.h;
-  const r = m.profile.at(z);
+  const r = m.profile.at(z) + (m.morph ? Math.max(m.morphRange(z).hi, 0) : 0);
   const a = r;
   const b = r * m.plan.ratio;
   const xy = new Float64Array(2);

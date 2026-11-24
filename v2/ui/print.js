@@ -8,6 +8,7 @@
 import { numberField, segmented, select, h } from './controls.js';
 import { defaultPrinter, normalisePrinter, PRINTER_LIMITS } from '../core/printer.js';
 import { LIMITS } from '../core/design.js';
+import { designFileBlob } from './design-file.js';
 
 const CHECK_DELAY = 300;
 const ICONS = { ok: '✓', warning: '⚠', error: '✕', info: 'ℹ' };
@@ -319,10 +320,10 @@ export function mountPrintPanel(el, ctx) {
       renderExport();
     }
   });
-  designBtn.addEventListener('click', () => {
+  designBtn.addEventListener('click', async () => {
     const { design } = store.state;
-    const blob = new Blob([JSON.stringify(design, null, 2)], { type: 'application/json' });
-    download(blob, `${safeFileName(design.meta?.name)}.vasecreator.json`);
+    // The shared writer embeds the pixels of any image patterns (phase 2).
+    download(await designFileBlob(design), `${safeFileName(design.meta?.name)}.vasecreator.json`);
   });
 
   const update = (state) => {

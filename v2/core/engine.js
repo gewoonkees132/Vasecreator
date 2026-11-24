@@ -55,14 +55,15 @@ function summarise(tp, design, warnings, started) {
 /**
  * The live preview: the centreline wall and the base, with design checks.
  * @param {object} design any design JSON (normalised here)
- * @param {{ library: { patterns: object[] }, printer?: object }} options
+ * @param {{ library: { patterns: object[] }, printer?: object, images?: Map<string, object> }} options
+ *   images: Rasters by hash, for 'img:' patterns and morph maps
  * @returns {object} PreviewResult (ARCHITECTURE.md)
  */
-export function computePreview(design, { library, printer } = {}) {
+export function computePreview(design, { library, printer, images } = {}) {
   const started = now();
   const d = normaliseDesign(design);
   const p = normalisePrinter(printer);
-  const tp = buildToolpath(d, library, { walls: 1, maxPoints: MAX_PREVIEW_POINTS });
+  const tp = buildToolpath(d, library, { walls: 1, maxPoints: MAX_PREVIEW_POINTS, images });
   const warnings = designChecks(tp, d, p);
   return summarise(tp, d, warnings, started);
 }
@@ -73,13 +74,13 @@ export function computePreview(design, { library, printer } = {}) {
  * emitGcode in the same thread, `toolpath` (the Float64 path and its layer
  * table; the worker drops it before posting).
  * @param {object} design
- * @param {{ library: { patterns: object[] }, printer?: object }} options
+ * @param {{ library: { patterns: object[] }, printer?: object, images?: Map<string, object> }} options
  */
-export function computePrint(design, { library, printer } = {}) {
+export function computePrint(design, { library, printer, images } = {}) {
   const started = now();
   const d = normaliseDesign(design);
   const p = normalisePrinter(printer);
-  const tp = buildToolpath(d, library, { walls: d.finish.walls });
+  const tp = buildToolpath(d, library, { walls: d.finish.walls, images });
   const warnings = designChecks(tp, d, p);
   const skirt = buildSkirt(tp.model, p);
   const refills = planRefills(tp, d, p, skirt);
@@ -93,14 +94,14 @@ export function computePrint(design, { library, printer } = {}) {
  * @param {object} design
  * @param {object | null} printResult from computePrint in this thread, or null to compute it
  * @param {object} printer
- * @param {{ library: { patterns: object[] }, onProgress?: (fraction: number) => void }} options
+ * @param {{ library: { patterns: object[] }, images?: Map<string, object>, onProgress?: (fraction: number) => void }} options
  * @returns {string[]}
  * @throws {GcodeError} on a V16 sanity failure
  */
-export function emitGcode(design, printResult, printer, { library, onProgress } = {}) {
+export function emitGcode(design, printResult, printer, { library, images, onProgress } = {}) {
   const d = normaliseDesign(design);
   const p = normalisePrinter(printer);
-  const print = printResult?.toolpath ? printResult : computePrint(d, { library, printer: p });
+  const print = printResult?.toolpath ? printResult : computePrint(d, { library, printer: p, images });
   const { tp, skirt, refills } = print.toolpath;
   return writeGcode(tp, d, p, { skirt, refills, onProgress });
 }

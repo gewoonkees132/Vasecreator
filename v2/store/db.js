@@ -11,8 +11,11 @@
 // hides the other tab's steps (mergeHistory, planHistorySave).
 
 const DB_NAME = 'vasecreator-v2';
-const DB_VERSION = 1;
-const STORES = ['history', 'designs', 'settings'];
+// Version 2 (phase 2) adds 'images' (greyscale rasters by hash) and 'patterns'
+// ("My patterns"); upgrading only adds the missing stores, so a version-1
+// database keeps its history, designs and settings.
+const DB_VERSION = 2;
+const STORES = ['history', 'designs', 'settings', 'images', 'patterns'];
 
 // The history store holds one record per step (key = step id) plus this one
 // record: { order: string[], pointers: { [tab]: { id, at } } }. Older builds

@@ -5,6 +5,7 @@
 
 import { createStore } from './store/store.js';
 import { openDb } from './store/db.js';
+import { useDb, loadImage, imageHashes, onImageSaved } from './store/assets.js';
 import { normaliseDesign, moveKnot, insertKnot, deleteKnot } from './core/design.js';
 import * as printerModule from './core/printer.js';
 import { createEngine } from './worker/client.js';
@@ -63,6 +64,69 @@ function designKey(design) {
   return JSON.stringify(rest);
 }
 
+/**
+ * The engine client, plus: before a design goes to the worker, every image it
+ * references is sent once with setImage (read from IndexedDB). A design that
+ * needs no new image goes straight through, so previews don't wait; one that
+ * does waits for the read, and a newer preview asked for meanwhile still
+ * wins (the waiting one then resolves null, like any superseded preview).
+ */
+function withImages(engine) {
+  const sent = new Set();      // hashes the worker has
+  const missing = new Set();   // not in this browser; tried again once an image is saved
+  const loading = new Map();   // hash → Promise<void>
+  let previewSeq = 0;
+  onImageSaved(() => missing.clear());
+
+  const send = (hash) => {
+    if (!loading.has(hash)) {
+      loading.set(hash, (async () => {
+        try {
+          const raster = await loadImage(hash);
+          if (!raster) { missing.add(hash); return; }
+          await engine.setImage(hash, raster);
+          sent.add(hash);
+        } catch (err) {
+          console.warn('[images]', hash, err);
+        } finally {
+          loading.delete(hash);
+        }
+      })());
+    }
+    return loading.get(hash);
+  };
+  /** null when the worker has everything the design needs, else a promise. */
+  const ensure = (design) => {
+    const todo = imageHashes(design).filter((h) => !sent.has(h) && !missing.has(h));
+    return todo.length ? Promise.all(todo.map(send)) : null;
+  };
+
+  return {
+    ...engine,
+    preview(design, printer) {
+      const seq = ++previewSeq;
+      const wait = ensure(design);
+      if (!wait) return engine.preview(design, printer);
+      return wait.then(() => (seq === previewSeq ? engine.preview(design, printer) : null));
+    },
+    print(design, printer) {
+      const wait = ensure(design);
+      return wait ? wait.then(() => engine.print(design, printer)) : engine.print(design, printer);
+    },
+    gcode(design, printer, onProgress) {
+      const wait = ensure(design);
+      return wait ? wait.then(() => engine.gcode(design, printer, onProgress)) : engine.gcode(design, printer, onProgress);
+    },
+    /** For uploads: the worker gets the image now, and it isn't sent again. */
+    async setImage(hash, raster) {
+      await engine.setImage(hash, raster);
+      sent.add(hash);
+      missing.delete(hash);
+    },
+    dispose: () => engine.dispose(),
+  };
+}
+
 function showFatal(message) {
   const box = $('#webgl-message');
   if (!box) return;
@@ -79,6 +143,7 @@ async function boot() {
     fetchJson('library/presets.json'),
     openDb(),
   ]);
+  useDb(db);
   const presets = presetsDoc.presets || [];
   const [persisted, savedPrinter] = await Promise.all([db.loadHistory(), db.get('settings', 'printer')]);
 
@@ -121,7 +186,7 @@ async function boot() {
   const designPanel = $('#design-panel');
   const printPanel = $('#print-panel');
 
-  const engine = createEngine({ library });
+  const engine = withImages(createEngine({ library }));
   const renderer = new BeadRenderer(canvas);
 
   let dragging = false;

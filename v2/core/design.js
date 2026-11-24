@@ -7,6 +7,8 @@
 
 import { BLEND_SHAPES } from './surface.js';
 import { createProfile } from './profile.js';
+import { validateRecipe } from './patterns.js';
+import { MORPH_DEFAULTS, isMorphMap } from './morph.js';
 
 export const DESIGN_SCHEMA = 'vasecreator/design';
 export const DESIGN_VERSION = 2;
@@ -17,6 +19,8 @@ export const SEAM_POSITIONS = ['fixed', 'followTwist', 'hidden'];
 export const INNER_WALLS = ['smooth', 'followPattern'];
 export const MIN_KNOTS = 2;
 export const MAX_KNOTS = 12;
+/** Most entries design.assets keeps (recipes and image references). */
+export const MAX_ASSETS = 32;
 
 /**
  * Numeric ranges for every field the UI edits, used by the clamps here and by
@@ -49,6 +53,10 @@ export const LIMITS = Object.freeze({
   spacingRatio: { min: 0.5, max: 1.5, step: 0.01 },   // base.spacingRatio
   holeDiameter: { min: 0, max: 500, step: 0.5 },      // base.hole.diameter
   wallSpacingMm: { min: 0.5, max: 20, step: 0.1 },    // finish.wallSpacingMm
+  morphSoftnessMm: { min: 0, max: 100, step: 0.5 },   // form.morph.softnessMm
+  morphStrengthMm: { min: 0, max: 60, step: 0.5 },    // form.morph.strengthMm
+  morphRepeats: { min: 1, max: 24, step: 1 },         // form.morph.repeats
+  morphBlend: { min: 0, max: 1, step: 0.01 },         // form.morph.blend
 });
 
 // The "Classic vase" preset (library/presets.json), named for a new design.
@@ -73,6 +81,7 @@ const DEFAULT = {
     },
     plan: { footprint: 'circle', depthRatio: 1, cornerRounding: 0 },
     twist: { degrees: 0 },
+    morph: null,
   },
   surface: {
     fromMm: 10,
@@ -89,6 +98,7 @@ const DEFAULT = {
   },
   base: { layers: 3, pattern: 'spiral', spacingRatio: 0.9, outline: true, hole: { diameter: 0 } },
   finish: { walls: 1, wallSpacingMm: 2.7, innerWall: 'smooth' },
+  assets: {},
 };
 
 /** @returns {object} a fresh copy of the default design ("Classic vase", named "Design 1") */
@@ -155,6 +165,73 @@ function normaliseKnots(input, height, h, rMin, fallbackKnots) {
   while (kept.length > MAX_KNOTS) kept.splice(kept.length - 2, 1);
   for (const k of kept) k.r = Math.min(Math.max(k.r, rMin, LIMITS.knotR.min), LIMITS.knotR.max);
   return kept;
+}
+
+const HASH = /^[0-9a-f]{16}$/;
+const assetName = (name, fallback) => (typeof name === 'string' && name.trim() ? name.trim().slice(0, 80) : fallback);
+
+// design.assets (ARCHITECTURE.md, phase 2): 'user:…' recipes that evaluate,
+// 'img:<hash>' image references with a positive size. Anything else is
+// dropped; at most MAX_ASSETS entries are kept.
+function normaliseAssets(input) {
+  const out = {};
+  if (!isObject(input)) return out;
+  let count = 0;
+  for (const [key, entry] of Object.entries(input)) {
+    if (count >= MAX_ASSETS) break;
+    if (!isObject(entry) || key.length > 80) continue;
+    if (entry.kind === 'recipe' && key.startsWith('user:') && key.length > 5) {
+      try {
+        validateRecipe(entry.recipe);
+      } catch {
+        continue;
+      }
+      out[key] = { kind: 'recipe', name: assetName(entry.name, 'My pattern'), recipe: structuredClone(entry.recipe) };
+    } else if (entry.kind === 'image' && typeof entry.hash === 'string' && HASH.test(entry.hash) && key === `img:${entry.hash}`
+      && Number.isInteger(entry.width) && Number.isInteger(entry.height) && entry.width > 0 && entry.height > 0) {
+      out[key] = { kind: 'image', name: assetName(entry.name, 'Image'), hash: entry.hash, width: entry.width, height: entry.height };
+    } else {
+      continue;
+    }
+    count++;
+  }
+  return out;
+}
+
+// form.morph: null, or a built-in map or an image reference with every field
+// clamped. An 'img:' map whose asset is missing is kept; the toolpath reports it.
+function normaliseMorph(input) {
+  if (!isObject(input) || typeof input.map !== 'string') return null;
+  const map = input.map;
+  if (!isMorphMap(map) && !/^img:[0-9a-f]{16}$/.test(map)) return null;
+  const D = MORPH_DEFAULTS;
+  return {
+    map,
+    softnessMm: num(input.softnessMm, D.softnessMm, LIMITS.morphSoftnessMm),
+    strengthMm: num(input.strengthMm, D.strengthMm, LIMITS.morphStrengthMm),
+    repeats: num(input.repeats, D.repeats, LIMITS.morphRepeats, true),
+    blend: num(input.blend, D.blend, LIMITS.morphBlend),
+  };
+}
+
+/**
+ * A design without the phase 2 fields when they are empty (assets {} and
+ * form.morph null), so files and G-code of designs that use neither stay
+ * exactly as before.
+ * @param {object} d a design
+ * @returns {object} d itself, or a shallow copy without the empty fields
+ */
+export function compactDesign(d) {
+  const emptyAssets = !isObject(d.assets) || Object.keys(d.assets).length === 0;
+  const noMorph = isObject(d.form) && d.form.morph == null;
+  if (!emptyAssets && !noMorph) return d;
+  const out = { ...d };
+  if (emptyAssets) delete out.assets;
+  if (noMorph) {
+    out.form = { ...d.form };
+    delete out.form.morph;
+  }
+  return out;
 }
 
 /**
@@ -231,6 +308,7 @@ export function normaliseDesign(json) {
         cornerRounding: num(plan.cornerRounding, 0, LIMITS.cornerRounding),
       },
       twist: { degrees: num(twist.degrees, 0, LIMITS.twist) },
+      morph: normaliseMorph(form.morph),
     },
     surface: {
       fromMm,
@@ -264,6 +342,7 @@ export function normaliseDesign(json) {
       wallSpacingMm: num(finish.wallSpacingMm, 0.9 * beadWidthMm, LIMITS.wallSpacingMm),
       innerWall: pick(finish.innerWall, INNER_WALLS, 'smooth'),
     },
+    assets: normaliseAssets(json.assets),
   };
   // C7: tile heights are whole layers, so pattern rows line up with beads.
   for (const slot of [out.surface.a, out.surface.b]) {
@@ -295,10 +374,13 @@ function deepEqual(a, b) {
   return true;
 }
 
-/** Deep equality of two designs, ignoring meta (name, id, dates). */
+/**
+ * Deep equality of two designs, ignoring meta (name, id, dates). Empty
+ * assets and a null morph equal their absence (compactDesign).
+ */
 export function designsEqual(a, b) {
-  const { meta: _a, ...restA } = a;
-  const { meta: _b, ...restB } = b;
+  const { meta: _a, ...restA } = compactDesign(a);
+  const { meta: _b, ...restB } = compactDesign(b);
   return deepEqual(restA, restB);
 }
 

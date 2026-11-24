@@ -2,6 +2,7 @@
 // here so the main thread only uploads buffers and draws.
 //
 // Messages in:  { type: 'init', library }
+//               { type: 'setImage', id, hash, raster }   stores a copy in the image cache
 //               { type: 'preview' | 'print' | 'gcode', id, design, printer }
 // Messages out: { id, result } | { id, superseded: true } | { id, error, name }
 //               { id, progress } while G-code is written
@@ -12,8 +13,11 @@
 // "superseded" and are never computed.
 
 import { computePreview, computePrint, emitGcode } from '../core/engine.js';
+import { isRaster } from '../core/raster.js';
 
 let library = { patterns: [] };
+// Rasters by hash, posted once by client.setImage(); every request uses them.
+const images = new Map();
 let pending = null;
 let scheduled = false;
 
@@ -29,7 +33,7 @@ function runPreview() {
   pending = null;
   if (!job) return;
   try {
-    const result = computePreview(job.design, { library, printer: job.printer });
+    const result = computePreview(job.design, { library, printer: job.printer, images });
     self.postMessage({ id: job.id, result }, transfers(result));
   } catch (error) {
     fail(job.id, error);
@@ -42,6 +46,16 @@ self.onmessage = (event) => {
     case 'init':
       library = msg.library ?? { patterns: [] };
       return;
+    case 'setImage': {
+      const r = msg.raster;
+      if (typeof msg.hash !== 'string' || !isRaster(r)) {
+        fail(msg.id, new TypeError('Not an image raster'));
+        return;
+      }
+      images.set(msg.hash, { width: r.width, height: r.height, data: r.data });
+      self.postMessage({ id: msg.id, result: true });
+      return;
+    }
     case 'preview':
       if (pending) self.postMessage({ id: pending.id, superseded: true });
       pending = msg;
@@ -52,7 +66,7 @@ self.onmessage = (event) => {
       return;
     case 'print':
       try {
-        const { toolpath, ...result } = computePrint(msg.design, { library, printer: msg.printer });
+        const { toolpath, ...result } = computePrint(msg.design, { library, printer: msg.printer, images });
         self.postMessage({ id: msg.id, result }, transfers(result));
       } catch (error) {
         fail(msg.id, error);
@@ -60,7 +74,7 @@ self.onmessage = (event) => {
       return;
     case 'gcode':
       try {
-        const print = computePrint(msg.design, { library, printer: msg.printer });
+        const print = computePrint(msg.design, { library, printer: msg.printer, images });
         if (!print.canExport) {
           const blocking = print.checks.filter((c) => c.severity === 'error').map((c) => c.message);
           throw Object.assign(new Error(blocking.join('; ') || 'This design cannot be exported'), { name: 'ExportBlocked' });
@@ -68,6 +82,7 @@ self.onmessage = (event) => {
         let last = -1;
         const chunks = emitGcode(msg.design, print, msg.printer, {
           library,
+          images,
           onProgress: (fraction) => {
             // A message per percent is plenty for a progress bar.
             const step = Math.floor(fraction * 100);

@@ -7,6 +7,7 @@ import { sampleTile } from '../core/patterns.js';
 
 const cache = new Map();
 const CACHE_LIMIT = 200;
+let anon = 0;
 
 // Grey levels for the pattern value: −1 (pulled in) is a mid grey, +1 (pushed
 // out) white. A little light from the top left on each step makes it read as
@@ -16,7 +17,33 @@ const GREY_OUT = 252;
 const LIGHT = 26;
 
 function key(recipe, o) {
-  return `${o.id ?? JSON.stringify(recipe)}|${o.size}|${o.columns}|${o.rows}|${o.tiles}|${o.dpr}`;
+  return `${o.id ?? (o.raster ? `raster:${++anon}` : JSON.stringify(recipe))}|${o.size}|${o.columns}|${o.rows}|${o.tiles}|${o.dpr}`;
+}
+
+/**
+ * Samples a greyscale raster on the bead grid of one tile: each square is the
+ * mean of the pixels under it, black = −1 (in), white = +1 (out).
+ * @param {{ width: number, height: number, data: Uint8Array }} raster row 0 = top of the image
+ * @param {number} columns
+ * @param {number} rows
+ * @returns {Float64Array} row-major, row 0 at the bottom of the tile (like sampleTile)
+ */
+export function sampleRaster(raster, columns, rows) {
+  const { width: w, height: hgt, data } = raster;
+  const out = new Float64Array(columns * rows);
+  for (let r = 0; r < rows; r++) {
+    // Tile row 0 is the bottom; image row 0 is the top.
+    const y0 = Math.floor(((rows - 1 - r) * hgt) / rows);
+    const y1 = Math.max(y0 + 1, Math.floor(((rows - r) * hgt) / rows));
+    for (let c = 0; c < columns; c++) {
+      const x0 = Math.floor((c * w) / columns);
+      const x1 = Math.max(x0 + 1, Math.floor(((c + 1) * w) / columns));
+      let sum = 0;
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) sum += data[y * w + x];
+      out[r * columns + c] = sum / ((y1 - y0) * (x1 - x0)) / 127.5 - 1;
+    }
+  }
+  return out;
 }
 
 function render(recipe, o) {
@@ -26,7 +53,7 @@ function render(recipe, o) {
   canvas.height = px;
   const ctx = canvas.getContext('2d');
   const { columns, rows, tiles } = o;
-  const tile = sampleTile(recipe, columns, rows);
+  const tile = o.raster ? sampleRaster(o.raster, columns, rows) : sampleTile(recipe, columns, rows);
   const nx = columns * tiles;
   const ny = rows * tiles;
   const at = (c, r) => tile[(((r % rows) + rows) % rows) * columns + (((c % columns) + columns) % columns)];
@@ -70,7 +97,23 @@ function render(recipe, o) {
  * @param {number} [opts.tiles=2] tiles across and up
  */
 export function drawSwatch(canvas, recipe, opts = {}) {
+  paint(canvas, recipe, opts);
+}
+
+/**
+ * Draws an image pattern the same way: the raster averaged onto the bead grid,
+ * in the same greys as a recipe swatch.
+ * @param {HTMLCanvasElement} canvas
+ * @param {{ width: number, height: number, data: Uint8Array }} raster
+ * @param {object} [opts] as drawSwatch; pass `id` ('img:<hash>') so the cache can tell images apart
+ */
+export function drawRasterSwatch(canvas, raster, opts = {}) {
+  paint(canvas, null, { ...opts, raster });
+}
+
+function paint(canvas, recipe, opts) {
   const o = {
+    raster: opts.raster,
     id: opts.id,
     size: opts.size ?? 56,
     columns: Math.max(1, Math.min(64, Math.round(opts.columns ?? 12))),
