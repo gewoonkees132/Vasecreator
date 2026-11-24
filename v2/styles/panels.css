@@ -669,14 +669,22 @@
 .steps--phone .more-toggle { display: none; }
 .steps--phone .more-shape { margin: 0; border: 0; }
 
+/* A compact phone (§7.5): a slider's label, range and value on one row, so
+   two controls fit the controls area; the targets stay 44 px. */
+.steps--phone .sl { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: var(--space-3); }
+.steps--phone .sl > .nf-info { grid-column: 1 / -1; }
+
 /* Swatches on a phone: one row that scrolls sideways, the library, then My
-   patterns, then + Image (C35). Room on top for the delete dots. */
+   patterns, then + Image (C35), under slot cards of 44 px, so the slot cards
+   and the swatches show together. Room on top for the delete dots. */
 .swatch-strip { display: flex; flex-direction: column; gap: var(--space-3); }
+.steps--phone .slot-card { min-height: 44px; padding: 3px 6px; }
+.steps--phone .slot-thumb, .steps--phone .slot-swatch { width: 32px; height: 32px; }
 .steps--phone .swatch-strip {
   flex-direction: row;
   gap: var(--space-2);
-  margin: -10px calc(var(--space-4) * -1) 0;
-  padding: 14px var(--space-4) 2px;
+  margin: -8px calc(var(--space-4) * -1) 0;
+  padding: 8px var(--space-4) 2px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
@@ -684,7 +692,11 @@
 .steps--phone .swatch-strip::-webkit-scrollbar { display: none; }
 .steps--phone .swatch-strip .swatch-grid { display: flex; flex: none; gap: var(--space-1); }
 .steps--phone .swatch-strip .swatch,
-.steps--phone .swatch-strip .swatch-item { flex: none; width: 64px; }
+.steps--phone .swatch-strip .swatch-item { flex: none; width: 58px; padding-top: 2px; }
+.steps--phone .swatch-strip .swatch-canvas,
+.steps--phone .swatch-strip .swatch-none,
+.steps--phone .swatch-strip .swatch-add { width: 52px; height: 52px; }
+.steps--phone .swatch-strip .swatch-del { top: -12px; right: calc(50% - 46px); }
 .steps--phone .mine-grid { padding-left: var(--space-2); border-left: 1px solid var(--c-border); }
 /* The slot cards say which slot the swatches fill; the labels stay for screen readers. */
 .steps--phone [data-part="swatch"].grid-label,
@@ -845,7 +857,7 @@
   .pe-actions .btn { min-height: 44px; }
 }
 
-/* Desktop: the editor sits over the sidebar with a light backdrop, so the
+/* Desktop: the editor sits over the step panel with a light backdrop, so the
    pot stays in view and shows each edit live. */
 @media (min-width: 761px) {
   .pattern-editor { width: min(600px, calc(100vw - 32px)); margin: calc(var(--topbar-h) + 32px) auto auto 16px; }

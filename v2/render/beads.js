@@ -385,7 +385,8 @@ export class BeadRenderer {
 
   /**
    * The region of the canvas (CSS px) the pot must be centred and fitted in:
-   * phone, the top 40 %; desktop, between the sidebar and the right column.
+   * phone, between the top bar and the controls area; desktop, between the
+   * left panel and the right column.
    * Recentres right away; call fitCamera() to also refit the size.
    * @param {{ x: number, y: number, width: number, height: number } | null} viewport
    */
