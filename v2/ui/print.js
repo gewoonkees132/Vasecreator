@@ -4,6 +4,9 @@
 // Walls are design data (a history step). The printer profile is not: it is
 // stored apart from designs and changing it never adds a history step. The
 // final walls and full checks are computed only while this panel is showing.
+//
+// Export also offers CAD files (issue #7): the nozzle path as DXF lines and
+// a closed solid as STL (core/cad.js). The print checks don't block them.
 
 import { numberField, segmented, select, h } from './controls.js';
 import { defaultPrinter, normalisePrinter, PRINTER_LIMITS } from '../core/printer.js';
@@ -208,6 +211,15 @@ export function mountPrintPanel(el, ctx) {
   const progress = h('progress', { class: 'export-progress', max: 1, value: 0, hidden: true, 'aria-label': 'Writing G-code' });
   const exportNote = h('p', { class: 'export-note', role: 'status', 'aria-live': 'polite' });
   const sizeLine = h('p', { class: 'size-line' });
+  const dxfBtn = h('button', { type: 'button', class: 'btn', text: 'Toolpath lines (.dxf)' });
+  const stlBtn = h('button', { type: 'button', class: 'btn', text: 'Solid (.stl)' });
+  const cadNote = h('p', { class: 'export-note', role: 'status', 'aria-live': 'polite' });
+  const cadBox = h('div', { class: 'cad-export' }, [
+    h('p', { class: 'cad-title', text: 'For CAD' }),
+    h('p', { class: 'cad-hint', text: 'Lines: the nozzle path in mm, a layer each for wall, inner wall, base and connectors. Opens in Rhino and most CAD programs. Solid: a closed mesh of the finished pot.' }),
+    h('div', { class: 'export-buttons' }, [dxfBtn, stlBtn]),
+    cadNote,
+  ]);
 
   el.classList.add('print-panel');
   el.replaceChildren(
@@ -215,7 +227,7 @@ export function mountPrintPanel(el, ctx) {
     step(1, 'Walls', [walls.el, twoWallBox]),
     step(2, 'Printer', [h('div', { class: 'printer-line' }, [printerName, badge]), summaryLine, editBtn, editor]),
     step(3, 'Check', [checkStatus, checkList]),
-    step(4, 'Export', [h('div', { class: 'export-buttons' }, [gcodeBtn, designBtn]), progress, exportNote, sizeLine]),
+    step(4, 'Export', [h('div', { class: 'export-buttons' }, [gcodeBtn, designBtn]), progress, exportNote, sizeLine, cadBox]),
   );
 
   // ---- Behaviour ----------------------------------------------------------
@@ -320,6 +332,28 @@ export function mountPrintPanel(el, ctx) {
       renderExport();
     }
   });
+  // CAD files: written in the worker, one at a time.
+  let cadBusy = false;
+  const exportCad = async (format, what) => {
+    if (cadBusy) return;
+    const { design } = store.state;
+    cadBusy = true;
+    dxfBtn.disabled = stlBtn.disabled = true;
+    cadNote.textContent = `Writing the ${what}…`;
+    try {
+      const blob = await engine.cad(design, format);
+      download(blob, `${safeFileName(design.meta?.name)}.${format}`);
+      cadNote.textContent = `${what[0].toUpperCase()}${what.slice(1)} downloaded.`;
+    } catch (err) {
+      cadNote.textContent = `Couldn't write the ${what}: ${err?.message || err}`;
+    } finally {
+      cadBusy = false;
+      dxfBtn.disabled = stlBtn.disabled = false;
+    }
+  };
+  dxfBtn.addEventListener('click', () => exportCad('dxf', 'toolpath lines'));
+  stlBtn.addEventListener('click', () => exportCad('stl', 'solid'));
+
   designBtn.addEventListener('click', async () => {
     const { design } = store.state;
     // The shared writer embeds the pixels of any image patterns (phase 2).
@@ -355,6 +389,7 @@ export function mountPrintPanel(el, ctx) {
         exportNote.dataset.kind = '';
         exportNote.textContent = '';
       }
+      if (!cadBusy) cadNote.textContent = '';
     }
     if (what.has('design') || what.has('printer') || what.has('result')) update(state);
     if (what.has('design') || what.has('printer')) {

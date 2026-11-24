@@ -240,9 +240,42 @@ export function createWallModel(design, library, { images } = {}) {
     return twist;
   }
 
+  const unitXY = new Float64Array(2);
+  const centre = { x: 0, y: 0, D: 0, radius: 0, unitLength: 1, narrow: false };
+  /**
+   * The outer wall's centreline at outline position u and height z: the
+   * toolpath's wall point and the CAD solid's skeleton (core/cad.js). The
+   * returned object is reused; copy what you need before the next call.
+   * D is the pattern displacement, radius the distance along the unit
+   * outline (|unit| = unitLength), narrow whether the minimum radius clamped it.
+   */
+  function centrePoint(u, z) {
+    plan.unitPoint(u, unitXY);
+    const unitLength = Math.sqrt(unitXY[0] * unitXY[0] + unitXY[1] * unitXY[1]);
+    const D = displacement(z, u);
+    let narrow = false;
+    let base = profile.at(z);
+    if (morphOn) {
+      base += morphAt(z, u);
+      if (base < rMin) { base = rMin; narrow = true; }
+    }
+    let radius = base * unitLength + D;
+    // A hair of slack: a circle of exactly r_min must not flag itself.
+    if (radius < rMin - 1e-9) { radius = rMin; narrow = true; }
+    const t = twistAt(z);
+    const s = radius / unitLength;
+    centre.x = (unitXY[0] * t.c - unitXY[1] * t.s) * s;
+    centre.y = (unitXY[0] * t.s + unitXY[1] * t.c) * s;
+    centre.D = D;
+    centre.radius = radius;
+    centre.unitLength = unitLength;
+    centre.narrow = narrow;
+    return centre;
+  }
+
   return {
     design, h, w, H, layerCount, baseLayers, baseTop, profile, plan, twistPerMm, rMin,
-    slots, active, missing, missingImages, stepLimit, displacement, weightsAt, twistAt,
+    slots, active, missing, missingImages, stepLimit, displacement, weightsAt, twistAt, centrePoint,
     morph: morphOn ? morph : null, morphAmp, morphAt, morphRange,
   };
 }
@@ -364,7 +397,7 @@ function groove(m, z, centre, w) {
  * the lower `cap` the point budget allows.
  * @returns {{ n: number, capped: boolean }}
  */
-function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
+export function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
   const perimeter = (m.profile.at(zTop) + m.morphAmp) * m.plan.unitPerimeter;
   let need = Math.max(Math.ceil(perimeter / (m.w / 2)), MIN_POINTS_PER_LAYER);
   if (m.morph) need = Math.max(need, 8 * m.morph.repeats * m.morph.featuresAround);
@@ -425,20 +458,11 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   let wx = 0, wy = 0, wIssue = 0;
   const morphed = !!m.morph;
   function wallPoint(u, z, checkOverhang) {
-    plan.unitPoint(u, unit);
-    const unitLength = Math.sqrt(unit[0] * unit[0] + unit[1] * unit[1]);
-    const D = m.displacement(z, u);
+    const c = m.centrePoint(u, z);
+    const { D, radius, unitLength } = c;
     if (D < minD) minD = D;
     if (D > maxD) maxD = D;
-    let issue = 0;
-    let base = profile.at(z);
-    if (morphed) {
-      base += m.morphAt(z, u);
-      if (base < rMin) { base = rMin; issue |= ISSUE.narrow; }
-    }
-    let radius = base * unitLength + D;
-    // A hair of slack: a circle of exactly r_min must not flag itself.
-    if (radius < rMin - 1e-9) { radius = rMin; issue |= ISSUE.narrow; }
+    let issue = c.narrow ? ISSUE.narrow : 0;
     if (checkOverhang) {
       const zb = z - h;
       let baseBelow = profile.at(zb);
@@ -447,10 +471,8 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       if (below < rMin - 1e-9) below = rMin;
       if (Math.abs(radius - below) > stepLimit) issue |= ISSUE.overhang;
     }
-    const t = m.twistAt(z);
-    const s = radius / unitLength;
-    wx = (unit[0] * t.c - unit[1] * t.s) * s;
-    wy = (unit[0] * t.s + unit[1] * t.c) * s;
+    wx = c.x;
+    wy = c.y;
     wIssue = issue;
   }
 

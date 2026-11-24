@@ -84,6 +84,12 @@ export function createEngine({ library, workerUrl } = {}) {
     /** @returns {Promise<Blob>} text/plain G-code; rejects when an error blocks the export */
     gcode: (design, printer, onProgress) => request('gcode', design, printer, onProgress),
     /**
+     * A CAD file (issue #7): 'dxf' toolpath polylines or an 'stl' solid.
+     * @param {object} design @param {'dxf' | 'stl'} format
+     * @returns {Promise<Blob>}
+     */
+    cad: (design, format) => request('cad', null, null, undefined, { design, format }),
+    /**
      * Stores a copy of a Raster in the worker's image cache, once per image.
      * Resolves after the worker has it, so a preview asked for afterwards sees it.
      * @param {string} hash hashRaster(raster)

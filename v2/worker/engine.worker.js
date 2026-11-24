@@ -4,6 +4,7 @@
 // Messages in:  { type: 'init', library }
 //               { type: 'setImage', id, hash, raster }   stores a copy in the image cache
 //               { type: 'preview' | 'print' | 'gcode', id, design, printer }
+//               { type: 'cad', id, design, format }       format 'dxf' | 'stl'
 // Messages out: { id, result } | { id, superseded: true } | { id, error, name }
 //               { id, progress } while G-code is written
 //
@@ -12,7 +13,7 @@
 // already queued behind it is read first; the ones it replaces answer
 // "superseded" and are never computed.
 
-import { computePreview, computePrint, emitGcode } from '../core/engine.js';
+import { computePreview, computePrint, emitGcode, exportCad } from '../core/engine.js';
 import { isRaster } from '../core/raster.js';
 
 let library = { patterns: [] };
@@ -93,6 +94,14 @@ self.onmessage = (event) => {
           },
         });
         self.postMessage({ id: msg.id, result: new Blob(chunks, { type: 'text/plain' }) });
+      } catch (error) {
+        fail(msg.id, error);
+      }
+      return;
+    case 'cad':
+      try {
+        const file = exportCad(msg.design, msg.format, { library, images });
+        self.postMessage({ id: msg.id, result: new Blob(file.chunks, { type: file.type }) });
       } catch (error) {
         fail(msg.id, error);
       }

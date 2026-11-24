@@ -608,6 +608,10 @@
 .export-note:empty { display: none; }
 .export-note { font-size: 12px; color: var(--c-text-2); }
 .size-line { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+/* CAD files (issue #7), under the G-code. */
+.cad-export { display: grid; gap: var(--space-2); margin-top: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--c-border); }
+.cad-title { margin: 0; font-weight: 600; }
+.cad-hint { margin: 0; font-size: 12px; color: var(--c-text-2); line-height: 1.4; }
 
 /* ---------- Touch screens: 44 px targets, steppers ---------- */
 

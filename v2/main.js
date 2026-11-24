@@ -118,6 +118,10 @@ function withImages(engine) {
       const wait = ensure(design);
       return wait ? wait.then(() => engine.gcode(design, printer, onProgress)) : engine.gcode(design, printer, onProgress);
     },
+    cad(design, format) {
+      const wait = ensure(design);
+      return wait ? wait.then(() => engine.cad(design, format)) : engine.cad(design, format);
+    },
     /** For uploads: the worker gets the image now, and it isn't sent again. */
     async setImage(hash, raster) {
       await engine.setImage(hash, raster);

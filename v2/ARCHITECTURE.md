@@ -37,6 +37,7 @@ v2/
     design.js profile.js plan.js        the design document, r(z) of the profile curve, footprint outlines
     toolpath.js checks.js               buildToolpath, buildSkirt, KIND, RAMP_IN_LAYERS; ISSUE, designChecks, printChecks
     printer.js gcode.js engine.js       the gantry profile; writeGcode, planRefills, GcodeError; the facade
+    cad.js                              CAD export: writeDxf, buildSolid, writeStl (issue #7)
   worker/ render/ store/                engine.worker.js client.js · beads.js handles.js · store.js db.js
   ui/                   controls.js sidebar.js swatch.js topbar.js chips.js size-fit.js history.js designs.js designs-tip.js print.js
   ui/sections/          shape, surface, layers, base · advanced: curve, points, footprint
@@ -99,6 +100,8 @@ export function computePrint(design, { library, printer }): PrintResult       //
 export function emitGcode(design, printResult | null, printer, { library, onProgress }): string[]
   // chunks: header + start, one per layer, end. Reads printResult.toolpath (from computePrint in the same thread);
   // null computes it. Throws GcodeError on a V16 sanity failure. GcodeError is re-exported.
+export function exportCad(design, 'dxf' | 'stl', { library, images }): { chunks, type, extension }
+  // CAD files (issue #7), see "CAD export" below. CAD_FORMATS lists the two formats.
 ```
 
 ```js
@@ -127,6 +130,7 @@ export function createEngine({ library, workerUrl? }): {
   preview(design, printer): Promise<PreviewResult | null>   // newest request wins; a superseded request resolves null
   print(design, printer): Promise<PrintResult>              // without `toolpath`
   gcode(design, printer, onProgress?: (fraction) => void): Promise<Blob>   // text/plain G-code
+  cad(design, format: 'dxf' | 'stl'): Promise<Blob>        // never blocked by print checks
   dispose()
 }
 ```
@@ -289,3 +293,12 @@ Design JSON additions (schema version stays 2; both fields are optional and `nor
 - Engine: `computePreview/computePrint/emitGcode(…, { library, printer, images })` with `images: Map<hash, Raster>`. Client: `engine.setImage(hash, raster) → Promise<void>` posts a copy to the worker cache once. A referenced image that the worker doesn't have prints plain and adds warning `missingImage` (an error in Prepare print, so it blocks export).
 - Browser storage (`store/assets.js`, IndexedDB stores `images` and `patterns` in the same database, version 2): `saveImage(raster, name) → hash`, `loadImage(hash) → Raster | null`, `listPatterns() → [{ id, name, recipe }]`, `savePattern({ id, name, recipe })`, `deletePattern(id)`. "My patterns" are the user's own swatches across designs.
 - Design files (`<name>.vasecreator.json`) embed the pixels of every referenced image under a top-level `"images": { "<hash>": { "width", "height", "data": "<base64>" } }`; opening a file stores them with `saveImage` before normalising (which drops the field).
+
+## CAD export (issue #7)
+
+`core/cad.js` writes plain formats with no library (`.3dm` would need rhino3dm.js).
+
+- `writeDxf(tp, { name })` → string chunks of an R12 ASCII DXF: a 3D `POLYLINE` for every run of one kind within one layer of the toolpath, drawn from the point before the run's first move. Kind 0 moves (travel, no-clay steps) are not drawn. Layers `WALL_OUTER`, `WALL_INNER`, `BASE`, `CONNECTOR`; millimetres (`$INSUNITS` 4), coordinates as in the toolpath (the axis on the origin, z the bead top). `exportCad` uses the final walls (`finish.walls`); the skirt and the prime are printer moves and are left out.
+- `buildSolid(design, library, { images, maxTriangles })` → `{ positions: Float64Array, triangles: Uint32Array, vertexCount, triangleCount, ringPoints, layers }`: a closed, outward-facing mesh. One ring per layer boundary (z = k·h, k = 0…layerCount), each with the same point count (the most `pointsAround` gives on any layer, capped so the mesh stays under `MAX_SOLID_TRIANGLES`, 600 000). The rings sample `createWallModel().centrePoint(u, z)`, the function the toolpath's wall points come from, and are offset by half a bead along the outline's normal in plan: outward for the outer skin, inward for the inner skin (with two walls, from the inner wall placed as in `innerLoop`). The rim joins the top rings. The base is solid from z 0 to the top of the base layers, with a cylinder for the hole; the bottom and the floor are stitched to the hole by angle. A sleeve (no base layers) has an open bottom ring instead. Where the fine-pattern warning shows, an offset skin can fold over itself.
+- `writeStl(mesh, { name })` → an ArrayBuffer of binary STL (the header never starts with "solid").
+- Tests (`test/cad.test.js`): the DXF parses as code/value pairs and draws every bead once; every solid case is closed (each directed edge has exactly one partner) with a positive volume; a plain cylinder's volume, with and without a hole, matches the formula; the output is deterministic.

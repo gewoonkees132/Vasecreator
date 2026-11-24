@@ -3,6 +3,7 @@
 //   computePreview: the live loop. Centreline wall plus base, design checks.
 //   computePrint:   Prepare print. Final walls, process moves, all checks.
 //   emitGcode:      the G-code text, in chunks.
+//   exportCad:      CAD files (issue #7): the toolpath as DXF polylines, the solid as STL.
 //
 // The preview and the G-code come from the same toolpath code (research
 // §5.4); the preview is that toolpath in Float32 for the GPU.
@@ -13,6 +14,7 @@ import { profileLine as evaluateProfileLine } from './profile.js';
 import { MAX_PREVIEW_POINTS, buildSkirt, buildToolpath } from './toolpath.js';
 import { designChecks, printChecks } from './checks.js';
 import { planRefills, writeGcode } from './gcode.js';
+import { writeDxf, buildSolid, writeStl } from './cad.js';
 
 export { GcodeError } from './gcode.js';
 
@@ -104,4 +106,33 @@ export function emitGcode(design, printResult, printer, { library, images, onPro
   const print = printResult?.toolpath ? printResult : computePrint(d, { library, printer: p, images });
   const { tp, skirt, refills } = print.toolpath;
   return writeGcode(tp, d, p, { skirt, refills, onProgress });
+}
+
+/** The CAD formats exportCad writes. */
+export const CAD_FORMATS = Object.freeze({
+  dxf: { extension: 'dxf', type: 'application/dxf' },
+  stl: { extension: 'stl', type: 'model/stl' },
+});
+
+/**
+ * A CAD file for a design (core/cad.js). 'dxf' is the nozzle path of the
+ * final walls (finish.walls) as 3D polylines; 'stl' is the closed solid.
+ * Neither depends on the printer, and print checks don't block them: a
+ * design that doesn't fit the bed can still go to CAD.
+ * @param {object} design
+ * @param {'dxf' | 'stl'} format
+ * @param {{ library: { patterns: object[] }, images?: Map<string, object> }} options
+ * @returns {{ chunks: (string | ArrayBuffer)[], type: string, extension: string }}
+ */
+export function exportCad(design, format, { library, images } = {}) {
+  const d = normaliseDesign(design);
+  const name = d.meta?.name || 'Vasecreator';
+  if (format === 'dxf') {
+    const tp = buildToolpath(d, library, { walls: d.finish.walls, images });
+    return { chunks: writeDxf(tp, { name }), ...CAD_FORMATS.dxf };
+  }
+  if (format === 'stl') {
+    return { chunks: [writeStl(buildSolid(d, library, { images }), { name })], ...CAD_FORMATS.stl };
+  }
+  throw new TypeError(`Unknown CAD format: ${format}`);
 }
