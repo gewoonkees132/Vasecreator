@@ -117,10 +117,13 @@ export function mountChips(root, ctx) {
     type: 'button', class: 'icon-close', 'aria-label': 'Close size', text: '×',
     onclick: () => closeSize({ focusChip: true }),
   });
+  // In Shape the pot, and so the chip, is the bare form (D29); from Pattern on
+  // the pattern is in it, so the same pot can read a few mm wider there.
+  const sizeHint = el('p', { class: 'warn-hint' });
   const sizeCard = el('div', { class: 'warn-card size-card', id: 'size-card', role: 'region', 'aria-label': 'Outer size', hidden: true }, [
     el('div', { class: 'warn-card-head' }, [el('span', { text: 'Outer size' }), sizeClose]),
     el('div', { class: 'size-fields' }, Object.values(fields).map((f) => f.el)),
-    el('p', { class: 'warn-hint', text: 'The finished outside, patterns included. Shape scales to match.' }),
+    sizeHint,
   ]);
   const sizeWrap = el('div', { class: 'chip-wrap' }, [sizeChip, sizeCard]);
   root.replaceChildren(wrap, sizeWrap);
@@ -287,9 +290,14 @@ export function mountChips(root, ctx) {
     const text = formatSize(s);
     sizeText.textContent = text;
     const printing = state.view.mode !== 'design';
-    sizeChip.setAttribute('aria-label', printing ? `Size ${text}` : `Size ${text}. Change size`);
-    sizeChip.title = printing ? 'Size: height × width × depth' : 'Size: height × width × depth. Click to change it';
+    const plain = !!ctx.resultIsPlain?.();
+    const what = plain ? 'Size of the shape, without its pattern' : 'Size';
+    sizeChip.setAttribute('aria-label', printing ? `${what} ${text}` : `${what} ${text}. Change size`);
+    sizeChip.title = `${what}: height × width × depth${printing ? '' : '. Click to change it'}`;
     sizeChip.classList.toggle('is-static', printing);
+    sizeHint.textContent = plain
+      ? 'The outside of the shape, without its pattern. Shape scales to match.'
+      : 'The finished outside, patterns included. Shape scales to match.';
     if (printing) closeSize();
     if (sizeCard.hidden) return;
     const locked = depthLocked(state);

@@ -1,4 +1,4 @@
-// Profile curve (advanced, design §9.5, issue #6). Three curve types:
+// Profile curve (design §9.5, issue #6), the Curve part of Shape. Three curve types:
 //   Smooth   centripetal Catmull-Rom with a tension (core 'catmullRomCentripetal')
 //   Gentle   never bulges past the points (core 'monotone', Fritsch–Carlson)
 //   Angular  straight lines with a corner radius in mm (core 'linear')
@@ -24,7 +24,6 @@ const interior = (knots) => knots.slice(1, -1);
 const section = {
   id: 'curve',
   title: 'Profile curve',
-  advanced: true,
 
   summary(design) {
     const p = design.form.profile;
@@ -92,4 +91,4 @@ const section = {
 };
 
 export default section;
-export const { id, title, advanced, summary, mount } = section;
+export const { id, title, summary, mount } = section;

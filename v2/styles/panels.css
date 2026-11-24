@@ -1,6 +1,7 @@
-/* Vasecreator v2: sidebar sections, controls, swatches and the Prepare print
-   panel. Uses only the shared tokens from app.css :root (ARCHITECTURE.md).
-   Desktop is compact (the sidebar is 320 px); coarse pointers get 44 px targets. */
+/* Vasecreator v2: the step frame (steps, parts, the phone bar), section
+   controls, swatches and the Print step. Uses only the shared tokens from
+   app.css :root (ARCHITECTURE.md). Desktop is compact (the panel is 320 px);
+   coarse pointers get 44 px targets. */
 
 /* ---------- Shared ---------- */
 
@@ -9,28 +10,11 @@
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
-.sidebar, .print-panel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  font-family: var(--font);
-  font-size: 13px;
-  color: var(--c-text);
-}
-
-.sidebar :focus-visible, .print-panel :focus-visible {
+.steps :focus-visible {
   outline: 2px solid var(--c-primary-dark);
   outline-offset: 2px;
 }
 
-.panel-card {
-  background: var(--c-card);
-  border: 1px solid var(--c-border);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-2);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-}
 
 .panel-note {
   margin: 0;
@@ -70,118 +54,124 @@
 .link-btn:hover:not(:disabled) { text-decoration-color: currentColor; }
 .link-btn:disabled { color: var(--c-text-2); text-decoration: none; cursor: default; }
 
-/* ---------- Section cards (desktop) ---------- */
+/* ---------- The step frame (issue #1, ui/steps.js) ---------- */
 
-.section-card { overflow: hidden; flex: none; }
+/* Desktop: one card, the step row on top, the parts in the middle (they
+   scroll), Next at the bottom; the row and Next stay in sight (C27). */
+.steps {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--c-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-2);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--c-text);
+}
 
-.card-heading { margin: 0; font-size: inherit; font-weight: inherit; }
-
-.card-header {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+/* The five steps. The bar is white so the light-grey steps keep their
+   contrast: labels at .66 (4.8:1), emblems at .5 (3:1) on white (§4). */
+.step-tabs {
+  flex: none;
+  display: flex;
+  gap: 2px;
+  padding: var(--space-2) var(--space-2) 6px;
+  background: #fff;
+  border-bottom: 1px solid var(--c-border);
+}
+.step-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  gap: 2px;
+  padding: 2px 0;
+  border: 0;
+  border-radius: var(--radius-ctl);
+  background: none;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(18,47,45,.66);
+  cursor: pointer;
+}
+.step-tab:hover .step-emblem { background: rgba(18,47,45,.07); }
+.step-tab:focus-visible { outline-offset: 0; }
+.step-emblem {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 28px;
+  border-radius: 14px;
+  color: rgba(18,47,45,.5);
+  transition: background-color .15s ease, color .15s ease;
+}
+.step-emblem svg { width: 20px; height: 20px; }
+.step-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.step-tab[aria-selected="true"] { color: var(--c-text); font-weight: 700; }
+.step-tab[aria-selected="true"] .step-emblem { background: var(--c-primary-dark); color: #fff; }
+
+/* The phone header and part row; desktop shows parts under headings instead. */
+.step-head, .part-tabs { display: none; }
+
+.step-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+}
+.step-page { display: flex; flex-direction: column; gap: var(--space-3); }
+.step-page:focus-visible { outline-offset: 2px; border-radius: 4px; }
+
+.section-body { display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* A part's small heading (desktop). */
+.part-heading {
+  margin: var(--space-2) 0 calc(var(--space-1) * -1);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--c-text-2);
+}
+.step-page > .section-body:first-child > .part-heading:first-child,
+.step-page > .part-heading:first-child { margin-top: 0; }
+
+/* A part that doesn't apply, or on a phone isn't the current one. */
+.is-part-off { display: none !important; }
+
+/* "More shape options": Curve, Points and Morph on desktop. */
+.more-shape { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-1); border-top: 1px solid var(--c-border); }
+.more-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--space-2);
   width: 100%;
   min-height: 44px;
-  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-4);
+  padding: var(--space-2) 0;
   border: 0;
   background: none;
   text-align: left;
   cursor: pointer;
 }
-.card-header:hover { background: var(--c-input-bg); }
-.card-header:focus-visible { outline-offset: -2px; }
-.card-title { font-size: 14px; font-weight: 600; white-space: nowrap; }
-/* Up to two lines, so a long summary ("bead 3 mm · layer 1.5 mm · seam
-   hidden") stays readable in the 320 px sidebar. */
-.card-summary {
-  min-width: 0;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--c-text-2);
-  text-align: right;
-}
-.card-chevron { display: inline-flex; color: var(--c-text-2); transition: transform .15s ease; grid-column: 3; }
-.section-card.is-open .card-chevron { transform: rotate(90deg); }
+.more-chevron { display: inline-flex; align-self: center; color: var(--c-text-2); transition: transform .15s ease; }
+.more-shape.is-open .more-chevron { transform: rotate(90deg); }
+.more-title { font-size: 13px; font-weight: 600; }
+.more-sub { font-size: 12px; color: var(--c-text-2); }
+.more-toggle:hover .more-title { text-decoration: underline; text-underline-offset: 2px; }
+.more-body { display: flex; flex-direction: column; gap: var(--space-3); }
+.steps:not(.steps--phone) .more-shape:not(.is-open) .more-body { display: none; }
 
-.section-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-1) var(--space-4) var(--space-4);
-}
-
-.advanced-divider {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: var(--space-2) var(--space-1) 0;
-  line-height: 1.4;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--c-primary-dark);
-}
-.advanced-divider::before, .advanced-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--c-primary-dark);
-  opacity: .3;
-}
-
-/* ---------- Phone tabs ---------- */
-
-.sidebar--phone {
-  height: 100%;
-  gap: 0;
-}
-.phone-tabs {
-  display: flex;
-  flex: none;
-  gap: 0;
-  padding: var(--space-2) var(--space-2) 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  border-bottom: 1px solid var(--c-border);
-}
-/* Five tabs (with Advanced) fit a 360 px screen (C11); the row still
-   scrolls if a larger text size needs it. */
-.phone-tab {
-  flex: 1 0 auto;
-  min-height: 44px;
-  padding: 0 var(--space-2);
-  border: 0;
-  border-bottom: 3px solid transparent;
-  background: none;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--c-text-2);
-  cursor: pointer;
-}
-.phone-tab[aria-selected="true"] { color: var(--c-text); font-weight: 600; border-bottom-color: var(--c-accent); }
-.phone-tab:focus-visible { outline-offset: -2px; }
-.phone-tabpanel {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-.phone-tabpanel:focus-visible { outline-offset: -2px; }
-.phone-tabpanel > .section-body { padding-top: var(--space-3); }
-.phone-stack + .phone-stack { border-top: 1px solid var(--c-border); }
-.phone-stack-title {
-  margin: 0;
-  padding: var(--space-3) var(--space-4) 0;
-  font-size: 13px;
-  font-weight: 600;
-}
+.step-foot { flex: none; padding: var(--space-3) var(--space-4) var(--space-4); border-top: 1px solid var(--c-border); }
+.step-next--foot { width: 100%; }
+.step-next--head { display: none; }
 
 /* ---------- Number field ---------- */
 
@@ -467,49 +457,10 @@
 .point-end { color: var(--c-text-2); }
 .add-point { align-self: flex-start; }
 
-/* ---------- Prepare print ---------- */
+/* ---------- Print (step 5) ---------- */
 
-.print-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-1) 0;
-}
-.print-title {
-  margin: 0;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--c-primary-dark);
-}
-.print-step {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4) var(--space-4);
-  flex: none;
-}
-.print-step-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-.step-num {
-  display: inline-grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--c-primary-dark);
-  color: var(--c-surface);
-  font-size: 12px;
-  font-weight: 700;
-}
+/* One part of the Print step: Walls, Printer, Check or Export. */
+.print-part { display: flex; flex-direction: column; gap: var(--space-3); }
 .printer-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .printer-name { font-weight: 600; }
 .badge {
@@ -521,7 +472,7 @@
 }
 .badge--draft { background: var(--c-border); color: var(--c-text); box-shadow: inset 0 0 0 1px var(--c-warn); }
 .printer-summary { margin: calc(var(--space-2) * -1) 0 0; font-size: 12px; color: var(--c-text-2); }
-.printer-step .link-btn, .print-step > .link-btn { align-self: flex-start; }
+.print-part > .link-btn { align-self: flex-start; }
 .printer-editor { display: flex; flex-direction: column; gap: var(--space-3); }
 .printer-editor > .link-btn { align-self: flex-start; }
 .printer-group {
@@ -616,7 +567,7 @@
 /* ---------- Touch screens: 44 px targets, steppers ---------- */
 
 @media (pointer: coarse) {
-  .sidebar, .print-panel { font-size: 14px; }
+  .steps { font-size: 14px; }
   .nf-step {
     display: inline-flex;
     align-items: center;
@@ -648,12 +599,98 @@
   .template-input { font-size: 16px; }
 }
 
-/* ---------- Phone width ---------- */
+/* ---------- Phone: bottom bar, controls area, part row (D31, §7.5) ---------- */
 
-@media (max-width: 760px) {
-  .section-body { padding: var(--space-3) var(--space-4) var(--space-5); }
-  .print-panel { height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: var(--space-2); }
-  .print-step { box-shadow: none; }
+/* steps.js sets .steps--phone from the same 760 px query app.css uses. The
+   DOM order stays the desktop one (nothing moves between layouts); the bar
+   goes to the bottom with `order`. */
+.steps--phone {
+  height: 100%;
+  border: 0;
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  background: rgb(250,250,250);
+  box-shadow: 0 -4px 16px rgba(0,0,0,.08);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.steps--phone .step-tabs {
+  order: 2;
+  height: calc(var(--bar-h, 64px) + env(safe-area-inset-bottom));
+  padding: 6px var(--space-1) calc(6px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--c-border);
+  border-bottom: 0;
+}
+.steps--phone .step-tab { justify-content: center; font-size: 12px; }
+.steps--phone .step-emblem { width: 56px; height: 30px; border-radius: 15px; }
+.steps--phone .step-emblem svg { width: 24px; height: 24px; }
+
+.steps--phone .step-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 46px;
+  padding: 2px var(--space-2) 0 var(--space-4);
+}
+.step-title { flex: 1; min-width: 0; margin: 0; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.steps--phone .step-next--head { display: inline-flex; min-height: 44px; padding: 0 var(--space-3); }
+
+.steps--phone .part-tabs {
+  display: flex;
+  flex: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  padding: 0 var(--space-3) 2px;
+}
+.steps--phone .part-tabs::-webkit-scrollbar { display: none; }
+.part-group { display: flex; gap: var(--space-1); }
+.part-tab {
+  flex: none;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-ctl);
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--c-text-2);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.part-tab[aria-selected="true"] { border-color: var(--c-primary-dark); background: rgba(139,197,193,.2); color: var(--c-text); font-weight: 700; }
+.part-tab:focus-visible { outline-offset: -2px; }
+.part-divider { flex: none; width: 1px; margin: 10px var(--space-1); background: rgba(18,47,45,.25); }
+
+/* The current part's controls; a long part scrolls here, never the page. */
+.steps--phone .step-scroll { flex: 1 1 0; padding: var(--space-1) var(--space-4) var(--space-3); }
+.steps--phone .step-foot,
+.steps--phone .part-heading,
+.steps--phone .more-toggle { display: none; }
+.steps--phone .more-shape { margin: 0; border: 0; }
+
+/* Swatches on a phone: one row that scrolls sideways, the library, then My
+   patterns, then + Image (C35). Room on top for the delete dots. */
+.swatch-strip { display: flex; flex-direction: column; gap: var(--space-3); }
+.steps--phone .swatch-strip {
+  flex-direction: row;
+  gap: var(--space-2);
+  margin: -10px calc(var(--space-4) * -1) 0;
+  padding: 14px var(--space-4) 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.steps--phone .swatch-strip::-webkit-scrollbar { display: none; }
+.steps--phone .swatch-strip .swatch-grid { display: flex; flex: none; gap: var(--space-1); }
+.steps--phone .swatch-strip .swatch,
+.steps--phone .swatch-strip .swatch-item { flex: none; width: 64px; }
+.steps--phone .mine-grid { padding-left: var(--space-2); border-left: 1px solid var(--c-border); }
+/* The slot cards say which slot the swatches fill; the labels stay for screen readers. */
+.steps--phone [data-part="swatch"].grid-label,
+.steps--phone .swatch-strip > .grid-label {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
 
 /* A disabled export reads as unavailable, but stays legible. */

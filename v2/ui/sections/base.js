@@ -1,5 +1,5 @@
 // Base section (design §9.4): floor thickness in layers, the infill (spiral
-// only in phase 1) and a drainage hole.
+// only in phase 1) and a drainage hole: the parts Base and Hole of the Base step.
 
 import { numberField, segmented, h } from '../controls.js';
 import { limit } from './shape.js';
@@ -7,7 +7,6 @@ import { limit } from './shape.js';
 const section = {
   id: 'base',
   title: 'Base',
-  advanced: false,
 
   summary(design) {
     const b = design.base;
@@ -39,6 +38,9 @@ const section = {
       onCommit: () => store.commit(),
     });
 
+    // The Base step's parts: Base (layers and infill) and Hole.
+    for (const e of [layers.el, infill.el, hint]) e.dataset.part = 'base';
+    hole.el.dataset.part = 'hole';
     el.append(layers.el, infill.el, hint, hole.el);
 
     const update = (state) => {
@@ -63,4 +65,4 @@ const section = {
 };
 
 export default section;
-export const { id, title, advanced, summary, mount } = section;
+export const { id, title, summary, mount } = section;

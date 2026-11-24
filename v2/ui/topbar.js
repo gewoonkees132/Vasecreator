@@ -1,6 +1,7 @@
-// Top bar actions (design §8.1): undo, redo, Designs, Save design and the
-// primary "Prepare print →". On a phone (C11) Designs and Save design move
-// into the menu behind the logo, and the bar keeps undo, redo and "Print →".
+// Top bar actions (design §8.1): undo, redo, Designs and Save design. Print is
+// step 5 of the step frame (issue #1), so the bar has no print button. On a
+// phone (C11) Designs and Save design move into the menu behind the logo, and
+// the bar keeps undo and redo.
 
 const UNDO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 const REDO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>';
@@ -51,17 +52,7 @@ export function mountTopbar(header, ctx) {
     type: 'button', class: 'btn', text: 'Save design', 'data-desk-only': true,
     onclick: () => ctx.designs.promptSave(),
   });
-  const printLabelDesk = el('span', { class: 'label-desk' });
-  const printLabelPhone = el('span', { class: 'label-phone' });
-  const printBtn = el('button', {
-    type: 'button', class: 'btn btn-primary',
-    onclick: () => {
-      const step = store.state.view.step === 'print' ? 'shape' : 'print';
-      store.setView({ step, highlight: null });
-    },
-  }, [printLabelDesk, printLabelPhone]);
-
-  actions.replaceChildren(undo, redo, el('span', { class: 'sep', 'aria-hidden': 'true' }), designsBtn, saveBtn, printBtn);
+  actions.replaceChildren(undo, redo, el('span', { class: 'sep', 'aria-hidden': 'true' }), designsBtn, saveBtn);
 
   // Logo menu: Designs and Save design (the only way to them on a phone), and
   // the credit, which has no room in the phone bar.
@@ -106,14 +97,11 @@ export function mountTopbar(header, ctx) {
 
   function update() {
     const printing = store.state.view.mode === 'print';
-    // Undo in Prepare print would change the design under a computed print.
+    // Undo, redo and saving in Print would change the design under a computed print (C31).
     undo.disabled = printing || !store.canUndo();
     redo.disabled = printing || !store.canRedo();
     saveBtn.disabled = printing;
     menuSave.disabled = printing;
-    printLabelDesk.textContent = printing ? '← Back to design' : 'Prepare print →';
-    printLabelPhone.textContent = printing ? '← Design' : 'Print →';
-    printBtn.setAttribute('aria-label', printing ? 'Back to design' : 'Prepare print');
   }
 
   const unsubscribe = store.subscribe((state, what) => {

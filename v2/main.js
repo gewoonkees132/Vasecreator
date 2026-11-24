@@ -11,8 +11,7 @@ import * as printerModule from './core/printer.js';
 import { createEngine } from './worker/client.js';
 import { BeadRenderer } from './render/beads.js';
 import { createProfileHandles } from './render/handles.js';
-import { mountSidebar } from './ui/sidebar.js';
-import { mountPrintPanel } from './ui/print.js';
+import { mountSteps, shapeOnly } from './ui/steps.js';
 import { mountTopbar } from './ui/topbar.js';
 import { mountChips } from './ui/chips.js';
 import { mountHistory } from './ui/history.js';
@@ -170,7 +169,8 @@ async function boot() {
   try {
     if (db.persistent && typeof BroadcastChannel === 'function') channel = new BroadcastChannel('vc2-history');
   } catch { /* not supported */ }
-  const first = normaliseDesign(presets[0]);
+  // A first visit opens Classic vase as a shape, like any preset (D30, C29).
+  const first = shapeOnly(normaliseDesign(presets[0]));
   const store = createStore({
     design: first,
     history,
@@ -188,8 +188,6 @@ async function boot() {
   const panel = $('#panel');
   const chips = $('#chips');
   const rightcol = $('#rightcol');
-  const designPanel = $('#design-panel');
-  const printPanel = $('#print-panel');
 
   const engine = withImages(createEngine({ library }));
   const renderer = new BeadRenderer(canvas);
@@ -231,8 +229,14 @@ async function boot() {
     thumbnailFor,
     /** Fit the camera once the next preview arrives (after opening a design). */
     requestFit() { fitPending = true; },
-    /** The design object store.state.result was computed from (the size chip matches them up). */
+    /**
+     * The store's design object store.state.result was computed from (the
+     * size chip matches them up). In Shape the result is of its plain copy,
+     * but this is still the store's object.
+     */
     resultDesign: () => shownDesign,
+    /** Whether store.state.result is of the plain copy (Shape, D29): no pattern in it. */
+    resultIsPlain: () => shownPlain,
     designs: null,
   };
 
@@ -241,20 +245,32 @@ async function boot() {
   // thumbnail renders (presets, design files), so thumbnails wait until the
   // live preview is idle, and a live request a thumbnail cancelled is re-sent.
 
+  // In Shape the pot is shown plain (D29): the engine gets a copy of the
+  // design without its pattern, and that copy also drives the size chip and
+  // the warnings there. From Pattern on, the design goes as it is.
+
   let liveSeq = 0;
   let livePending = 0;
   let idleWaiters = [];
-  let shownDesign = null;      // the design object the newest shown result was made from
+  let shownDesign = null;      // the store's design object the newest shown result was made from
+  let shownPlain = false;      // that result is of its plain copy
+  let requestedPlain = null;   // the newest request is of a plain copy
   let fitPending = true;       // fit the camera when the next result arrives (load, open)
+  const wantsPlain = () => store.state.view.step === 'shape';
 
   function requestPreview() {
     const seq = ++liveSeq;
     const { design, printer } = store.state;
+    const plain = wantsPlain();
+    requestedPlain = plain;
     livePending += 1;
-    engine.preview(design, printer)
+    engine.preview(plain ? shapeOnly(design) : design, printer)
       .then((result) => {
+        // A newer request of the other kind (a step change) is on its way: skip this one.
+        if (result && plain !== wantsPlain() && seq !== liveSeq) return;
         if (result) {
           shownDesign = design;
+          shownPlain = plain;
           store.setResult(result);
         } else if (seq === liveSeq) {
           // Superseded by a thumbnail request, not by a newer edit.
@@ -292,7 +308,10 @@ async function boot() {
 
   // ---------- History thumbnails ----------
   // Once the preview of a committed step is on screen and nothing changed for
-  // a moment, take its picture. Never during a drag.
+  // a moment, take its picture. Never during a drag, never in Print. History
+  // always shows the finished pot (C32): while the pot on screen is plain
+  // (Shape), the picture comes from a separate full preview instead, which
+  // waits until the live preview is idle.
 
   let thumbTimer = 0;
   function scheduleStepThumb() {
@@ -306,6 +325,12 @@ async function boot() {
       if (dragging || now.id !== id || now.thumb || store.state.view.mode !== 'design') return;
       if (shownDesign !== store.state.design || designKey(store.state.design) !== designKey(now.design)) return;
       try {
+        if (shownPlain) {
+          const blob = await thumbnailFor(now.design);
+          const step = store.history().find((s) => s.id === id);
+          if (blob && step && !step.thumb) store.setThumb(id, blob);
+          return;
+        }
         const blob = await renderer.thumbnail();
         if (blob && store.currentStep().id === id) store.setThumb(id, blob);
       } catch (err) {
@@ -316,7 +341,7 @@ async function boot() {
 
   // Steps made in quick succession move on before their picture is taken.
   // They get one later, newest first and one at a time, but only after a
-  // quiet moment: never during a drag, in Prepare print or while the Designs
+  // quiet moment: never during a drag, in Print or while the Designs
   // screen renders its own tiles.
   let backfillTimer = 0;
   let backfilling = false;
@@ -353,7 +378,8 @@ async function boot() {
     const r = rightcol.getBoundingClientRect();
     const gap = 8;
     if (PHONE.matches) {
-      // D22: the pot fits in the top 40 %, clear of the chips and the history column.
+      // D22, D31: the pot fits between the top bar and the controls area,
+      // clear of the chips and the history column.
       const y = Math.max(0, c.bottom - v.top + 4);
       return { x: gap, y, width: Math.max(40, r.left - v.left - gap * 2), height: Math.max(40, v.height - y - gap) };
     }
@@ -371,7 +397,7 @@ async function boot() {
     renderer.requestRender();
   }
 
-  // A layout change (window size, the phone split) refits the pot into its
+  // A layout change (window size, the phone layout) refits the pot into its
   // region, keeping the angle the user turned it to.
   let resizeFrame = 0;
   let resizeFitTimer = 0;
@@ -394,28 +420,29 @@ async function boot() {
     else renderer.setHighlight(0, null);
   }
 
-  function applySeam() {
-    const v = store.state.view;
-    const open = PHONE.matches ? v.phoneTab === 'layers' : (v.openSections || []).includes('layers');
-    renderer.setSeamMarker(v.mode === 'design' && open);
-  }
-  PHONE.addEventListener('change', applySeam);
-
-  let mode = store.state.view.mode;
-  function applyMode() {
-    const printing = store.state.view.mode === 'print';
-    designPanel.hidden = printing;
-    printPanel.hidden = !printing;
-    panel.setAttribute('aria-label', printing ? 'Prepare print' : 'Design settings');
-    handles.setVisible(!printing);
-    applySeam();
-    if (mode === 'print' && !printing) {
-      // The print panel may have drawn final walls: no step thumbnail of
-      // those, and the centreline preview comes back.
+  // Each step shows only its own aids on the pot (§7.2): the drag points in
+  // Shape, the seam line in Layers & seam (C13), the bed and the final walls
+  // in Print. Switching steps never moves the camera and never adds a history
+  // step; it costs at most one preview, when the pot turns plain or full.
+  let shownStep = null;
+  function applyStep() {
+    const { step, selectedKnot } = store.state.view;
+    const was = shownStep;
+    shownStep = step;
+    handles.setVisible(step === 'shape');
+    renderer.setSeamMarker(step === 'layers');
+    renderer.setBed(step === 'print' ? bedOf(store.state.printer) : null);
+    if (was == null) return;
+    if (was === 'print' && step !== 'print') {
+      // Print may have drawn final walls: no step thumbnail of those, and
+      // the centreline preview comes back.
       shownDesign = null;
       requestPreview();
+    } else if (requestedPlain !== null && requestedPlain !== wantsPlain()) {
+      requestPreview();
     }
-    mode = store.state.view.mode;
+    // Delete must not remove a point you can't see.
+    if (was === 'shape' && step !== 'shape' && selectedKnot != null) store.setView({ selectedKnot: null });
   }
 
   let printerTimer = 0;
@@ -441,12 +468,12 @@ async function boot() {
       }
     }
     if (what.has('printer')) {
-      renderer.setBed(bedOf(state.printer));
+      if (state.view.step === 'print') renderer.setBed(bedOf(state.printer));
       clearTimeout(printerTimer);
       printerTimer = setTimeout(savePrinter, PRINTER_SAVE_MS);
     }
     if (what.has('result') && state.result) {
-      // In Prepare print the print panel owns what the renderer shows.
+      // In Print the print panel owns what the renderer shows.
       if (state.view.mode === 'design') {
         renderer.setToolpath(state.result);
         handles.update(state.design, state.result.profileLine);
@@ -465,9 +492,8 @@ async function boot() {
     }
     if (what.has('view')) {
       applyHighlight();
-      applySeam();
       handles.setSelected(state.view.selectedKnot);
-      if (state.view.mode !== mode) applyMode();
+      if (state.view.step !== shownStep) applyStep();
     }
   });
 
@@ -482,7 +508,7 @@ async function boot() {
     if ((e.key === 'Delete' || e.key === 'Backspace') && !e.ctrlKey && !e.metaKey && !e.altKey) {
       const i = store.state.view.selectedKnot;
       const idle = !document.activeElement || document.activeElement === document.body;
-      if (i != null && idle) {
+      if (i != null && idle && store.state.view.step === 'shape') {
         e.preventDefault();
         removeKnot(i);
       }
@@ -513,12 +539,10 @@ async function boot() {
   mount('topbar', () => mountTopbar($('header.topbar'), ctx));
   mount('chips', () => mountChips(chips, ctx));
   mount('history', () => mountHistory(rightcol, ctx));
-  mount('sidebar', () => mountSidebar(designPanel, ctx));
-  mount('print', () => mountPrintPanel(printPanel, ctx));
-  mount('designs-tip', () => mountDesignsTip(panel, ctx));
+  const steps = mount('steps', () => mountSteps(panel, ctx));
+  mount('designs-tip', () => mountDesignsTip(steps?.tipHost ?? panel, ctx));
 
-  renderer.setBed(bedOf(store.state.printer));
-  applyMode();
+  applyStep();
   layout(false);
   requestPreview();
 

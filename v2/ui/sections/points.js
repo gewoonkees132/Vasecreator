@@ -1,4 +1,4 @@
-// Profile points (advanced, design §9.5): every point's height and radius in
+// Profile points (design §9.5), the Points part of Shape: every point's height and radius in
 // mm, editable, with × to remove one. The selected row and the selected handle
 // on the pot are the same thing (view.selectedKnot).
 //
@@ -17,7 +17,6 @@ const ROUND_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden=
 const section = {
   id: 'points',
   title: 'Profile points',
-  advanced: true,
 
   summary(design) {
     return `${design.form.profile.knots.length} points`;
@@ -185,4 +184,4 @@ const section = {
 };
 
 export default section;
-export const { id, title, advanced, summary, mount } = section;
+export const { id, title, summary, mount } = section;

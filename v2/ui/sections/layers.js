@@ -1,5 +1,6 @@
-// Layers & seam section (design §9.3): bead width, layer height, overhang
-// limit and the seam. main.js shows the seam marker while this section is open.
+// Layers & seam section (design §9.3): the seam, bead width, layer height and
+// the overhang limit, as the parts Seam, Bead and Overhang of the Layers step
+// (ui/steps.js). main.js shows the seam marker while that step is open.
 
 import { numberField, segmented } from '../controls.js';
 import { limit } from './shape.js';
@@ -14,7 +15,6 @@ function layerInfo(layers) {
 const section = {
   id: 'layers',
   title: 'Layers & seam',
-  advanced: false,
 
   summary(design) {
     const l = design.layers;
@@ -64,7 +64,10 @@ const section = {
       onCommit: commit,
     });
 
-    el.append(bead.el, layer.el, overhang.el, ramp.el, position.el, angle.el);
+    for (const e of [position.el, angle.el, ramp.el]) e.dataset.part = 'seam';
+    for (const e of [bead.el, layer.el]) e.dataset.part = 'bead';
+    overhang.el.dataset.part = 'overhang';
+    el.append(position.el, angle.el, ramp.el, bead.el, layer.el, overhang.el);
 
     const update = (state) => {
       const l = state.design.layers;
@@ -84,4 +87,4 @@ const section = {
 };
 
 export default section;
-export const { id, title, advanced, summary, mount } = section;
+export const { id, title, summary, mount } = section;

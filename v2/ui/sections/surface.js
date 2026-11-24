@@ -1,6 +1,8 @@
-// Surface section (design §9.2, C7, C8, C16, C18): two pattern slots, the
-// swatch grid that fills the selected slot, per-slot settings, and the shared
-// range and blend. Phase 2 (D24): "My patterns" (your own recipes and images)
+// Pattern section (design §9.2, C7, C8, C16, C18; "Surface" before issue #1,
+// and still the design's `surface` key): two pattern slots, the swatch grid
+// that fills the selected slot, per-slot settings, and the shared range and
+// blend, as the parts Swatch, Depth, Repeats, From / to and Blend of the
+// Pattern step. Phase 2 (D24): "My patterns" (your own recipes and images)
 // after the library, + Image, and Edit pattern… for the motif generator.
 
 import { numberField, slider, segmented, h } from '../controls.js';
@@ -72,17 +74,35 @@ function snapToLayers(mm, layerHeightMm) {
   return Math.round(n * layerHeightMm * 1000) / 1000;
 }
 
+// A slot with a texture: set, and not Plain.
+const textured = (slot) => !!slot && slot.pattern !== PLAIN.id;
+
 const section = {
   id: 'surface',
-  title: 'Surface',
-  advanced: false,
+  title: 'Pattern',
 
   summary(design, ctx) {
     const lib = ctx?.library;
     const name = (slot) => (lib && findEntry(lib, slot.pattern, design.assets)?.name) || prettyId(slot.pattern);
     const s = design.surface;
-    if (!s.b) return s.a.pattern === PLAIN.id ? 'plain, no pattern' : `${name(s.a)} · ${s.a.depthMm} mm`;
+    if (!s.b) return s.a.pattern === PLAIN.id ? 'plain' : `${name(s.a)} · ${s.a.depthMm} mm`;
     return `${name(s.a)} → ${name(s.b)} · ${BLEND_LABELS[s.blend.shape] ?? s.blend.shape}`;
+  },
+
+  /**
+   * The Pattern step's parts that apply now (C34), the same rules that hide
+   * the controls below: Depth and Repeats with a pattern in the chosen slot,
+   * From / to with a pattern in either slot, Blend once slot B is set.
+   * @param {{ design: object, view: object }} state
+   * @returns {string[]}
+   */
+  applies(state) {
+    const s = state.design.surface;
+    const out = ['swatch'];
+    if (textured(s[state.view.slot === 'b' ? 'b' : 'a'])) out.push('depth', 'repeats');
+    if (textured(s.a) || textured(s.b)) out.push('range');
+    if (s.b) out.push('blend');
+    return out;
   },
 
   mount(el, ctx) {
@@ -452,7 +472,20 @@ const section = {
     });
     const blendBox = h('div', { class: 'blend-settings' }, [blend.el, amount.el]);
 
-    el.append(slots, gridLabel, grid, mineLabel, mineGrid, confirmBox, fileInput, imageMsg, actions, emptyNote, plainNote, slotBox, rangeRow, blendBox);
+    // The library and My patterns share one strip: on desktop it stacks as two
+    // grids, on a phone it is one row that scrolls sideways (C35).
+    const strip = h('div', { class: 'swatch-strip' }, [grid, mineLabel, mineGrid]);
+
+    // The Pattern step's parts (ui/steps.js). The slot cards belong to every
+    // part that edits the chosen slot, so on a phone they stay in sight (C34).
+    slots.dataset.part = 'swatch depth repeats';
+    for (const e of [gridLabel, strip, confirmBox, imageMsg, actions, emptyNote, plainNote]) e.dataset.part = 'swatch';
+    slotBox.dataset.part = 'depth repeats';
+    depth.el.dataset.part = 'depth';
+    for (const e of [repeats.el, tileHeight.el, resNote]) e.dataset.part = 'repeats';
+    rangeRow.dataset.part = 'range';
+    blendBox.dataset.part = 'blend';
+    el.append(slots, gridLabel, strip, confirmBox, fileInput, imageMsg, actions, emptyNote, plainNote, slotBox, rangeRow, blendBox);
 
     const update = (state) => {
       const d = state.design;
@@ -543,4 +576,4 @@ const section = {
 };
 
 export default section;
-export const { id, title, advanced, summary, mount } = section;
+export const { id, title, summary, applies, mount } = section;

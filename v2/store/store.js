@@ -16,8 +16,6 @@ import { mergeHistory, MAX_STEPS } from './db.js';
 
 const PERSIST_DELAY_MS = 500;
 const REFRESH_DELAY_MS = 100;
-const LS_ADVANCED = 'vc2.advanced';
-const LS_SECTIONS = 'vc2.openSections';
 const LS_STEP = 'vc2.step';
 
 /** The five design steps in their fixed order (design D28). */
@@ -73,20 +71,18 @@ function writeLocal(name, value) {
   try { localStorage.setItem(name, JSON.stringify(value)); } catch { /* storage off */ }
 }
 
+// A reload comes back to the step you were on; every step starts on its first
+// part (the part per step lasts the session only).
 function defaultView() {
-  const sections = readLocal(LS_SECTIONS, null);
   const saved = readLocal(LS_STEP, null);
   const step = STEPS.includes(saved) ? saved : 'shape';
   return {
     step,
     parts: {},
-    advanced: readLocal(LS_ADVANCED, false) === true,
     mode: modeOf(step),
-    openSections: Array.isArray(sections) ? sections : ['surface'],
     slot: 'a',
     selectedKnot: null,
     highlight: null,
-    phoneTab: 'shape',
     designsOpen: false,
     sizeLocked: true,
   };
@@ -412,8 +408,6 @@ export function createStore({ design, history = null, printer = null, label = 'S
       Object.assign(state.view, rest);
       state.view.mode = modeOf(state.view.step);
       if ('step' in rest) writeLocal(LS_STEP, state.view.step);
-      if ('advanced' in rest) writeLocal(LS_ADVANCED, !!state.view.advanced);
-      if ('openSections' in rest) writeLocal(LS_SECTIONS, state.view.openSections);
       emit('view');
     },
 

@@ -1,6 +1,7 @@
 // Shape section (design §9.1, C6): height, width, depth with a lock,
-// footprint, corner rounding and twist. Also exports the small helpers the
-// other sections share (field limits, footprint size and perimeter).
+// footprint, corner rounding and twist. Three parts of the Shape step
+// (ui/steps.js): Size, Footprint and Twist. Also exports the small helpers
+// the other sections share (field limits, footprint size and perimeter).
 
 import { numberField, slider, segmented, h } from '../controls.js';
 import { LIMITS, setHeight, setWidth, setDepth, widestRadius } from '../../core/design.js';
@@ -52,10 +53,9 @@ export function footprintAt(design) {
 }
 
 /**
- * Footprint and corner-rounding controls, shared by Shape and the advanced
- * Footprint section.
+ * Footprint and corner-rounding controls.
  * @param {object} store
- * @param {{ hideLabel?: boolean }} [opts] hide the Footprint label where the section title already says it
+ * @param {{ hideLabel?: boolean }} [opts] hide the Footprint label where a heading already says it
  * @returns {{ els: HTMLElement[], update(design: object): void, destroy(): void }}
  */
 export function footprintControls(store, opts = {}) {
@@ -104,10 +104,13 @@ const UNLOCK_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden
 export const depthLocked = (state) => state.view.sizeLocked !== false && (state.design.form.plan.depthRatio ?? 1) === 1;
 const isLocked = depthLocked;
 
+// Twist turns corners, the morph and the pattern; on a plain round pot it has
+// nothing to turn, so say why the pot doesn't change (C30).
+const twistHidden = (d) => d.form.plan.footprint === 'circle' && (d.form.plan.depthRatio ?? 1) === 1 && !d.form.morph?.map;
+
 const section = {
   id: 'shape',
   title: 'Shape',
-  advanced: false,
 
   /** @param {object} design */
   summary(design) {
@@ -163,7 +166,7 @@ const section = {
     });
     depth.el.insertBefore(lock, depth.el.querySelector('.nf-box'));
 
-    const fp = footprintControls(store);
+    const fp = footprintControls(store, { hideLabel: true });
     const twist = numberField({
       label: 'Twist',
       unit: '°',
@@ -173,8 +176,14 @@ const section = {
       onInput: (v) => store.change('Twist', (d) => { d.form.twist.degrees = v; }),
       onCommit: commit,
     });
+    const twistNote = h('p', { class: 'panel-note', text: 'Twist shows once there’s a pattern, a corner or a morph.' });
 
-    el.append(height.el, width.el, depth.el, ...fp.els, twist.el);
+    // The step frame shows these groups as the parts Size, Footprint and Twist.
+    for (const e of [height.el, width.el, depth.el]) e.dataset.part = 'size';
+    for (const e of fp.els) e.dataset.part = 'footprint';
+    twist.el.dataset.part = 'twist';
+    twistNote.dataset.part = 'twist';
+    el.append(height.el, width.el, depth.el, ...fp.els, twist.el, twistNote);
 
     const update = (state) => {
       const d = state.design;
@@ -192,6 +201,7 @@ const section = {
       }
       fp.update(d);
       twist.set(d.form.twist.degrees);
+      twistNote.hidden = !twistHidden(d);
     };
     update(store.state);
 
@@ -206,4 +216,4 @@ const section = {
 };
 
 export default section;
-export const { id, title, advanced, summary, mount } = section;
+export const { id, title, summary, mount } = section;

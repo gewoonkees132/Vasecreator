@@ -1,6 +1,6 @@
 /* Vasecreator v2: tokens, layout (desktop and phone), top bar, chips,
-   history, dialogs and shared buttons. Sidebar sections and controls live in
-   panels.css. */
+   history, dialogs and shared buttons. The step frame and the controls live
+   in panels.css. */
 
 :root {
   --c-primary: rgb(139,197,193); --c-primary-light: rgb(93,138,139); --c-primary-dark: rgb(26,47,48);
@@ -193,6 +193,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .topbar-actions .sep { width: var(--space-2); }
 .label-phone { display: none; }
+@media (min-width: 761px) { [data-phone-only] { display: none !important; } }
 
 /* Logo menu and other small menus. */
 .menu {
@@ -259,6 +260,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .webgl-message p { font-size: 14px; color: var(--c-text-2); }
 .no-webgl #panel, .no-webgl #chips, .no-webgl #rightcol, .no-webgl .topbar-actions { display: none; }
 
+/* The step frame (ui/steps.js): the left panel on desktop, the controls area
+   and the bottom bar on a phone. */
 #panel {
   position: fixed;
   top: var(--content-top);
@@ -266,11 +269,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
   bottom: var(--gap);
   width: var(--sidebar-w);
   z-index: 10;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
+  display: flex;
+  flex-direction: column;
   border-radius: var(--radius-card);
 }
+#panel > .steps { flex: 1 1 auto; }
 
 #chips {
   position: fixed;
@@ -390,7 +393,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* ---------- First-visit tip (issue #2) ---------- */
 
 .designs-tip {
-  margin-bottom: var(--gap);
+  margin-bottom: var(--space-3);
   padding: var(--space-3);
   border: 1px solid var(--c-border);
   border-radius: var(--radius-card);
@@ -408,13 +411,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
   50% { box-shadow: 0 0 0 6px rgba(63,166,106,.25); }
 }
 
-/* ---------- History and Advanced (design §8.4, §8.6) ---------- */
+/* ---------- History (design §8.4) ---------- */
 
 .history-card {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: calc(100% - 52px);
+  max-height: 100%;
   padding: var(--space-2);
   background: var(--c-card);
   border-radius: var(--radius-card);
@@ -481,32 +484,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .history-time { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .history-more { display: none; }
 
-.advanced-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: 44px;
-  flex: none;
-  padding: 0 var(--space-3);
-  border: 2px solid transparent;
-  border-radius: var(--radius-card);
-  background: var(--c-card);
-  box-shadow: var(--shadow-2);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-}
-.advanced-btn:hover { background: rgba(255,255,255,.88); }
-.advanced-btn[aria-pressed="true"] { border-color: var(--c-primary-dark); }
-.advanced-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c-accent); display: none; }
-.advanced-btn[aria-pressed="true"] .advanced-dot { display: inline-block; }
-.advanced-short { display: none; }
-
-/* Full history list on a phone, over the controls area. */
+/* Full history list on a phone, over the controls area and the step bar. */
 .history-overlay {
   position: fixed;
   left: 0; right: 0; bottom: 0;
@@ -700,7 +678,7 @@ dialog::backdrop {
 }
 .storage-note p { flex: 1; }
 
-/* ---------- Phone (design §8.2, D22) ---------- */
+/* ---------- Phone (design §8.2, D22, D31; journey §7.5) ---------- */
 
 @media (max-width: 760px) {
   :root {
@@ -708,8 +686,12 @@ dialog::backdrop {
     --topbar-h: 56px;
     --ctl-h: 44px;
     --content-top: calc(var(--gap) * 2 + var(--topbar-h));
-    /* D22: the controls get a fixed 60 % of the screen; the top bar and the pot share the top 40 %. */
-    --panel-h: calc(100dvh * .6);
+    /* C26: the controls area keeps one height per screen size, so the pot
+       never jumps; below it the 64 px step bar. The pot gets the rest:
+       about 320 px of a 360 × 660 screen. Nothing covers it (D22). */
+    --bar-h: 64px;
+    --controls-h: clamp(200px, 30dvh, 260px);
+    --panel-h: calc(var(--controls-h) + var(--bar-h) + env(safe-area-inset-bottom));
     --view-h: calc(100dvh - var(--content-top) - var(--panel-h));
     --rightcol-w: 68px;
   }
@@ -736,9 +718,6 @@ dialog::backdrop {
     width: auto;
     height: var(--panel-h);
     border-radius: var(--radius-card) var(--radius-card) 0 0;
-    background: rgb(250,250,250);
-    box-shadow: 0 -4px 16px rgba(0,0,0,.08);
-    padding-bottom: env(safe-area-inset-bottom);
   }
 
   #chips {
@@ -771,8 +750,19 @@ dialog::backdrop {
   .size-card { width: auto; }
   .size-fields { padding: 0; }
 
-  .designs-tip { margin: var(--space-2) var(--space-2) 0; padding: var(--space-2) var(--space-3); box-shadow: none; }
-  .designs-tip-text { margin-bottom: var(--space-1); }
+  /* One line with a close button at the top of the controls (C36). */
+  .designs-tip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 44px;
+    margin-bottom: var(--space-2);
+    padding: 0 0 0 var(--space-3);
+    border-radius: var(--radius-ctl);
+    box-shadow: none;
+  }
+  .designs-tip-text { flex: 1; min-width: 0; margin: 0; font-size: 12px; line-height: 1.3; }
+  .designs-tip-close { flex: none; width: 44px; height: 44px; border: 0; background: none; }
   .designs-hinted .logo-button { border-radius: var(--radius-ctl); box-shadow: 0 0 0 3px var(--c-accent); animation: designs-ring 2.4s ease-in-out 3; }
 
   #rightcol {
@@ -791,9 +781,6 @@ dialog::backdrop {
   .history-card .history-thumb { width: 100%; height: auto; aspect-ratio: 1; max-height: 52px; }
   .history-card .history-time { font-size: 11px; }
   .history-more { display: block; font-size: 11px; text-align: center; color: var(--c-text-2); padding-top: 2px; }
-  .advanced-btn { min-height: 44px; padding: 0 4px; font-size: 12px; gap: 4px; }
-  .advanced-long { display: none; }
-  .advanced-short { display: inline; }
 
   #designs { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
   .designs-head { flex-wrap: wrap; padding: var(--space-4) var(--space-4) var(--space-2); gap: var(--space-2); }
@@ -803,6 +790,11 @@ dialog::backdrop {
   .designs-body { padding: 0 var(--space-4) var(--space-4); }
   .tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
   .tile-add { min-height: 130px; }
+}
+
+/* A short screen (a phone held sideways) keeps some room for the pot. */
+@media (max-width: 760px) and (max-height: 520px) {
+  :root { --controls-h: 160px; }
 }
 
 @media (pointer: coarse) {

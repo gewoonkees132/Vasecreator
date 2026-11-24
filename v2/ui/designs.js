@@ -1,9 +1,17 @@
 // The Designs screen (design §8.3, D13, C14): Last design and the three
 // presets, then the saved designs and a "+ Save design" tile. Saved designs
 // live in IndexedDB (store/db.js); design files move them between devices.
+//
+// Presets are shapes (D30, C29): their tiles show plain pots, and opening one
+// starts on Shape with no pattern (slot A Plain, slot B none), keeping its
+// form, layers, base and finish. The preset files keep their patterns, so the
+// golden G-code still covers whole designs. Saved designs and design files
+// open whole. Everything opens on the Shape step, except Last design, which
+// keeps the step you're on.
 
 import { looksLikeDesign, normaliseDesign } from '../core/design.js';
 import { designFileBlob, takeFileImages, FILE_MAX_BYTES } from './design-file.js';
+import { shapeOnly } from './steps.js';
 
 const LS_NOTE = 'vc2.storageNoteDismissed';
 const FILE_SUFFIX = '.vasecreator.json';
@@ -119,9 +127,9 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
       .sort((a, b) => b.updated - a.updated);
   });
 
-  // Normalised presets, made once; a broken preset is skipped, not fatal.
+  // Normalised presets as shapes, made once; a broken preset is skipped, not fatal.
   const presets = (ctx.presets || []).map((p) => {
-    try { return normaliseDesign(p); } catch (err) { console.warn('[designs] preset skipped', err); return null; }
+    try { return shapeOnly(normaliseDesign(p)); } catch (err) { console.warn('[designs] preset skipped', err); return null; }
   }).filter(Boolean);
 
   // Thumbnail object URLs: presets and Last design are cached for the session;
@@ -223,7 +231,7 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
         label: 'Open Last design, where you left off',
         onOpen: () => {
           if (sameDesign(store.state.design, lastDesign.design)) { close(); return; }
-          openDesign(lastDesign.design, 'Last design', lastDesign.savedId);
+          openDesign(lastDesign.design, 'Last design', lastDesign.savedId, { keepStep: true });
         },
       });
       if (lastDesign.thumb) {
@@ -304,9 +312,9 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
 
   // ---------- Actions ----------
 
-  function openDesign(design, name, savedId) {
-    // A new design starts in the design view, not halfway through Prepare print.
-    if (store.state.view.mode !== 'design') store.setView({ step: 'shape', highlight: null });
+  function openDesign(design, name, savedId, { keepStep = false } = {}) {
+    // A design you open starts on Shape (§7.1); Last design carries on where you are.
+    if (!keepStep && store.state.view.step !== 'shape') store.setView({ step: 'shape', highlight: null });
     store.open(design, `Opened: ${name}`, { savedId });
     ctx.requestFit();
     close();
@@ -331,9 +339,10 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
 
   async function currentThumb() {
     // The renderer shows the current design's beads; render a fresh one only
-    // when there is no preview yet.
+    // when there is no preview yet, or when the pot on screen is plain (Shape):
+    // a saved tile shows the finished pot (§7.3).
     try {
-      if (store.state.result) return await ctx.renderer.thumbnail();
+      if (store.state.result && !ctx.resultIsPlain?.()) return await ctx.renderer.thumbnail();
       return await ctx.thumbnailFor(store.state.design);
     } catch (err) {
       console.warn('[designs] thumbnail failed', err);

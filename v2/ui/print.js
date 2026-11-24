@@ -1,5 +1,6 @@
-// Prepare print (design §10, C10, C19): four numbered steps, Walls, Printer,
-// Check and Export. It replaces the sidebar while view.mode is 'print'.
+// Print, step 5 (design §10, C10, C19; Prepare print before issue #1): the
+// parts Walls, Printer, Check and Export. ui/steps.js mounts it as the Print
+// step's content, and it computes while that step is open.
 //
 // Walls are design data (a history step). The printer profile is not: it is
 // stored apart from designs and changing it never adds a history step. The
@@ -101,7 +102,7 @@ function download(blob, fileName) {
 const fmt = (v) => (Number.isFinite(v) ? String(Math.round(v)) : '–');
 
 /**
- * Mounts the Prepare print panel.
+ * Mounts the Print step's content.
  * @param {HTMLElement} el
  * @param {{ store: object, engine: { print: Function, gcode: Function }, library?: object, renderer?: object }} ctx
  * @returns {{ destroy(): void }}
@@ -110,15 +111,12 @@ export function mountPrintPanel(el, ctx) {
   const { store, engine } = ctx;
   const printerOf = () => store.state.printer ?? defaultPrinter();
 
-  // ---- Header -------------------------------------------------------------
-  const back = h('button', { type: 'button', class: 'link-btn back-btn', text: '← Back to design' });
-  back.addEventListener('click', () => store.setView({ step: 'shape' }));
-  const header = h('div', { class: 'print-header' }, [back, h('h2', { class: 'print-title', text: 'Prepare print' })]);
-
-  const step = (n, title, children) => h('section', { class: 'panel-card print-step', 'aria-labelledby': `print-step-${n}` }, [
-    h('h3', { class: 'print-step-title', id: `print-step-${n}` }, [h('span', { class: 'step-num', 'aria-hidden': 'true', text: String(n) }), title]),
-    ...children,
-  ]);
+  // One part of the Print step; the step frame gives it its heading.
+  const part = (id, children) => {
+    const node = h('div', { class: 'print-part' }, children);
+    node.dataset.part = id;
+    return node;
+  };
 
   // ---- 1 Walls ------------------------------------------------------------
   const d0 = store.state.design;
@@ -223,11 +221,10 @@ export function mountPrintPanel(el, ctx) {
 
   el.classList.add('print-panel');
   el.replaceChildren(
-    header,
-    step(1, 'Walls', [walls.el, twoWallBox]),
-    step(2, 'Printer', [h('div', { class: 'printer-line' }, [printerName, badge]), summaryLine, editBtn, editor]),
-    step(3, 'Check', [checkStatus, checkList]),
-    step(4, 'Export', [h('div', { class: 'export-buttons' }, [gcodeBtn, designBtn]), progress, exportNote, sizeLine, cadBox]),
+    part('walls', [walls.el, twoWallBox]),
+    part('printer', [h('div', { class: 'printer-line' }, [printerName, badge]), summaryLine, editBtn, editor]),
+    part('check', [checkStatus, checkList]),
+    part('export', [h('div', { class: 'export-buttons' }, [gcodeBtn, designBtn]), progress, exportNote, sizeLine, cadBox]),
   );
 
   // ---- Behaviour ----------------------------------------------------------
@@ -237,7 +234,7 @@ export function mountPrintPanel(el, ctx) {
   let runToken = 0;
   let timer = 0;
 
-  const visible = () => store.state.view.mode === 'print';
+  const visible = () => store.state.view.step === 'print';
   const blocked = () => !printResult || printResult.canExport === false || (printResult.checks || []).some((c) => c.severity === 'error');
   // A check is waiting to start or running: the shown checks may be for an older design.
   const busy = () => running || timer !== 0;

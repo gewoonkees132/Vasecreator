@@ -1,4 +1,4 @@
-// Geometry morph (advanced, design §9.6, D23): a soft greyscale map that
+// Geometry morph (design §9.6, D23), the Morph part of Shape: a soft greyscale map that
 // pushes the whole form in and out before patterns go on top. None, the
 // built-in maps (core/morph.js MORPH_MAPS) or your own image, then Softness,
 // Strength, Repeats around and Blend.
@@ -21,7 +21,7 @@ const SWATCH_PX = 52;
 // The "+ Image" tile: a plain square with a plus, not the struck-out None look.
 const ADD_STYLE = 'display:flex;align-items:center;justify-content:center;background:var(--c-input-bg);font-size:24px;color:var(--c-text-2)';
 
-// The Surface image upload (ui/image-swatch.js) when it offers one; else the
+// The Pattern image upload (ui/image-swatch.js) when it offers one; else the
 // same steps here: decode, greyscale, store, hand to the engine.
 async function importMorphImage(ctx, file) {
   if (typeof imageSwatch.importImage === 'function') return imageSwatch.importImage(ctx, file);
@@ -97,7 +97,6 @@ const fmtMm = (v) => `${Math.round((Number(v) || 0) * 10) / 10} mm`;
 const section = {
   id: 'morph',
   title: 'Geometry morph',
-  advanced: true,
 
   summary(design) {
     const m = design.form?.morph;
@@ -225,4 +224,4 @@ const section = {
 };
 
 export default section;
-export const { id, title, advanced, summary, mount } = section;
+export const { id, title, summary, mount } = section;

@@ -1,7 +1,7 @@
-// The right column (design §8.4, §8.6, D14, D19): the history card with a
-// thumbnail per step, newest on top, and the Advanced button below it. On a
-// phone it is a narrow column with the three newest steps; tapping it opens
-// the full list over the controls area.
+// The right column (design §8.4, D14): the history card with a thumbnail per
+// step, newest on top. On a phone it is a narrow column with the three newest
+// steps; tapping it opens the full list over the controls area. (The Advanced
+// button that sat below it went with issue #1, D33.)
 
 import { relativeTime } from '../store/store.js';
 
@@ -21,7 +21,7 @@ function el(tag, props = {}, children = []) {
 }
 
 /**
- * Mounts the history card and the Advanced button.
+ * Mounts the history card.
  * @param {HTMLElement} root  div#rightcol
  * @param {{ store }} ctx
  * @returns {{ destroy(): void }}
@@ -52,18 +52,7 @@ export function mountHistory(root, ctx) {
     more,
   ]);
 
-  const advanced = el('button', {
-    type: 'button', class: 'advanced-btn', 'aria-pressed': 'false',
-    title: 'Show the advanced sections: profile curve, profile points, footprint and geometry morph',
-    onclick: () => store.setView({ advanced: !store.state.view.advanced }),
-  }, [
-    el('span', { class: 'advanced-long', text: 'Advanced' }),
-    el('span', { class: 'advanced-short', 'aria-hidden': 'true', text: 'Adv' }),
-    el('span', { class: 'advanced-dot', 'aria-hidden': 'true' }),
-  ]);
-  advanced.setAttribute('aria-label', 'Advanced');
-
-  // Full list for the phone, over the controls area (bottom 60 %).
+  // Full list for the phone, over the controls area and the step bar.
   const overlayList = el('ol', { class: 'history-list', 'aria-label': 'Steps, newest first' });
   const overlayClose = el('button', {
     type: 'button', class: 'icon-close', 'aria-label': 'Close history', text: '×',
@@ -77,7 +66,7 @@ export function mountHistory(root, ctx) {
   ]);
   overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeOverlay(); });
 
-  root.replaceChildren(card, advanced, overlay);
+  root.replaceChildren(card, overlay);
 
   function openOverlay() {
     overlay.hidden = false;
@@ -120,7 +109,7 @@ export function mountHistory(root, ctx) {
     const currentId = store.state.historyId;
     const now = Date.now();
     const shown = compact ? steps.slice(0, 3) : steps;
-    // Prepare print works on the current design; going back in history happens in the design view.
+    // Print works on the current design; going back in history happens in the design steps (C31).
     const printing = store.state.view.mode === 'print';
     // Thumbnails and the clock re-render the list; keyboard focus stays put.
     const focusedId = target.contains(document.activeElement) ? document.activeElement.dataset.step : null;
@@ -164,25 +153,16 @@ export function mountHistory(root, ctx) {
     }
   }
 
-  function updateAdvanced() {
-    const on = !!store.state.view.advanced;
-    advanced.setAttribute('aria-pressed', String(on));
-  }
-
   let lastMode = store.state.view.mode;
   const unsubscribe = store.subscribe((state, what) => {
     if (what.has('history')) render();
-    if (what.has('view')) {
-      updateAdvanced();
-      if (state.view.mode !== lastMode) { lastMode = state.view.mode; render(); }
-    }
+    if (what.has('view') && state.view.mode !== lastMode) { lastMode = state.view.mode; render(); }
   });
 
   // Keep "1 min", "3 min"… honest without re-rendering on every change.
   const timer = setInterval(render, 30000);
 
   syncPhone();
-  updateAdvanced();
 
   return {
     destroy() {
