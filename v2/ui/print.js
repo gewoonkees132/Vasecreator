@@ -211,12 +211,12 @@ export function mountPrintPanel(el, ctx) {
   const progress = h('progress', { class: 'export-progress', max: 1, value: 0, hidden: true, 'aria-label': 'Writing G-code' });
   const exportNote = h('p', { class: 'export-note', role: 'status', 'aria-live': 'polite' });
   const sizeLine = h('p', { class: 'size-line' });
-  const dxfBtn = h('button', { type: 'button', class: 'btn', text: 'Toolpath lines (.dxf)' });
+  const dxfBtn = h('button', { type: 'button', class: 'btn', text: 'Toolpath (.dxf)' });
   const stlBtn = h('button', { type: 'button', class: 'btn', text: 'Solid (.stl)' });
   const cadNote = h('p', { class: 'export-note', role: 'status', 'aria-live': 'polite' });
   const cadBox = h('div', { class: 'cad-export' }, [
     h('p', { class: 'cad-title', text: 'For CAD' }),
-    h('p', { class: 'cad-hint', text: 'Lines: the nozzle path in mm, a layer each for wall, inner wall, base and connectors. Opens in Rhino and most CAD programs. Solid: a closed mesh of the finished pot.' }),
+    h('p', { class: 'cad-hint', text: 'Toolpath: the whole nozzle path as one continuous line in mm, in print order. Opens in Rhino, Grasshopper and most CAD programs. Solid: a closed mesh of the finished pot.' }),
     h('div', { class: 'export-buttons' }, [dxfBtn, stlBtn]),
     cadNote,
   ]);
@@ -351,7 +351,7 @@ export function mountPrintPanel(el, ctx) {
       dxfBtn.disabled = stlBtn.disabled = false;
     }
   };
-  dxfBtn.addEventListener('click', () => exportCad('dxf', 'toolpath lines'));
+  dxfBtn.addEventListener('click', () => exportCad('dxf', 'toolpath'));
   stlBtn.addEventListener('click', () => exportCad('stl', 'solid'));
 
   designBtn.addEventListener('click', async () => {

@@ -1,9 +1,9 @@
-// CAD export (issue #7): DXF polylines from the toolpath, a closed solid as STL.
+// CAD export (issue #7): the toolpath as one continuous DXF polyline, a closed solid as STL.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normaliseDesign } from '../core/design.js';
-import { buildToolpath, KIND } from '../core/toolpath.js';
+import { buildToolpath } from '../core/toolpath.js';
 import { writeDxf, buildSolid, writeStl } from '../core/cad.js';
 import { exportCad } from '../core/engine.js';
 import { library, presets, cylinder } from './support/fixtures.js';
@@ -38,7 +38,7 @@ function polylines(pairs) {
   return out;
 }
 
-test('DXF: a well-formed R12 file with the four layers', () => {
+test('DXF: a well-formed R12 file with one open 3D polyline on TOOLPATH', () => {
   const d = normaliseDesign(presets[0]);
   d.finish.walls = 2;
   const text = writeDxf(buildToolpath(d, library, { walls: 2 }), { name: 'Classic vase' }).join('');
@@ -47,27 +47,31 @@ test('DXF: a well-formed R12 file with the four layers', () => {
   assert.equal(values[0], 'SECTION');
   assert.equal(values.at(-1), 'EOF');
   assert.equal(values.filter((v) => v === 'SECTION').length, values.filter((v) => v === 'ENDSEC').length);
-  const layers = pairs.filter(([c], i) => c === 0 && pairs[i][1] === 'LAYER').map((_, i) => i);
-  assert.equal(layers.length, 4);
-  const used = new Set(polylines(pairs).map((p) => p.layer));
-  for (const name of ['WALL_OUTER', 'WALL_INNER', 'BASE', 'CONNECTOR']) assert.ok(used.has(name), `${name} has lines`);
+  assert.equal(values.filter((v) => v === 'LAYER').length, 1);
+  assert.equal(values.filter((v) => v === 'POLYLINE').length, 1, 'one continuous line');
+  assert.equal(values.filter((v) => v === 'SEQEND').length, 1);
+  const at = pairs.findIndex(([c, v]) => c === 0 && v === 'POLYLINE');
+  const flags = pairs.slice(at + 1).find(([c]) => c === 70)[1];
+  assert.equal(Number(flags), 8, '3D, open');
+  assert.equal(polylines(pairs)[0].layer, 'TOOLPATH');
 });
 
-test('DXF: every bead of the toolpath is drawn once, at its place', () => {
-  const d = normaliseDesign(presets[1]);
-  const tp = buildToolpath(d, library, { walls: 1 });
-  const lines = polylines(parseDxf(writeDxf(tp).join('')));
-  const beads = Array.from(tp.kinds).filter((k) => k !== KIND.none).length;
-  const drawn = lines.reduce((s, l) => s + l.points.length - 1, 0);
-  assert.equal(drawn, beads);
-  // Spot check: the last point of the last line is the end of the path.
-  const last = lines.at(-1).points.at(-1);
-  const n = tp.pointCount - 1;
-  for (let k = 0; k < 3; k++) assert.ok(Math.abs(last[k] - tp.path[3 * n + k]) <= 0.0005);
-  // Every wall layer is its own line (or a few), never one line across layers.
-  const wallLines = lines.filter((l) => l.layer === 'WALL_OUTER');
-  assert.ok(wallLines.length >= tp.layerZ.length - d.base.layers, `${wallLines.length} wall lines`);
-});
+for (const [label, walls] of [['one wall', 1], ['two walls', 2]]) {
+  test(`DXF: ${label}, every point of the path in print order, with no gap`, () => {
+    const d = normaliseDesign(presets[1]);
+    const tp = buildToolpath(d, library, { walls });
+    const [line] = polylines(parseDxf(writeDxf(tp).join('')));
+    assert.equal(line.points.length, tp.pointCount);
+    for (let i = 0; i < tp.pointCount; i++) {
+      for (let k = 0; k < 3; k++) {
+        assert.ok(Math.abs(line.points[i][k] - tp.path[3 * i + k]) <= 0.0005, `point ${i}`);
+      }
+    }
+    // It starts on the bed and ends at the top layer.
+    assert.ok(line.points[0][2] <= d.layers.layerHeightMm + 1e-9);
+    assert.ok(Math.abs(line.points.at(-1)[2] - tp.layerZ.at(-1)) <= 0.0005);
+  });
+}
 
 // ---------- Solid ----------
 

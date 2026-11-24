@@ -1,11 +1,11 @@
 // CAD export (issue #7): plain file formats written here, with no library.
 //
-//   writeDxf(tp)   the nozzle path as 3D polylines in a DXF (R12, ASCII), one
-//                  polyline per layer and kind, on the layers WALL_OUTER,
-//                  WALL_INNER, BASE and CONNECTOR. Millimetres, the pot's axis
-//                  on the origin, z up from the bed. Rhino, Grasshopper and
-//                  most CAD programs open it with the layers intact. (A .3dm
-//                  file would need rhino3dm.js, several MB of WebAssembly.)
+//   writeDxf(tp)   the nozzle path as one continuous 3D polyline in a DXF
+//                  (R12, ASCII) on the layer TOOLPATH: every point in print
+//                  order, from the first bead to the last. Millimetres, the
+//                  pot's axis on the origin, z up from the bed. Rhino,
+//                  Grasshopper and most CAD programs open it. (A .3dm file
+//                  would need rhino3dm.js, several MB of WebAssembly.)
 //   buildSolid()   a closed triangle mesh of the finished pot: the outer and
 //                  inner skin of the wall, the rim, and the base with its
 //                  hole. writeStl() writes it as binary STL.
@@ -18,16 +18,13 @@
 // offset skin can fold over itself.
 
 import { TAU, dcos, dsin, datan2 } from './math.js';
-import { KIND, createWallModel, pointsAround } from './toolpath.js';
+import { createWallModel, pointsAround } from './toolpath.js';
 
 // ---------- DXF ----------
 
-const DXF_LAYERS = [
-  { kind: KIND.outer, name: 'WALL_OUTER', colour: 7 },
-  { kind: KIND.inner, name: 'WALL_INNER', colour: 5 },
-  { kind: KIND.base, name: 'BASE', colour: 3 },
-  { kind: KIND.connector, name: 'CONNECTOR', colour: 1 },
-];
+export const DXF_LAYER = 'TOOLPATH';
+// Vertices per string chunk, so a long path isn't built as one huge string.
+const DXF_CHUNK = 2000;
 
 const num = (v) => {
   const s = v.toFixed(3);
@@ -35,9 +32,12 @@ const num = (v) => {
 };
 
 /**
- * The toolpath as DXF text: a 3D POLYLINE for every run of one kind within a
- * layer. Moves without clay (kind 0) break the runs and are not drawn.
- * @param {{ path: Float64Array, kinds: Uint8Array, layerOf: Uint16Array, pointCount: number }} tp from buildToolpath
+ * The toolpath as DXF text: one open 3D POLYLINE through every point of the
+ * path in print order. The path is already one continuous line (core/
+ * toolpath.js), so the walls, the base, the connectors between two walls and
+ * the short no-clay steps at the seam all follow on without a break. The
+ * skirt and the prime are printer moves before the pot and are left out.
+ * @param {{ path: Float64Array, pointCount: number }} tp from buildToolpath
  * @param {{ name?: string }} [options]
  * @returns {string[]} chunks to join or put in a Blob
  */
@@ -55,35 +55,27 @@ export function writeDxf(tp, { name = 'Vasecreator' } = {}) {
     + pair(0, 'TABLE') + pair(2, 'LTYPE') + pair(70, 1)
     + pair(0, 'LTYPE') + pair(2, 'CONTINUOUS') + pair(70, 0) + pair(3, 'Solid line') + pair(72, 65) + pair(73, 0) + pair(40, '0.0')
     + pair(0, 'ENDTAB')
-    + pair(0, 'TABLE') + pair(2, 'LAYER') + pair(70, DXF_LAYERS.length)
-    + DXF_LAYERS.map((l) => pair(0, 'LAYER') + pair(2, l.name) + pair(70, 0) + pair(62, l.colour) + pair(6, 'CONTINUOUS')).join('')
+    + pair(0, 'TABLE') + pair(2, 'LAYER') + pair(70, 1)
+    + pair(0, 'LAYER') + pair(2, DXF_LAYER) + pair(70, 0) + pair(62, 7) + pair(6, 'CONTINUOUS')
     + pair(0, 'ENDTAB')
     + pair(0, 'ENDSEC')
-    + pair(0, 'SECTION') + pair(2, 'ENTITIES'),
+    + pair(0, 'SECTION') + pair(2, 'ENTITIES')
+    // 70 = 8: a 3D polyline, open (the path ends at the top, not where it began).
+    + pair(0, 'POLYLINE') + pair(8, DXF_LAYER) + pair(66, 1)
+    + pair(10, '0.0') + pair(20, '0.0') + pair(30, '0.0') + pair(70, 8),
   );
 
-  const layerName = new Map(DXF_LAYERS.map((l) => [l.kind, l.name]));
-  const { path, kinds, layerOf } = tp;
-  const n = tp.pointCount ?? kinds.length;
-  const vertex = (layer, i) => pair(0, 'VERTEX') + pair(8, layer)
-    + pair(10, num(path[3 * i])) + pair(20, num(path[3 * i + 1])) + pair(30, num(path[3 * i + 2])) + pair(70, 32);
-
-  let i = 1;
-  while (i < n) {
-    const kind = kinds[i];
-    const layer = layerName.get(kind);
-    if (!layer) { i += 1; continue; }
-    // The run: moves i..end of this kind in this layer, drawn from point i − 1.
-    let end = i;
-    while (end + 1 < n && kinds[end + 1] === kind && layerOf[end + 1] === layerOf[i]) end += 1;
-    let text = pair(0, 'POLYLINE') + pair(8, layer) + pair(66, 1)
-      + pair(10, '0.0') + pair(20, '0.0') + pair(30, '0.0') + pair(70, 8);
-    for (let p = i - 1; p <= end; p++) text += vertex(layer, p);
-    text += pair(0, 'SEQEND') + pair(8, layer);
+  const { path } = tp;
+  const n = tp.pointCount ?? path.length / 3;
+  for (let start = 0; start < n; start += DXF_CHUNK) {
+    let text = '';
+    for (let i = start; i < Math.min(n, start + DXF_CHUNK); i++) {
+      text += pair(0, 'VERTEX') + pair(8, DXF_LAYER)
+        + pair(10, num(path[3 * i])) + pair(20, num(path[3 * i + 1])) + pair(30, num(path[3 * i + 2])) + pair(70, 32);
+    }
     chunks.push(text);
-    i = end + 1;
   }
-  chunks.push(pair(0, 'ENDSEC') + pair(0, 'EOF'));
+  chunks.push(pair(0, 'SEQEND') + pair(8, DXF_LAYER) + pair(0, 'ENDSEC') + pair(0, 'EOF'));
   return chunks;
 }
 

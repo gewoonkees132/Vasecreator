@@ -84,7 +84,7 @@ export function createEngine({ library, workerUrl } = {}) {
     /** @returns {Promise<Blob>} text/plain G-code; rejects when an error blocks the export */
     gcode: (design, printer, onProgress) => request('gcode', design, printer, onProgress),
     /**
-     * A CAD file (issue #7): 'dxf' toolpath polylines or an 'stl' solid.
+     * A CAD file (issue #7): the 'dxf' toolpath (one continuous polyline) or an 'stl' solid.
      * @param {object} design @param {'dxf' | 'stl'} format
      * @returns {Promise<Blob>}
      */

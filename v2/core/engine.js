@@ -3,7 +3,7 @@
 //   computePreview: the live loop. Centreline wall plus base, design checks.
 //   computePrint:   Prepare print. Final walls, process moves, all checks.
 //   emitGcode:      the G-code text, in chunks.
-//   exportCad:      CAD files (issue #7): the toolpath as DXF polylines, the solid as STL.
+//   exportCad:      CAD files (issue #7): the toolpath as one DXF polyline, the solid as STL.
 //
 // The preview and the G-code come from the same toolpath code (research
 // §5.4); the preview is that toolpath in Float32 for the GPU.
@@ -116,7 +116,7 @@ export const CAD_FORMATS = Object.freeze({
 
 /**
  * A CAD file for a design (core/cad.js). 'dxf' is the nozzle path of the
- * final walls (finish.walls) as 3D polylines; 'stl' is the closed solid.
+ * final walls (finish.walls) as one continuous 3D polyline; 'stl' is the closed solid.
  * Neither depends on the printer, and print checks don't block them: a
  * design that doesn't fit the bed can still go to CAD.
  * @param {object} design
