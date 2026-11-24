@@ -1,7 +1,7 @@
 # Vasecreator v2: the guided design journey (issue #1)
 
 - **Date:** 2026-11-24
-- **Status:** Draft for the owner's approval.
+- **Status:** Approved by the owner on 2026-11-24. This is the input for building it.
 - **Issue:** [#1 Guided design journey: Shape → Pattern → Layers & seam → Base](https://github.com/gewoonkees132/Vasecreator/issues/1) (label *brainstorm*).
 - **Builds on:** [`v2-design-brainstorm.md`](v2-design-brainstorm.md), the "design" below (§ numbers without a prefix point there). It revises §8.1, §8.2, §8.3, §8.6, §10, D19 and D22. The owner's decisions from this brainstorm go into the design's §3 as D28–D34, and my calls into its §17 as C24–C36.
 - **Code:** everything lives in `v2/`. Paths below are relative to it.

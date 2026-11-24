@@ -55,15 +55,22 @@ D0–D5 stand as recorded in research §11.1. These were added in the brainstorm
 | D16 | **Patterns start as small seamless swatches you click.** They come from a bitmap pattern generator (motifs such as out-in-out, arranged as stripes, brick and so on), and they always wrap round the pot a whole number of times. | Owner |
 | D17 | **Two patterns, A and B, that blend.** *Even*, *Fades up* or *Middle* sets where B takes over, and an amount works as the multiplier. Transitions are always gradual. This replaces the research's curves over height and rules list. B can be *Plain*, which gives a fade to a smooth surface. | Owner |
 | D18 | **No height rail.** Where the pattern starts and stops is two numbers. | Owner |
-| D19 | **Advanced is a button under the history,** with the same width and colour as the history card. Switching it on adds the advanced sections to the sidebar: profile curve, exact profile points and footprint. | Owner |
+| D19 | **Advanced is a button under the history,** with the same width and colour as the history card. Switching it on adds the advanced sections to the sidebar: profile curve, exact profile points and footprint. **Reversed by D33** (issue #1). | Owner |
 | D20 | **Everything updates live.** Every control, Advanced ones included, updates the pot while you drag. Editing never moves the camera. | Owner |
 | D21 | **Visual style.** Pots and pattern swatches are a clean, professional white. The chips at the top right (warnings, size) use the same small corner radius as the buttons, and the size chip sits to the right of the warnings chip. | Owner |
-| D22 | **Phone layout.** The pot gets the top 40 % of the screen and the controls a fixed 60 % below it. Nothing covers the pot. | Owner (principle); accepted (40/60) |
+| D22 | **Phone layout.** The pot gets the top 40 % of the screen and the controls a fixed 60 % below it. Nothing covers the pot. **The 40/60 split is revised by D31** (issue #1); the principle stays. | Owner (principle); accepted (40/60) |
 | D23 | **Geometry morph** is an advanced feature in a later release: a bitmap, softened with a Gaussian blur, reshapes the whole form, with blend numbers. | Owner |
 | D24 | **The pattern editor** (making your own patterns) comes right after the first release. | Owner |
 | D25 | **Build v2 next to v1** in its own folder, served at `vasecreator.com/v2` as an open preview, and swap when the first release is complete (§7). | Owner |
 | D26 | **After launch, every later item is written up as a GitHub issue,** clearly documented. §15.4 lists them ready to copy. | Owner |
 | D27 | **With 2 walls, the inner wall is smooth by default,** set behind the outer wall's deepest groove so the walls never cross. A toggle makes it follow the pattern instead (fused, even thickness). | Owner |
+| D28 | **Issue #1: five steps in a fixed order: 1 Shape, 2 Pattern, 3 Layers & seam, 4 Base, 5 Print.** Shape holds everything about the form (size, footprint, twist, profile curve, profile points, geometry morph). Print is Prepare print. Any step can be opened at any time; nothing is locked. The current step is dark, the others light grey. Each step ends with *Next*. See [the journey design](v2-guided-journey.md) | Owner (order, free movement, two shades); accepted (Print as step 5) |
+| D29 | **Issue #1: in Shape the pot is shown plain;** the pattern comes back from step 2 on | Owner |
+| D30 | **Issue #1: presets are shapes; patterns are picked in the Pattern step.** On the Designs screen the presets show as plain pots and open on Shape with no pattern. Your own saved designs open whole | Owner (separation); accepted (saved designs open whole) |
+| D31 | **Issue #1: on a phone the steps are a bottom bar with an emblem per step.** The pot gets most of the screen; the controls sit in a compact area between the pot and the bar, one part of a step at a time, picked from a row of buttons. Revises D22's 40/60 split; nothing covers the pot | Owner |
+| D32 | **Issue #1: on desktop the same five emblems sit at the top of the left panel,** and a step shows all its parts under small headings | Owner |
+| D33 | **Issue #1: the Advanced button goes** (reverses D19). Profile curve, profile points and geometry morph become parts of Shape; Footprint appears once, in Shape | Accepted |
+| D34 | **Issue #1: the Twisted column preset gets rounded square corners,** so its twist shows on the bare shape (revises C4) | Owner |
 
 ---
 
@@ -135,6 +142,8 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 
 ### 8.1 Desktop layout
 
+> **Revised by issue #1** (D28–D34): the sidebar, the phone tabs, the Advanced button and the Prepare print mode become five steps. See [the journey design](v2-guided-journey.md). The text below describes the first release.
+
 ```
 ┌───────────────────────────────────────────────────────────────────────────────────┐
 │ ▣ Vase Creator    Created with ♥ by …          ↶  ↷   [Designs] [Save design] [Prepare print →] │
@@ -167,6 +176,8 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 
 ### 8.2 Phone layout
 
+> **Revised by issue #1** (D28–D34): the sidebar, the phone tabs, the Advanced button and the Prepare print mode become five steps. See [the journey design](v2-guided-journey.md). The text below describes the first release.
+
 ```
 ┌──────────────────────────────┐
 │ ▣              ↶  ↷ [Print →]│
@@ -194,6 +205,8 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 
 ### 8.3 Designs screen: opening, presets, saving
 
+> **Revised by issue #1** (D30): presets show and open as plain shapes on the Shape step; patterns are picked in the Pattern step. See [the journey design](v2-guided-journey.md).
+
 ```
 ┌ Designs ─────────────────────────── Click one to start from it ──── × ┐
 │ CONTINUE · PRESETS                                                    │
@@ -213,7 +226,7 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 
 - **When it opens:** from the *Designs* button (on a phone, from the logo menu). It no longer opens by itself (issue #2, C20): the app opens straight into the designer, on the first preset for a first visit and on the last design after that. A one-time tip at the top of the controls points at *Designs*, and the button gets a ring (on a phone, the logo). The tip goes for good once Designs has been opened or the tip is closed. On the very first visit, *Last design* is missing and the presets lead.
 - **Tiles are rectangular,** with a white bead thumbnail of the pot and its name (D13). One click loads the design and closes the screen.
-- **Three built-in presets,** suggested on 2026-11-23 and confirmed by the owner on 2026-11-24: **Classic vase** (flutes fading into a smooth neck), **Twisted column** (pleats with a 60° twist) and **Square planter** (basket weave on a square footprint, with a drainage hole). They are in `v2/library/presets.json` (§16).
+- **Three built-in presets,** suggested on 2026-11-23 and confirmed by the owner on 2026-11-24: **Classic vase** (flutes fading into a smooth neck), **Twisted column** (pleats with a 60° twist; a rounded square since issue #1, D34) and **Square planter** (basket weave on a square footprint, with a drainage hole). They are in `v2/library/presets.json` (§16).
 - **Save design** asks for a name (default "Design 1", "Design 2"…) and adds a tile under *Saved*. Saving an already-saved design updates its tile. A *Save as new* option keeps both.
 - **Tile menu (⋯)** on saved tiles: rename, duplicate, delete (with confirmation), and *Download design file*. The Designs screen also has *Open design file*, which adds a tile from a `.json` file. Design files are how designs move between devices and how students hand work in.
 - **Storage.** Saved designs and their thumbnails live in the browser (IndexedDB, with `navigator.storage.persist()`). Because browsers may clear storage, the Designs screen reminds users once to download important designs (research §8.4).
@@ -235,6 +248,8 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 - **Style.** The same small corner radius as the buttons (8 px), not pill-shaped (D21).
 
 ### 8.6 The Advanced button
+
+> **Revised by issue #1** (D28–D34): the sidebar, the phone tabs, the Advanced button and the Prepare print mode become five steps. See [the journey design](v2-guided-journey.md). The text below describes the first release.
 
 - **Where:** under the history card, with the same width and colour (D19). The on state shows a dark outline and a small green dot.
 - **Off** (the default for new users): the sidebar shows only the four main sections.
@@ -376,6 +391,8 @@ Blend           ──●── [0.80]      how much of the morph to apply
 ---
 
 ## 10. Prepare print (the finish step)
+
+> **Revised by issue #1:** Prepare print is now step 5, *Print*, and its four steps are that step's parts; the top-bar button and *← Back to design* go. See [the journey design](v2-guided-journey.md).
 
 *Prepare print →* swaps the sidebar for the Prepare print panel. On a phone it swaps the controls area. The pot stays in view, now showing the final walls. *← Back to design* returns to the sidebar. Nothing in Prepare print slows down editing, because it computes only on demand (research §11.3, Q4).
 
@@ -591,7 +608,7 @@ These were not explicitly decided by the owner. A builder should treat them as t
 | C1 | With 2 walls, the default **wall spacing is 0.9 × bead width**, so the walls fuse where they meet. The inner-wall behaviour is the owner's (D27) | A thick wall is the usual reason to choose 2 walls |
 | C2 | Defaults: **bead 3.0 mm, layer 1.5 mm, seam ramp 15 mm, base 3 layers** | Mid-range values from research §3.4 and §5.2 |
 | C3 | **Clicking a history step restores it as a new step;** about 200 steps; history survives reloads; opening a design adds a step | Nothing is ever lost, which matters when going back is the point |
-| C4 | Presets **Classic vase, Twisted column, Square planter** (confirmed 2026-11-24, `v2/library/presets.json`) | Covers a smooth profile with a blend, a twist, and a rectangle with a drainage hole |
+| C4 | Presets **Classic vase, Twisted column, Square planter** (confirmed 2026-11-24, `v2/library/presets.json`; Twisted column became a rounded square in issue #1, D34) | Covers a smooth profile with a blend, a twist, and a rectangle with a drainage hole |
 | C5 | **12 in-house pattern recipes** (confirmed 2026-11-24, `v2/library/patterns.json`) | No licence risk; swatches stay exact at any bead size |
 | C6 | **Width** = widest diameter and scales the profile; **depth** is a locked ratio; rectangle **corner rounding** is a fraction | Width and depth read as overall sizes. The profile keeps its character, and the corners stay valid where the pot narrows |
 | C7 | **Repeats** are the control, and cell size is shown as information; **tile height** snaps to whole layers | Whole repeats keep the pattern seamless (D16); rows line up with beads |
@@ -611,6 +628,19 @@ These were not explicitly decided by the owner. A builder should treat them as t
 | C21 | **Issue #5, sidebar usability:** every number can be dragged by its label or its value, in whole steps (12.3 → 13 → 14), Shift ×10, Alt ÷10; a click on the value types. Only sideways drags scrub, so a phone panel still scrolls. Sliders snap to coarse steps with tick marks (5 %, 0.5 mm, 0.05), and Shift drags fine. − / + stay touch-only, because scrubbing and arrow keys cover desktop. Fields are spinbuttons for screen readers. The size chip opens an *Outer size* card rather than editing inline, which gives phones 44 px fields over the controls (D22) and keeps the chip compact. A chip edit sets the finished outer size, and Shape's *Width* stays the profile's widest diameter (C6) | The owner asked for stepped sliders, drag with steps and an editable chip. Two meanings of "width" stay apart by place: the chip is the outside of the finished pot, and Shape is the form you draw |
 | C22 | **Issue #6, curve editing (first slice):** *Gentle* (monotone) joins Smooth and Angular; a corner radius per point on Angular; sharp points on Smooth and Gentle. Bézier handles, B-splines, a tension per point and a flat 2D editor are not built: each needs the rules in §9.1 revisited (Bézier handles can break one radius per height) | The core already had monotone curves and per-point corners; sharp points reuse them by splitting the curve. These add control without changing the rules or any existing design |
 | C23 | **Issue #7, CAD export, lean:** no library. The toolpath goes out as **DXF** (R12 ASCII, mm) as one continuous 3D polyline through every point in print order, as the owner asked, which Rhino and Grasshopper open; a `.3dm` would need rhino3dm.js (several MB of WebAssembly). The solid is a closed **binary STL** mesh: the wall's centreline (the same function the toolpath uses) offset by half a bead each side in plan, sampled once per layer, with the rim, the base and its hole. Layer lines are not modelled. NURBS, STEP and 3MF are not built. A typical pot gives a 1.5–3 MB DXF and a 4–6 MB STL; the solid is capped at 600 000 triangles. Both sit under *For CAD* in Prepare print's Export step | The owner asked for CAD export without adding a library. DXF and STL are plain formats that every CAD and mesh program opens, and both are written in the worker in well under a second |
+| C24 | **Issue #1: a step frame around the existing sections,** which tag their parts; controls stay mounted once (details: [the journey design](v2-guided-journey.md)) | Least churn; leaves Pattern thin for #3 |
+| C25 | **Issue #1: `view.step` is the source of truth,** `view.mode` is derived from it, and the step is remembered in this browser (details: [the journey design](v2-guided-journey.md)) | Modules that test `view.mode` keep working; a reload returns to the step |
+| C26 | **Issue #1: phone controls area `clamp(200px, 30dvh, 260px)` above a 64 px bottom bar** (details: [the journey design](v2-guided-journey.md)) | The pot gets about half the screen |
+| C27 | **Issue #1: on desktop the step row stays at the top and *Next* at the bottom** while the panel scrolls; *More shape options* starts closed (details: [the journey design](v2-guided-journey.md)) | The steps and the way forward stay in sight |
+| C28 | **Issue #1: the parts per step** follow the existing control groups (details: [the journey design](v2-guided-journey.md)) | No control moves to another step |
+| C29 | **Issue #1: opening a preset sets slot A to Plain and slot B to none;** the first visit opens Classic vase that way; the preset files keep their patterns (details: [the journey design](v2-guided-journey.md)) | Presets become shapes while the golden G-code still tests whole designs |
+| C30 | **Issue #1: a note under Twist** in Shape when it can't show (round footprint, no morph) (details: [the journey design](v2-guided-journey.md)) | A control that seems to do nothing feels broken |
+| C31 | **Issue #1: undo, redo, Save design and restoring history stay off in Print** (details: [the journey design](v2-guided-journey.md)) | They would change the design under a computed print |
+| C32 | **Issue #1: thumbnails of steps made in Shape come from a separate full preview** (details: [the journey design](v2-guided-journey.md)) | History shows the finished pot without slowing a drag |
+| C33 | **Issue #1: emblems are inline SVG drawn in-house** (details: [the journey design](v2-guided-journey.md)) | No icon library joins the import map |
+| C34 | **Issue #1: Pattern parts appear when they apply,** and on a phone the A/B slot cards show above every per-slot part (details: [the journey design](v2-guided-journey.md)) | An empty part looks broken, a greyed one locked |
+| C35 | **Issue #1: on a phone, swatches are one sideways row,** and taller parts scroll inside the controls area (details: [the journey design](v2-guided-journey.md)) | Keeps the pot large, as in the approved mockup |
+| C36 | **Issue #1: on a phone, the first-visit tip is one line with a close button** (details: [the journey design](v2-guided-journey.md)) | The old card would fill the controls area |
 
 ---
 
