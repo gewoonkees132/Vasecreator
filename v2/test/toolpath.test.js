@@ -189,7 +189,10 @@ test('a hole stops the base spiral short of the hole', () => {
 });
 
 test('two walls: outer, connector in, inner flat at the top, connector out', () => {
-  const d = { ...presets[1], finish: { walls: 2, wallSpacingMm: 2.7, innerWall: 'smooth' } };
+  // A round footprint, so a smooth inner wall keeps one radius all round (the
+  // Twisted column became a rounded square in issue #1, D34).
+  const round = { footprint: 'circle', depthRatio: 1, cornerRounding: 0 };
+  const d = { ...presets[1], form: { ...presets[1].form, plan: round }, finish: { walls: 2, wallSpacingMm: 2.7, innerWall: 'smooth' } };
   const { design, tp } = build(d, 2);
   const i = 40;
   const first = tp.layerStarts[i];

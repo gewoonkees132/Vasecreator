@@ -62,7 +62,7 @@
             { "z": 150, "r": 40 }
           ]
         },
-        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
+        "plan": { "footprint": "rectangle", "depthRatio": 1, "cornerRounding": 0.3 },
         "twist": { "degrees": 60 }
       },
       "surface": {
