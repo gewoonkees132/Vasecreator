@@ -306,7 +306,7 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
 
   function openDesign(design, name, savedId) {
     // A new design starts in the design view, not halfway through Prepare print.
-    if (store.state.view.mode !== 'design') store.setView({ mode: 'design', highlight: null });
+    if (store.state.view.mode !== 'design') store.setView({ step: 'shape', highlight: null });
     store.open(design, `Opened: ${name}`, { savedId });
     ctx.requestFit();
     close();

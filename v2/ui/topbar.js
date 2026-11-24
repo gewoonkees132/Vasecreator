@@ -56,8 +56,8 @@ export function mountTopbar(header, ctx) {
   const printBtn = el('button', {
     type: 'button', class: 'btn btn-primary',
     onclick: () => {
-      const mode = store.state.view.mode === 'print' ? 'design' : 'print';
-      store.setView({ mode, highlight: null });
+      const step = store.state.view.step === 'print' ? 'shape' : 'print';
+      store.setView({ step, highlight: null });
     },
   }, [printLabelDesk, printLabelPhone]);
 

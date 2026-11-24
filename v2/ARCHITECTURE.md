@@ -210,8 +210,12 @@ Store = {
   flush(): Promise<void>            // saves now (a merge, see below) and takes in other tabs' steps; otherwise 500 ms
                                     // after a change, on page hide, when the tab is shown again and when another tab saved a step
 }
-view = { advanced, mode: 'design' | 'print', openSections: string[], slot: 'a' | 'b', selectedKnot: number | null,
-         highlight: warningId | null, phoneTab, designsOpen, sizeLocked }   // advanced, openSections kept in localStorage
+view = { step: 'shape' | 'pattern' | 'layers' | 'base' | 'print', parts: { [step]: partId },
+         mode: 'design' | 'print', advanced, openSections: string[], slot: 'a' | 'b', selectedKnot: number | null,
+         highlight: warningId | null, phoneTab, designsOpen, sizeLocked }
+// step is kept in localStorage (vc2.step), as are advanced and openSections; parts lasts the session.
+// mode is derived from step inside setView ('print' on Print, else 'design') and can't be set on its own.
+export const STEPS, modeOf(step)   // the step ids in order; the mode a step gives
 ```
 
 History (C3): the history is a list of design snapshots, oldest first, plus a pointer. Undo and redo only move the pointer. A commit, open or restore made below the top is added on top, so no step is ever dropped, except the oldest once there are more than 200 (`MAX_STEPS`). Designs are compared without `meta`, so renaming or saving doesn't count as a step. Camera, view state and printer settings are not in history (§8.4).

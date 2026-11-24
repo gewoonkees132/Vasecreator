@@ -18,6 +18,13 @@ const PERSIST_DELAY_MS = 500;
 const REFRESH_DELAY_MS = 100;
 const LS_ADVANCED = 'vc2.advanced';
 const LS_SECTIONS = 'vc2.openSections';
+const LS_STEP = 'vc2.step';
+
+/** The five design steps in their fixed order (design D28). */
+export const STEPS = ['shape', 'pattern', 'layers', 'base', 'print'];
+
+/** view.mode follows the step: Print is the print mode, every other step designs. */
+export const modeOf = (step) => (step === 'print' ? 'print' : 'design');
 
 /**
  * @typedef {{ id: string, label: string, time: number, design: object, savedId: string | null, thumb: Blob | null }} Step
@@ -68,9 +75,13 @@ function writeLocal(name, value) {
 
 function defaultView() {
   const sections = readLocal(LS_SECTIONS, null);
+  const saved = readLocal(LS_STEP, null);
+  const step = STEPS.includes(saved) ? saved : 'shape';
   return {
+    step,
+    parts: {},
     advanced: readLocal(LS_ADVANCED, false) === true,
-    mode: 'design',
+    mode: modeOf(step),
     openSections: Array.isArray(sections) ? sections : ['surface'],
     slot: 'a',
     selectedKnot: null,
@@ -391,11 +402,18 @@ export function createStore({ design, history = null, printer = null, label = 'S
       return steps[pointer];
     },
 
-    /** @param {object} patch  merged into view; `advanced` and `openSections` are remembered */
+    /**
+     * @param {object} patch  merged into view. `step` is remembered in this
+     *   browser; `mode` is derived from it and can't be set on its own.
+     */
     setView(patch) {
-      Object.assign(state.view, patch);
-      if ('advanced' in patch) writeLocal(LS_ADVANCED, !!state.view.advanced);
-      if ('openSections' in patch) writeLocal(LS_SECTIONS, state.view.openSections);
+      const { mode: _mode, ...rest } = patch;
+      if ('step' in rest && !STEPS.includes(rest.step)) delete rest.step;
+      Object.assign(state.view, rest);
+      state.view.mode = modeOf(state.view.step);
+      if ('step' in rest) writeLocal(LS_STEP, state.view.step);
+      if ('advanced' in rest) writeLocal(LS_ADVANCED, !!state.view.advanced);
+      if ('openSections' in rest) writeLocal(LS_SECTIONS, state.view.openSections);
       emit('view');
     },
 

@@ -112,7 +112,7 @@ export function mountPrintPanel(el, ctx) {
 
   // ---- Header -------------------------------------------------------------
   const back = h('button', { type: 'button', class: 'link-btn back-btn', text: '← Back to design' });
-  back.addEventListener('click', () => store.setView({ mode: 'design' }));
+  back.addEventListener('click', () => store.setView({ step: 'shape' }));
   const header = h('div', { class: 'print-header' }, [back, h('h2', { class: 'print-title', text: 'Prepare print' })]);
 
   const step = (n, title, children) => h('section', { class: 'panel-card print-step', 'aria-labelledby': `print-step-${n}` }, [

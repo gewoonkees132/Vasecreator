@@ -287,3 +287,20 @@ test('without a db the store still works and stays bounded', () => {
   s.undo();
   assert.equal(s.state.design.form.height, 100 + MAX_STEPS + 4);
 });
+
+test('the step drives the mode, and switching steps adds no history step', () => {
+  const store = createStore({ design: base, label: 'Start' });
+  assert.equal(store.state.view.step, 'shape');
+  assert.equal(store.state.view.mode, 'design');
+  const steps = store.history().length;
+  store.setView({ step: 'print' });
+  assert.equal(store.state.view.mode, 'print');
+  // mode follows the step and can't be set on its own; an unknown step is ignored.
+  store.setView({ mode: 'design' });
+  assert.equal(store.state.view.mode, 'print');
+  store.setView({ step: 'nowhere' });
+  assert.equal(store.state.view.step, 'print');
+  store.setView({ step: 'pattern' });
+  assert.equal(store.state.view.mode, 'design');
+  assert.equal(store.history().length, steps);
+});
