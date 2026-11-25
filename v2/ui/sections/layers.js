@@ -39,9 +39,9 @@ const section = {
       onCommit: commit,
     });
     const overhang = numberField({
-      label: 'Overhang limit', unit: '°', ...limit(['overhangLimitDeg', 'layers.overhangLimitDeg'], { min: 5, max: 80, step: 1 }), decimals: 0,
-      value: l0.overhangLimitDeg,
-      onInput: (v) => store.change('Overhang limit', (d) => { d.layers.overhangLimitDeg = v; }),
+      label: 'Overhang limit', unit: '°', ...limit(['overhangLimitDeg', 'rules.overhangLimitDeg'], { min: 5, max: 80, step: 1 }), decimals: 0,
+      value: store.state.design.rules.overhangLimitDeg,
+      onInput: (v) => store.change('Overhang limit', (d) => { d.rules.overhangLimitDeg = v; }),
       onCommit: commit,
     });
     const ramp = numberField({
@@ -74,7 +74,7 @@ const section = {
       bead.set(l.beadWidthMm);
       layer.set(l.layerHeightMm);
       layer.setInfo(layerInfo(l));
-      overhang.set(l.overhangLimitDeg);
+      overhang.set(state.design.rules.overhangLimitDeg);
       ramp.set(l.seam.rampLengthMm);
       position.set(l.seam.position);
       angle.set(l.seam.angleDeg);

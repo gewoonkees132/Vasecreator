@@ -203,7 +203,7 @@ export function mountDock(el, ctx, frame) {
       carousel.replaceChildren(...tiles.map((t) => t.btn), imageTile, makeTile, fileInput);
       carousel.setAttribute('aria-label', `Patterns for ${s.toUpperCase()}`);
     }
-    const slot = d.surface[s];
+    const slot = d.form.detail[s];
     let selected = null;
     for (const t of tiles) {
       const on = slot ? t.id === slot.pattern : t.id === null;

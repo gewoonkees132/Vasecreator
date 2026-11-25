@@ -20,6 +20,19 @@ export { GcodeError } from './gcode.js';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
+// The Pattern's density readout (D40): nodes per layer, the node spacing on
+// the narrowest and widest layer of its range, and whether the density was
+// clamped to the point cap. Null without a Pattern that prints.
+function patternInfo(m) {
+  const lp = m.pattern;
+  if (!lp) return null;
+  return {
+    nodes: lp.nodes, columns: lp.columns, rows: lp.rows, repeats: lp.repeats,
+    spacingMinMm: lp.spacingMinMm, spacingMaxMm: lp.spacingMaxMm, clamped: lp.clamped,
+    pointsPerLayer: m.patternPoints,
+  };
+}
+
 function summarise(tp, design, warnings, started) {
   const { path, pointCount } = tp;
   const w = design.layers.beadWidthMm;
@@ -49,6 +62,7 @@ function summarise(tp, design, warnings, started) {
     bounds: { min, max },
     profileLine: evaluateProfileLine(tp.model.profile),
     seamLine: tp.seamLine,
+    pattern: patternInfo(tp.model),
     pointCount,
     computeMs: now() - started,
   };

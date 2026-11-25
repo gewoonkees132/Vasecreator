@@ -6,7 +6,7 @@
 // advice. Messages are plain and give heights in mm, never layer numbers.
 
 /** Issue bits per point (ARCHITECTURE.md). */
-export const ISSUE = Object.freeze({ overhang: 1, finePattern: 2, narrow: 4, bed: 8 });
+export const ISSUE = Object.freeze({ overhang: 1, finePattern: 2, narrow: 4, bed: 8, support: 16 });
 
 // Layer kinds as numbers, to stay free of an import cycle with toolpath.js.
 const OUTER = 1;
@@ -72,18 +72,38 @@ function flaggedLayers(tp, bit) {
 }
 
 // Bead-scale curvature (V6): the circle through each wall point and its two
-// neighbours must be at least half a bead wide.
+// neighbours must be at least half a bead wide. At a node of the Pattern the
+// neighbours are the nodes either side: the wall runs straight from node to
+// node by design (D37), and the points the engine adds in between would
+// otherwise turn every node into a corner, by an amount that depends only on
+// how many points there are.
 function markCurvature(tp, w) {
-  const { path, kinds, layerOf, issues, pointCount } = tp;
+  const { path, kinds, layerOf, issues, pointCount, nodes } = tp;
   const limit = w / 2;
+  // The next node from p in direction d on the same layer and wall, or −1.
+  const nodeFrom = (p, d) => {
+    for (let q = p + d; q >= 0 && q < pointCount; q += d) {
+      if (kinds[q] !== kinds[p] || layerOf[q] !== layerOf[p]) return -1;
+      if (nodes[q]) return q;
+    }
+    return -1;
+  };
   for (let p = 1; p < pointCount - 1; p++) {
     const k = kinds[p];
-    if ((k !== OUTER && k !== INNER) || kinds[p - 1] !== k || kinds[p + 1] !== k) continue;
-    if (layerOf[p - 1] !== layerOf[p] || layerOf[p + 1] !== layerOf[p]) continue;
-    const ax = path[3 * p - 3] - path[3 * p];
-    const ay = path[3 * p - 2] - path[3 * p + 1];
-    const bx = path[3 * p + 3] - path[3 * p];
-    const by = path[3 * p + 4] - path[3 * p + 1];
+    if (k !== OUTER && k !== INNER) continue;
+    let a = p - 1;
+    let b = p + 1;
+    if (nodes?.[p]) {
+      a = nodeFrom(p, -1);
+      b = nodeFrom(p, 1);
+      if (a < 0 || b < 0) continue;
+    }
+    if (kinds[a] !== k || kinds[b] !== k) continue;
+    if (layerOf[a] !== layerOf[p] || layerOf[b] !== layerOf[p]) continue;
+    const ax = path[3 * a] - path[3 * p];
+    const ay = path[3 * a + 1] - path[3 * p + 1];
+    const bx = path[3 * b] - path[3 * p];
+    const by = path[3 * b + 1] - path[3 * p + 1];
     const cross = Math.abs(ax * by - ay * bx);
     if (cross < 1e-12) continue;
     const cx = bx - ax;
@@ -132,7 +152,8 @@ function markBed(tp, printer, w) {
  * @returns {{ id: string, severity: string, bit: number, message: string }[]}
  */
 export function designChecks(tp, design, printer) {
-  const { beadWidthMm: w, layerHeightMm: h, overhangLimitDeg } = design.layers;
+  const { beadWidthMm: w, layerHeightMm: h } = design.layers;
+  const { overhangLimitDeg } = design.rules;
   markCurvature(tp, w);
   const offBed = markBed(tp, printer, w);
   const warnings = [];
@@ -145,7 +166,18 @@ export function designChecks(tp, design, printer) {
     });
   }
 
-  // Vertical fineness (V5): a pattern needs at least two layers per bump.
+  // Bead support (D43): a bead of the Pattern, or of the layer on top of it,
+  // sits more than rules.supportRatio of a bead width off the bead below.
+  const support = flaggedLayers(tp, ISSUE.support);
+  if (support) {
+    warnings.push({
+      id: 'support', severity: 'warning', bit: ISSUE.support,
+      message: `Bead not supported ${describeHeights(heightRanges(support, tp.layerZ))}`,
+    });
+  }
+
+  // Vertical fineness (V5): a Detailed morph needs at least two layers per
+  // bump. The Pattern is exempt: one row is one layer by design (D43).
   let rowsTooFine = false;
   for (const s of tp.model.active) {
     if (s.features.up > 0 && s.tileHeightMm / s.features.up < 2 * h) rowsTooFine = true;

@@ -87,7 +87,7 @@ export function onImageSaved(fn) {
  */
 export function imageHashes(design) {
   const assets = design?.assets && typeof design.assets === 'object' ? design.assets : {};
-  const refs = [design?.surface?.a?.pattern, design?.surface?.b?.pattern, design?.form?.morph?.map];
+  const refs = [design?.form?.detail?.a?.pattern, design?.form?.detail?.b?.pattern, design?.form?.morph?.map];
   const out = new Set();
   for (const ref of refs) {
     if (typeof ref !== 'string' || !ref.startsWith(IMAGE_PREFIX)) continue;

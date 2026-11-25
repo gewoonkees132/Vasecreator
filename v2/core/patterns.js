@@ -7,15 +7,28 @@
 //
 // Recipes are plain JSON (v2/library/patterns.json):
 //   { "kind": "shape", "shape": "flutes" }
-//   { "kind": "motif", "cells": [1, -1, 1], "layout": "brick", "edges": "soft" }
+//   { "kind": "bitmap", "columns": 6, "rows": 2, "cells": "++--++-++++-", "edges": "soft" }
 //   { "kind": "plain" }
+//
+// A bitmap is a grid of in / flat / out cells (D45, D48), shared by the
+// Detailed morph's coarse grids and the bead-scale Pattern
+// (core/layer-pattern.js). `cells` holds one character per cell: '+' out,
+// '0' flat, '-' in. It is row-major with row 0 at the bottom of the tile, so
+// the first row printed is the first row written. As a Detailed morph it is
+// drawn soft: each cell blends into its neighbours across both borders over
+// the `edges` width (optional, 'soft' by default). The Pattern reads the same
+// cells crisp, node for node.
 
 import { TAU, dcos, dsin, frac, lerp, smoothstep } from './math.js';
 
 /** Width of a cell-to-cell transition, as a share of one cell. */
 export const EDGE_WIDTHS = { sharp: 0.1, soft: 0.35, round: 1 };
 
-export const MOTIF_LAYOUTS = ['stripes', 'diagonal', 'brick', 'checker'];
+/** The most cells a bitmap has across or up (D48). */
+export const MAX_BITMAP_CELLS = 64;
+const CELL_VALUES = { '+': 1, 0: 0, '-': -1 };
+/** Quick fills that lay one row of cells out over a whole tile (D45). */
+export const FILL_LAYOUTS = ['stripes', 'diagonal', 'brick', 'checker'];
 
 export const PLAIN = Object.freeze({
   id: 'plain',
@@ -146,33 +159,89 @@ export const SHAPES = {
   basket,
 };
 
-// One row of motif cells along t (in cells). Neighbouring cells blend over
-// `width` cells, centred on their shared border.
-function motifRow(cells, t, width) {
-  const n = cells.length;
+const parsed = new WeakMap();
+
+/**
+ * A bitmap's cells as numbers (+1, 0 or −1), row-major from the bottom row.
+ * Cached per recipe object, so evaluating a tile never parses it again.
+ * @param {{ columns: number, rows: number, cells: string }} recipe
+ * @returns {Int8Array}
+ */
+export function bitmapValues(recipe) {
+  let values = parsed.get(recipe);
+  if (!values) {
+    values = new Int8Array(recipe.columns * recipe.rows);
+    for (let i = 0; i < values.length; i++) values[i] = CELL_VALUES[recipe.cells[i]] ?? 0;
+    parsed.set(recipe, values);
+  }
+  return values;
+}
+
+/**
+ * A bitmap recipe from numbers: over ½ is out, under −½ in, the rest flat.
+ * @param {number} columns
+ * @param {number} rows
+ * @param {ArrayLike<number>} values row-major, bottom row first
+ * @param {'sharp' | 'soft' | 'round'} [edges]
+ * @returns {{ kind: 'bitmap', columns: number, rows: number, cells: string, edges?: string }}
+ */
+export function makeBitmap(columns, rows, values, edges) {
+  let cells = '';
+  for (let i = 0; i < columns * rows; i++) cells += values[i] > 0.5 ? '+' : values[i] < -0.5 ? '-' : '0';
+  const recipe = { kind: 'bitmap', columns, rows, cells };
+  if (edges) recipe.edges = edges;
+  return recipe;
+}
+
+/**
+ * One row of cells laid out over a whole tile, the quick fills (D45):
+ * stripes (the row alone), diagonal (each row one cell further round), brick
+ * (every other row half a row round; an odd row doubles its cells so the
+ * half is whole) or checker (every other row inverted).
+ * @param {number[]} row values from −1 to 1
+ * @param {'stripes' | 'diagonal' | 'brick' | 'checker'} layout
+ * @param {'sharp' | 'soft' | 'round'} [edges]
+ */
+export function fillBitmap(row, layout, edges) {
+  const n = row.length;
+  if (layout === 'diagonal') {
+    const values = [];
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) values.push(row[(c + r) % n]);
+    return makeBitmap(n, n, values, edges);
+  }
+  if (layout === 'brick') {
+    const wide = n % 2 ? row.flatMap((v) => [v, v]) : row;
+    const m = wide.length;
+    return makeBitmap(m, 2, [...wide, ...wide.map((_, c) => wide[(c + m / 2) % m])], edges);
+  }
+  if (layout === 'checker') return makeBitmap(n, 2, [...row, ...row.map((v) => -v)], edges);
+  return makeBitmap(n, 1, row, edges);
+}
+
+// One row of cells along t (in cells, wrapping). Neighbouring cells blend
+// over `width` cells, centred on their shared border.
+function cellRow(values, offset, n, t, width) {
   const u = t - n * Math.floor(t / n);
   const i = Math.min(Math.floor(u), n - 1);
   const f = u - i;
   const h = width / 2;
-  const here = cells[i];
-  if (f < 0.5) return lerp(cells[(i + n - 1) % n], here, smoothstep(-h, h, f));
-  return lerp(here, cells[(i + 1) % n], smoothstep(1 - h, 1 + h, f));
+  const here = values[offset + i];
+  if (f < 0.5) return lerp(values[offset + ((i + n - 1) % n)], here, smoothstep(-h, h, f));
+  return lerp(here, values[offset + ((i + 1) % n)], smoothstep(1 - h, 1 + h, f));
 }
 
-function motif(recipe, x, y) {
-  const { cells, layout = 'stripes', edges = 'soft' } = recipe;
-  const n = cells.length;
-  const width = EDGE_WIDTHS[edges];
-  if (layout === 'stripes') return motifRow(cells, x * n, width);
-  if (layout === 'diagonal') return motifRow(cells, (x + y) * n, width);
-
-  // Brick and checker: two rows per tile, blended into each other like cells.
-  const row = (j) =>
-    layout === 'brick'
-      ? motifRow(cells, x * n + (j & 1) * (n / 2), width)
-      : (j & 1 ? -1 : 1) * motifRow(cells, x * n, width);
-  const r = 2 * y;
-  const j = Math.floor(r);
+// A bitmap drawn soft, the Detailed morph look: each row blends around, then
+// neighbouring rows blend into each other up the tile, over the same share
+// of a cell.
+function softBitmap(recipe, x, y) {
+  const { columns, rows } = recipe;
+  const values = bitmapValues(recipe);
+  const width = EDGE_WIDTHS[recipe.edges ?? 'soft'];
+  const t = x * columns;
+  const row = (j) => cellRow(values, (((j % rows) + rows) % rows) * columns, columns, t, width);
+  if (rows === 1) return row(0);
+  const r = y * rows;
+  const j = Math.min(Math.floor(r), rows - 1);
   const f = r - j;
   const h = width / 2;
   if (f < 0.5) return lerp(row(j - 1), row(j), smoothstep(-h, h, f));
@@ -190,13 +259,14 @@ export function validateRecipe(recipe) {
     if (!Object.hasOwn(SHAPES, recipe.shape)) throw new RangeError(`Unknown pattern shape: ${recipe.shape}`);
     return;
   }
-  if (recipe.kind === 'motif') {
-    const { cells, layout = 'stripes', edges = 'soft' } = recipe;
-    if (!Array.isArray(cells) || cells.length < 2 || cells.some((c) => !(c >= -1 && c <= 1))) {
-      throw new RangeError('Motif cells must be 2 or more values from -1 to 1');
+  if (recipe.kind === 'bitmap') {
+    const { columns, rows, cells, edges = 'soft' } = recipe;
+    const size = (n) => Number.isInteger(n) && n >= 1 && n <= MAX_BITMAP_CELLS;
+    if (!size(columns) || !size(rows)) throw new RangeError(`A bitmap has 1 to ${MAX_BITMAP_CELLS} cells a side`);
+    if (typeof cells !== 'string' || cells.length !== columns * rows || /[^+0-]/.test(cells)) {
+      throw new RangeError('Bitmap cells must be one of + 0 - per cell');
     }
-    if (!MOTIF_LAYOUTS.includes(layout)) throw new RangeError(`Unknown motif layout: ${layout}`);
-    if (!Object.hasOwn(EDGE_WIDTHS, edges)) throw new RangeError(`Unknown motif edges: ${edges}`);
+    if (!Object.hasOwn(EDGE_WIDTHS, edges)) throw new RangeError(`Unknown bitmap edges: ${edges}`);
     return;
   }
   throw new RangeError(`Unknown pattern kind: ${recipe.kind}`);
@@ -216,7 +286,7 @@ export function evaluatePattern(recipe, x, y) {
   switch (recipe.kind) {
     case 'plain': return 0;
     case 'shape': return SHAPES[recipe.shape](u, v);
-    case 'motif': return motif(recipe, u, v);
+    case 'bitmap': return softBitmap(recipe, u, v);
     default: throw new RangeError(`Unknown pattern kind: ${recipe.kind}`);
   }
 }

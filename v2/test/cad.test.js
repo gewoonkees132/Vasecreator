@@ -6,7 +6,7 @@ import { normaliseDesign } from '../core/design.js';
 import { buildToolpath } from '../core/toolpath.js';
 import { writeDxf, buildSolid, writeStl } from '../core/cad.js';
 import { exportCad } from '../core/engine.js';
-import { library, presets, cylinder } from './support/fixtures.js';
+import { library, presets, cylinder, withPattern, TILES } from './support/fixtures.js';
 
 // ---------- DXF ----------
 
@@ -115,6 +115,7 @@ const cases = [
   ['two walls that follow', (() => { const d = normaliseDesign(presets[2]); d.finish.walls = 2; d.finish.innerWall = 'follow'; return d; })()],
   ['a sleeve (no base)', normaliseDesign(cylinder({ baseLayers: 0 }))],
   ['a base with a hole', (() => { const d = normaliseDesign(cylinder({ baseLayers: 3 })); d.base.hole = { diameter: 20 }; return d; })()],
+  ['a Pattern, two walls', (() => { const d = normaliseDesign(withPattern(structuredClone(presets[0]), TILES.knit, { fromMm: 10, toMm: 150 })); d.finish.walls = 2; return d; })()],
 ];
 
 for (const [label, design] of cases) {

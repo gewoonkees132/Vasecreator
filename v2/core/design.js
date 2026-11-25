@@ -1,17 +1,22 @@
 // The design document (design §13): defaults, normalising, and the editing
 // rules for the profile points (design §9.1).
 //
+// Version 3 (D50, no migration): the Detailed morph is form.detail (it was
+// design.surface), the bead-scale Pattern is design.pattern (null when off),
+// and the warning thresholds are design.rules.
+//
 // Everything that edits a design goes through here, so the core can rely on a
 // normalised design: knots sorted, a layer height apart, radii above the
 // minimum, every field present and in range.
 
 import { BLEND_SHAPES } from './surface.js';
+import { DENSITY_FACES, DEFAULT_POINTS, DEPTH_BEADS, FADE_SHAPES, SPACING_BEADS, defaultPatternRange } from './layer-pattern.js';
 import { createProfile } from './profile.js';
 import { validateRecipe } from './patterns.js';
 import { MORPH_DEFAULTS, isMorphMap } from './morph.js';
 
 export const DESIGN_SCHEMA = 'vasecreator/design';
-export const DESIGN_VERSION = 2;
+export const DESIGN_VERSION = 3;
 
 export const INTERPS = ['catmullRomCentripetal', 'monotone', 'linear'];
 export const FOOTPRINTS = ['circle', 'rectangle'];
@@ -38,15 +43,20 @@ export const LIMITS = Object.freeze({
   knotR: { min: 1, max: 500, step: 0.1 },             // knot r
   tension: { min: 0, max: 1, step: 0.01 },            // form.profile.tension
   cornerMm: { min: 0, max: 100, step: 0.5 },          // form.profile.cornerMm and knot corner
-  depthMm: { min: 0, max: 10, step: 0.1 },            // slot depthMm
-  repeats: { min: 1, max: 200, step: 1 },             // slot repeats
-  tileHeightMm: { min: 3, max: 1000, step: 0.5 },     // slot tileHeightMm
-  fromMm: { min: 0, max: 1000, step: 0.5 },           // surface.fromMm
-  toMm: { min: 0, max: 1000, step: 0.5 },             // surface.toMm
-  amount: { min: 0, max: 1, step: 0.01 },             // surface.blend.amount
+  depthMm: { min: 0, max: 10, step: 0.1 },            // detail slot depthMm
+  repeats: { min: 1, max: 200, step: 1 },             // detail slot repeats
+  tileHeightMm: { min: 3, max: 1000, step: 0.5 },     // detail slot tileHeightMm
+  fromMm: { min: 0, max: 1000, step: 0.5 },           // form.detail.fromMm, pattern.fromMm
+  toMm: { min: 0, max: 1000, step: 0.5 },             // form.detail.toMm, pattern.toMm
+  amount: { min: 0, max: 1, step: 0.01 },             // form.detail.blend.amount, pattern.fade.amount
+  patternDepthMm: { min: 0, max: 6, step: 0.05 },     // pattern.depthMm; the real most is ½ bead width
+  spacingMm: { min: 0.25, max: 36, step: 0.1 },       // pattern.density.spacingMm; really ½ to 3 bead widths
+  points: { min: 1, max: 1600, step: 1 },             // pattern.density.points
+  softenCells: { min: 0, max: 2, step: 0.05 },        // pattern.softenCells
   beadWidthMm: { min: 0.5, max: 12, step: 0.1 },      // layers.beadWidthMm
   layerHeightMm: { min: 0.2, max: 8, step: 0.05 },    // layers.layerHeightMm
-  overhangLimitDeg: { min: 5, max: 80, step: 1 },     // layers.overhangLimitDeg
+  overhangLimitDeg: { min: 5, max: 80, step: 1 },     // rules.overhangLimitDeg
+  supportRatio: { min: 0.1, max: 1, step: 0.05 },     // rules.supportRatio, of a bead width
   rampLengthMm: { min: 0, max: 200, step: 1 },        // layers.seam.rampLengthMm
   angleDeg: { min: 0, max: 359, step: 1 },            // layers.seam.angleDeg (wraps)
   baseLayers: { min: 0, max: 20, step: 1 },           // base.layers
@@ -82,20 +92,21 @@ const DEFAULT = {
     plan: { footprint: 'circle', depthRatio: 1, cornerRounding: 0 },
     twist: { degrees: 0 },
     morph: null,
+    detail: {
+      fromMm: 10,
+      toMm: 150,
+      a: { pattern: 'lib:flutes@1', depthMm: 2, repeats: 20, tileHeightMm: 19.5 },
+      b: { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 19.5 },
+      blend: { shape: 'fadesUp', amount: 1 },
+    },
   },
-  surface: {
-    fromMm: 10,
-    toMm: 150,
-    a: { pattern: 'lib:flutes@1', depthMm: 2, repeats: 20, tileHeightMm: 19.5 },
-    b: { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 19.5 },
-    blend: { shape: 'fadesUp', amount: 1 },
-  },
+  pattern: null,
   layers: {
     beadWidthMm: 3,
     layerHeightMm: 1.5,
-    overhangLimitDeg: 45,
     seam: { rampLengthMm: 15, position: 'hidden', angleDeg: 0 },
   },
+  rules: { overhangLimitDeg: 45, supportRatio: 0.5 },
   base: { layers: 3, pattern: 'spiral', spacingRatio: 0.9, outline: true, hole: { diameter: 0 } },
   finish: { walls: 1, wallSpacingMm: 2.7, innerWall: 'smooth' },
   assets: {},
@@ -215,19 +226,55 @@ function normaliseMorph(input) {
   };
 }
 
+// A From / To pair inside the height, at least a layer apart.
+function normaliseRange(input, fallback, height, h) {
+  let fromMm = num(input.fromMm, fallback.fromMm, LIMITS.fromMm);
+  let toMm = num(input.toMm, fallback.toMm, LIMITS.toMm);
+  if (fromMm > toMm) [fromMm, toMm] = [toMm, fromMm];
+  toMm = Math.min(toMm, height);
+  fromMm = Math.min(fromMm, Math.max(toMm - h, 0));
+  return { fromMm, toMm };
+}
+
+// design.pattern (D38–D42): null, or a drawing id with every setting clamped.
+// Depth is at most half a bead and the spacing half a bead to three beads,
+// for the bead width the design has now. A drawing that can't be found is
+// kept; the toolpath reports it.
+function normalisePattern(input, d) {
+  if (!isObject(input) || typeof input.drawing !== 'string' || !input.drawing || input.drawing.length > 80) return null;
+  const w = d.layers.beadWidthMm;
+  const density = isObject(input.density) ? input.density : {};
+  const fade = isObject(input.fade) ? input.fade : {};
+  const range = normaliseRange(input, defaultPatternRange(d), d.form.height, d.layers.layerHeightMm);
+  return {
+    drawing: input.drawing,
+    depthMm: num(input.depthMm, DEPTH_BEADS.default * w, { min: 0, max: DEPTH_BEADS.max * w }),
+    density: {
+      by: pick(density.by, DENSITY_FACES, 'spacing'),
+      spacingMm: num(density.spacingMm, SPACING_BEADS.default * w, { min: SPACING_BEADS.min * w, max: SPACING_BEADS.max * w }),
+      points: num(density.points, DEFAULT_POINTS, LIMITS.points, true),
+    },
+    fromMm: range.fromMm,
+    toMm: range.toMm,
+    fade: { shape: pick(fade.shape, FADE_SHAPES, 'even'), amount: num(fade.amount, 1, LIMITS.amount) },
+    softenCells: num(input.softenCells, 0, LIMITS.softenCells),
+  };
+}
+
 /**
- * A design without the phase 2 fields when they are empty (assets {} and
- * form.morph null), so files and G-code of designs that use neither stay
- * exactly as before.
+ * A design without the optional fields when they are empty (assets {},
+ * form.morph null and pattern null), so files stay short.
  * @param {object} d a design
  * @returns {object} d itself, or a shallow copy without the empty fields
  */
 export function compactDesign(d) {
   const emptyAssets = !isObject(d.assets) || Object.keys(d.assets).length === 0;
   const noMorph = isObject(d.form) && d.form.morph == null;
-  if (!emptyAssets && !noMorph) return d;
+  const noPattern = Object.hasOwn(d, 'pattern') && d.pattern == null;
+  if (!emptyAssets && !noMorph && !noPattern) return d;
   const out = { ...d };
   if (emptyAssets) delete out.assets;
+  if (noPattern) delete out.pattern;
   if (noMorph) {
     out.form = { ...d.form };
     delete out.form.morph;
@@ -267,9 +314,10 @@ export function normaliseDesign(json) {
   const profile = isObject(form.profile) ? form.profile : {};
   const plan = isObject(form.plan) ? form.plan : {};
   const twist = isObject(form.twist) ? form.twist : {};
-  const surface = isObject(json.surface) ? json.surface : {};
-  const blend = isObject(surface.blend) ? surface.blend : {};
+  const detail = isObject(form.detail) ? form.detail : {};
+  const blend = isObject(detail.blend) ? detail.blend : {};
   const layers = isObject(json.layers) ? json.layers : {};
+  const rules = isObject(json.rules) ? json.rules : {};
   const seam = isObject(layers.seam) ? layers.seam : {};
   const base = isObject(json.base) ? json.base : {};
   const hole = isObject(base.hole) ? base.hole : {};
@@ -282,11 +330,7 @@ export function normaliseDesign(json) {
   const height = num(form.height, Number.isFinite(lastKnotZ) ? lastKnotZ : D.form.height, LIMITS.height);
   const knots = normaliseKnots(profile.knots, height, layerHeightMm, 2 * beadWidthMm, D.form.profile.knots);
 
-  let fromMm = num(surface.fromMm, D.surface.fromMm, LIMITS.fromMm);
-  let toMm = num(surface.toMm, D.surface.toMm, LIMITS.toMm);
-  if (fromMm > toMm) [fromMm, toMm] = [toMm, fromMm];
-  toMm = Math.min(toMm, height);
-  fromMm = Math.min(fromMm, Math.max(toMm - layerHeightMm, 0));
+  const { fromMm, toMm } = normaliseRange(detail, D.form.detail, height, layerHeightMm);
 
   const angle = num(seam.angleDeg, 0);
   const out = {
@@ -310,26 +354,30 @@ export function normaliseDesign(json) {
       },
       twist: { degrees: num(twist.degrees, 0, LIMITS.twist) },
       morph: normaliseMorph(form.morph),
-    },
-    surface: {
-      fromMm,
-      toMm,
-      a: normaliseSlot(surface.a, D.surface.a),
-      b: isObject(surface.b) ? normaliseSlot(surface.b, { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 19.5 }) : null,
-      blend: {
-        shape: pick(blend.shape, BLEND_SHAPES, 'fadesUp'),
-        amount: num(blend.amount, 1, LIMITS.amount),
+      detail: {
+        fromMm,
+        toMm,
+        a: normaliseSlot(detail.a, D.form.detail.a),
+        b: isObject(detail.b) ? normaliseSlot(detail.b, { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 19.5 }) : null,
+        blend: {
+          shape: pick(blend.shape, BLEND_SHAPES, 'fadesUp'),
+          amount: num(blend.amount, 1, LIMITS.amount),
+        },
       },
     },
+    pattern: null,
     layers: {
       beadWidthMm,
       layerHeightMm,
-      overhangLimitDeg: num(layers.overhangLimitDeg, D.layers.overhangLimitDeg, LIMITS.overhangLimitDeg),
       seam: {
         rampLengthMm: num(seam.rampLengthMm, D.layers.seam.rampLengthMm, LIMITS.rampLengthMm),
         position: pick(seam.position, SEAM_POSITIONS, 'fixed'),
         angleDeg: angle - 360 * Math.floor(angle / 360),
       },
+    },
+    rules: {
+      overhangLimitDeg: num(rules.overhangLimitDeg, D.rules.overhangLimitDeg, LIMITS.overhangLimitDeg),
+      supportRatio: num(rules.supportRatio, D.rules.supportRatio, LIMITS.supportRatio),
     },
     base: {
       layers: num(base.layers, D.base.layers, LIMITS.baseLayers, true),
@@ -346,9 +394,11 @@ export function normaliseDesign(json) {
     assets: normaliseAssets(json.assets),
   };
   // C7: tile heights are whole layers, so pattern rows line up with beads.
-  for (const slot of [out.surface.a, out.surface.b]) {
+  for (const slot of [out.form.detail.a, out.form.detail.b]) {
     if (slot) slot.tileHeightMm = snapTileHeight(slot.tileHeightMm, layerHeightMm);
   }
+  // Last: its defaults depend on the rest (the bead width, the Detailed morph's range).
+  out.pattern = normalisePattern(json.pattern, out);
   return out;
 }
 
@@ -377,7 +427,7 @@ function deepEqual(a, b) {
 
 /**
  * Deep equality of two designs, ignoring meta (name, id, dates). Empty
- * assets and a null morph equal their absence (compactDesign).
+ * assets, a null morph and a null pattern equal their absence (compactDesign).
  */
 export function designsEqual(a, b) {
   const { meta: _a, ...restA } = compactDesign(a);
@@ -385,12 +435,16 @@ export function designsEqual(a, b) {
   return deepEqual(restA, restB);
 }
 
-// Keeps the surface range inside the height after the height changed.
-function clampSurface(d) {
+// Keeps the Detailed morph's and the Pattern's ranges inside the height
+// after the height changed.
+function clampRanges(d) {
   const H = d.form.height;
   const h = d.layers.layerHeightMm;
-  d.surface.toMm = Math.min(d.surface.toMm, H);
-  d.surface.fromMm = Math.min(d.surface.fromMm, Math.max(d.surface.toMm - h, 0));
+  for (const range of [d.form.detail, d.pattern]) {
+    if (!range) continue;
+    range.toMm = Math.min(range.toMm, H);
+    range.fromMm = Math.min(range.fromMm, Math.max(range.toMm - h, 0));
+  }
 }
 
 /**
@@ -414,7 +468,7 @@ export function moveKnot(d, index, { z, r } = {}) {
   } else if (index === knots.length - 1) {
     k.z = Math.min(Math.max(z, knots[index - 1].z + h, LIMITS.height.min), LIMITS.height.max);
     d.form.height = k.z;
-    clampSurface(d);
+    clampRanges(d);
   } else {
     k.z = Math.min(Math.max(z, knots[index - 1].z + h), knots[index + 1].z - h);
   }
@@ -453,8 +507,8 @@ export function deleteKnot(d, index) {
 }
 
 /**
- * Sets the height, scaling every point height and the surface range in
- * proportion. Stops short of squeezing two points closer than a layer.
+ * Sets the height, scaling every point height, the Detailed morph's range
+ * and the Pattern's range in proportion. Stops short of squeezing two points closer than a layer.
  * @param {object} d @param {number} mm
  */
 export function setHeight(d, mm) {
@@ -469,9 +523,12 @@ export function setHeight(d, mm) {
   knots[0].z = 0;
   knots[knots.length - 1].z = target;
   d.form.height = target;
-  d.surface.fromMm *= s;
-  d.surface.toMm *= s;
-  clampSurface(d);
+  for (const range of [d.form.detail, d.pattern]) {
+    if (!range) continue;
+    range.fromMm *= s;
+    range.toMm *= s;
+  }
+  clampRanges(d);
 }
 
 /**

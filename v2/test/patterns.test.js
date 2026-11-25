@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { PLAIN, evaluatePattern, findPattern, sampleTile, validateRecipe } from '../core/patterns.js';
+import { PLAIN, bitmapValues, evaluatePattern, fillBitmap, findPattern, makeBitmap, sampleTile, validateRecipe } from '../core/patterns.js';
 import { REFERENCE_POT, measureWall, wallLimits } from './support/printability.js';
 
 const library = JSON.parse(readFileSync(new URL('../library/patterns.json', import.meta.url), 'utf8'));
@@ -79,17 +79,44 @@ test('evaluation is repeatable to the bit', () => {
   }
 });
 
-test('brick motifs shift every other row by half a repeat', () => {
-  const recipe = { kind: 'motif', cells: [1, -1, 1], layout: 'brick', edges: 'soft' };
+test('a brick fill shifts every other row by half a repeat', () => {
+  const recipe = fillBitmap([1, -1, 1], 'brick', 'soft');
+  validateRecipe(recipe);
+  // An odd row doubles its cells, so the half repeat is whole.
+  assert.deepEqual([recipe.columns, recipe.rows, recipe.cells], [6, 2, '++--++-++++-']);
   for (let k = 0; k < 50; k++) {
     const x = k / 50;
     assert.ok(Math.abs(evaluatePattern(recipe, x, 0.25) - evaluatePattern(recipe, x + 0.5, 0.75)) < 1e-12);
   }
+  assert.equal(fillBitmap([1, -1], 'brick').cells, '+--+');
+});
+
+test('the other fills lay a row out as stripes, a diagonal or a checker', () => {
+  assert.deepEqual(fillBitmap([1, 0, -1], 'stripes'), { kind: 'bitmap', columns: 3, rows: 1, cells: '+0-' });
+  // Each row one cell further round, so an out cell climbs to the left.
+  assert.equal(fillBitmap([1, 0, -1], 'diagonal').cells, '+0-0-+-+0');
+  assert.equal(fillBitmap([1, 0, -1], 'checker').cells, '+0--0+');
 });
 
 test('stripes depend only on the position around', () => {
-  const recipe = { kind: 'motif', cells: [1, 0, -1], layout: 'stripes', edges: 'round' };
+  const recipe = { kind: 'bitmap', columns: 3, rows: 1, cells: '+0-', edges: 'round' };
   assert.equal(evaluatePattern(recipe, 0.3, 0.1), evaluatePattern(recipe, 0.3, 0.8));
+});
+
+test('a bitmap is drawn soft: whole cells in the middle, blended borders', () => {
+  const recipe = makeBitmap(4, 2, [1, -1, 0, 1, -1, 1, 1, 0]);
+  assert.deepEqual([...bitmapValues(recipe)], [1, -1, 0, 1, -1, 1, 1, 0]);
+  // Row 0 is the bottom of the tile.
+  assert.equal(evaluatePattern(recipe, 0.125, 0.25), 1);
+  assert.equal(evaluatePattern(recipe, 0.375, 0.25), -1);
+  assert.equal(evaluatePattern(recipe, 0.125, 0.75), -1);
+  // Halfway between two cells is the average of the two, around and up.
+  assert.ok(Math.abs(evaluatePattern(recipe, 0.25, 0.25) - 0) < 1e-12);
+  assert.ok(Math.abs(evaluatePattern(recipe, 0.125, 0.5) - 0) < 1e-12);
+  // Sharp edges blend over less of a cell than round ones.
+  const sharp = { ...recipe, edges: 'sharp' };
+  const round = { ...recipe, edges: 'round' };
+  assert.ok(evaluatePattern(sharp, 0.22, 0.25) > evaluatePattern(round, 0.22, 0.25));
 });
 
 test('plain is always available and flat', () => {
@@ -100,10 +127,13 @@ test('plain is always available and flat', () => {
 
 test('invalid recipes are rejected', () => {
   assert.throws(() => validateRecipe({ kind: 'shape', shape: 'nope' }), RangeError);
-  assert.throws(() => validateRecipe({ kind: 'motif', cells: [1] }), RangeError);
-  assert.throws(() => validateRecipe({ kind: 'motif', cells: [1, 2] }), RangeError);
-  assert.throws(() => validateRecipe({ kind: 'motif', cells: [1, -1], layout: 'zigzag' }), RangeError);
-  assert.throws(() => validateRecipe({ kind: 'motif', cells: [1, -1], edges: 'blurry' }), RangeError);
+  assert.throws(() => validateRecipe({ kind: 'motif', cells: [1, -1] }), RangeError, 'the motif kind is gone (D45)');
+  assert.throws(() => validateRecipe({ kind: 'bitmap', columns: 2, rows: 1, cells: '+' }), RangeError);
+  assert.throws(() => validateRecipe({ kind: 'bitmap', columns: 2, rows: 1, cells: '+x' }), RangeError);
+  assert.throws(() => validateRecipe({ kind: 'bitmap', columns: 0, rows: 1, cells: '' }), RangeError);
+  assert.throws(() => validateRecipe({ kind: 'bitmap', columns: 65, rows: 1, cells: '+'.repeat(65) }), RangeError);
+  assert.throws(() => validateRecipe({ kind: 'bitmap', columns: 2, rows: 1, cells: '+-', edges: 'blurry' }), RangeError);
+  assert.doesNotThrow(() => validateRecipe({ kind: 'bitmap', columns: 64, rows: 64, cells: '0'.repeat(4096) }));
   assert.throws(() => validateRecipe({ kind: 'image' }), RangeError);
 });
 

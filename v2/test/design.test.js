@@ -30,9 +30,9 @@ test('normalise fills missing fields and never throws on them', () => {
   const n = normaliseDesign({});
   assert.equal(n.form.height, 170);
   assert.equal(n.form.profile.knots.length, 4);
-  assert.equal(n.surface.b, null);
+  assert.equal(n.form.detail.b, null);
   assert.equal(n.base.pattern, 'spiral');
-  for (const broken of [{ form: null }, { form: { profile: { knots: 'x' } } }, { layers: { seam: 4 } }, { surface: { a: 7 } }]) {
+  for (const broken of [{ form: null }, { form: { profile: { knots: 'x' } } }, { layers: { seam: 4 } }, { form: { detail: { a: 7 } } }, { pattern: { drawing: 5 } }, { rules: 'x' }]) {
     assert.doesNotThrow(() => normaliseDesign(broken));
   }
 });
@@ -42,18 +42,18 @@ test('normalise clamps, sorts and spaces the knots', () => {
     form: {
       height: 100,
       profile: { interp: 'nope', knots: [{ z: 100, r: 50 }, { z: 0, r: 1 }, { z: 50, r: 60 }, { z: 50.5, r: 61 }, { z: 99.9, r: 40 }] },
+      detail: { fromMm: 120, toMm: -5, a: { pattern: 'lib:flutes@1', repeats: 7.6, depthMm: 99 } },
     },
     layers: { beadWidthMm: 3, layerHeightMm: 1.5, seam: { angleDeg: -90 } },
-    surface: { fromMm: 120, toMm: -5, a: { pattern: 'lib:flutes@1', repeats: 7.6, depthMm: 99 } },
     finish: { walls: 3 },
   });
   assert.deepEqual(n.form.profile.knots.map((k) => k.z), [0, 50, 100]);
   assert.equal(n.form.profile.knots[0].r, 6, 'radius at least two beads');
   assert.equal(n.form.profile.interp, 'catmullRomCentripetal');
   assert.equal(n.layers.seam.angleDeg, 270);
-  assert.equal(n.surface.a.repeats, 8);
-  assert.equal(n.surface.a.depthMm, LIMITS.depthMm.max);
-  assert.ok(n.surface.fromMm >= 0 && n.surface.fromMm < n.surface.toMm && n.surface.toMm <= 100);
+  assert.equal(n.form.detail.a.repeats, 8);
+  assert.equal(n.form.detail.a.depthMm, LIMITS.depthMm.max);
+  assert.ok(n.form.detail.fromMm >= 0 && n.form.detail.fromMm < n.form.detail.toMm && n.form.detail.toMm <= 100);
   assert.equal(n.finish.walls, 1);
 });
 
@@ -89,7 +89,8 @@ test('designsEqual ignores meta', () => {
 test('LIMITS give min, max and step for every edited field', () => {
   for (const key of ['height', 'width', 'depth', 'depthRatio', 'cornerRounding', 'twist', 'knotZ', 'knotR', 'tension', 'cornerMm',
     'depthMm', 'repeats', 'tileHeightMm', 'fromMm', 'toMm', 'amount', 'beadWidthMm', 'layerHeightMm', 'overhangLimitDeg',
-    'rampLengthMm', 'angleDeg', 'baseLayers', 'spacingRatio', 'holeDiameter', 'wallSpacingMm']) {
+    'rampLengthMm', 'angleDeg', 'baseLayers', 'spacingRatio', 'holeDiameter', 'wallSpacingMm',
+    'patternDepthMm', 'spacingMm', 'points', 'softenCells', 'supportRatio']) {
     const l = LIMITS[key];
     assert.ok(l && l.min < l.max && l.step > 0, key);
   }
@@ -108,7 +109,7 @@ test('moveKnot keeps the profile rules', () => {
   assert.equal(d.form.profile.knots[1].r, 6, 'radius stays at two beads');
   moveKnot(d, 3, { z: 140 });
   assert.equal(d.form.height, 140, 'the top point sets the height');
-  assert.ok(d.surface.toMm <= 140);
+  assert.ok(d.form.detail.toMm <= 140);
   moveKnot(d, 3, { z: 0 });
   assert.equal(d.form.profile.knots[3].z, 128 + h);
 });
@@ -135,8 +136,8 @@ test('setHeight and setWidth scale in proportion', () => {
   setHeight(d, 85);
   assert.deepEqual(d.form.profile.knots.map((k) => k.z), [0, 27.5, 64, 85]);
   assert.equal(d.form.height, 85);
-  assert.equal(d.surface.fromMm, 5);
-  assert.equal(d.surface.toMm, 75);
+  assert.equal(d.form.detail.fromMm, 5);
+  assert.equal(d.form.detail.toMm, 75);
   const w0 = widestRadius(d);
   setWidth(d, w0);
   assert.ok(Math.abs(widestRadius(d) - w0 / 2) < 1e-9);

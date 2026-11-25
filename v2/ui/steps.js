@@ -121,19 +121,21 @@ export const STEP_LIST = [
 ];
 
 /**
- * The design as a bare shape: slot A Plain (keeping its tile height) and slot
- * B none; form, layers, base and finish stay. Shape shows the pot this way
+ * The design as a bare shape: the Detailed morph's slot A Plain (keeping its
+ * tile height), slot B none and no Pattern; the rest of the form, layers,
+ * base and finish stay. Shape shows the pot this way
  * (D29), and presets open this way (D30, C29). A new object; the design given
  * is not changed.
  * @param {object} design  a normalised design
  * @returns {object}
  */
 export function shapeOnly(design) {
-  const surface = design.surface || {};
-  const tileHeightMm = surface.a?.tileHeightMm ?? surface.b?.tileHeightMm;
+  const detail = design.form.detail || {};
+  const tileHeightMm = detail.a?.tileHeightMm ?? detail.b?.tileHeightMm;
   return {
     ...design,
-    surface: { ...surface, a: { pattern: PLAIN.id, depthMm: 0, repeats: 1, tileHeightMm }, b: null },
+    form: { ...design.form, detail: { ...detail, a: { pattern: PLAIN.id, depthMm: 0, repeats: 1, tileHeightMm }, b: null } },
+    pattern: null,
   };
 }
 

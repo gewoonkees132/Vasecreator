@@ -83,7 +83,7 @@ test('dock: per-slot tools say which slot they edit once B is in use', () => {
   const d = normaliseDesign(presets[0]);   // Classic vase: A flutes, B plain
   const depth = DOCK_TOOLS.pattern.find((t) => t.id === 'depth');
   assert.equal(toolName(depth, state(d, { slot: 'a' })), 'Depth A');
-  d.surface.b = null;
+  d.form.detail.b = null;
   assert.equal(toolName(depth, state(d, { slot: 'a' })), 'Depth');
 });
 
@@ -122,14 +122,14 @@ test('dock: tools edit the design like the sheet does', () => {
   // Tile heights snap to whole layers (C7).
   const t = cloneDesign(d);
   tool('pattern', 'tile').set(t, 20.2, state(t, { slot: 'a' }));
-  assert.equal(t.surface.a.tileHeightMm, snapTileHeight(20.2, t.layers.layerHeightMm));
+  assert.equal(t.form.detail.a.tileHeightMm, snapTileHeight(20.2, t.layers.layerHeightMm));
 
   // From stays under To and To above From.
   const r = cloneDesign(d);
   tool('pattern', 'from').set(r, 1000, s);
-  assert.equal(r.surface.fromMm, r.surface.toMm - 1);
+  assert.equal(r.form.detail.fromMm, r.form.detail.toMm - 1);
   tool('pattern', 'to').set(r, 0, s);
-  assert.equal(r.surface.toMm, r.surface.fromMm + 1);
+  assert.equal(r.form.detail.toMm, r.form.detail.fromMm + 1);
 
   // The seam angle wraps.
   const a = cloneDesign(d);
@@ -141,7 +141,7 @@ test('dock: tools edit the design like the sheet does', () => {
   // Blend amount in per cent.
   const b = cloneDesign(d);
   tool('pattern', 'amount').set(b, 35, s);
-  close(b.surface.blend.amount, 0.35);
+  close(b.form.detail.blend.amount, 0.35);
 });
 
 test('dock: the hole dial is off without a floor', () => {
@@ -170,25 +170,25 @@ test('patterns: a library pattern on a plain slot gets its own defaults, in whol
   const d = shapeOnly(normaliseDesign(presets[0]));
   const entry = findEntry(library, 'lib:diamonds@1');
   setSlotPattern(d, 'a', entry.id, entry);
-  assert.equal(d.surface.a.pattern, 'lib:diamonds@1');
-  assert.equal(d.surface.a.depthMm, entry.defaults.depthMm);
-  assert.equal(d.surface.a.repeats, entry.defaults.repeats);
-  const layers = d.surface.a.tileHeightMm / d.layers.layerHeightMm;
+  assert.equal(d.form.detail.a.pattern, 'lib:diamonds@1');
+  assert.equal(d.form.detail.a.depthMm, entry.defaults.depthMm);
+  assert.equal(d.form.detail.a.repeats, entry.defaults.repeats);
+  const layers = d.form.detail.a.tileHeightMm / d.layers.layerHeightMm;
   close(layers, Math.round(layers));
 });
 
 test('patterns: switching texture keeps depth and repeats; None clears slot B', () => {
   const d = normaliseDesign(presets[1]);
-  d.surface.a.depthMm = 3.3;
-  d.surface.a.repeats = 7;
+  d.form.detail.a.depthMm = 3.3;
+  d.form.detail.a.repeats = 7;
   setSlotPattern(d, 'a', 'lib:ribs@1', findEntry(library, 'lib:ribs@1'));
-  assert.equal(d.surface.a.depthMm, 3.3);
-  assert.equal(d.surface.a.repeats, 7);
+  assert.equal(d.form.detail.a.depthMm, 3.3);
+  assert.equal(d.form.detail.a.repeats, 7);
   setSlotPattern(d, 'b', 'lib:dots@1', findEntry(library, 'lib:dots@1'));
-  assert.equal(d.surface.blend.shape, 'fadesUp');
-  assert.ok(textured(d.surface.b));
+  assert.equal(d.form.detail.blend.shape, 'fadesUp');
+  assert.ok(textured(d.form.detail.b));
   setSlotPattern(d, 'b', null, null);
-  assert.equal(d.surface.b, null);
+  assert.equal(d.form.detail.b, null);
 });
 
 test('patterns: your own recipe travels inside the design', () => {

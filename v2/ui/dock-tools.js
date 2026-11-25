@@ -28,9 +28,9 @@ const fmt = (v, decimals = 1) => {
 const L = (key, fallback) => ({ ...fallback, ...(LIMITS[key] || {}) });
 
 const slotKey = (state) => (state.view.slot === 'b' ? 'b' : 'a');
-const slotOf = (state) => state.design.surface[slotKey(state)];
+const slotOf = (state) => state.design.form.detail[slotKey(state)];
 /** "Depth" while only A is in use, "Depth B" once there is a B. */
-const perSlot = (name) => (state) => (state.design.surface.b ? `${name} ${slotKey(state).toUpperCase()}` : name);
+const perSlot = (name) => (state) => (state.design.form.detail.b ? `${name} ${slotKey(state).toUpperCase()}` : name);
 
 // Twist turns corners, the morph and the pattern; on a plain round pot there
 // is nothing to turn (C30).
@@ -140,7 +140,7 @@ export const DOCK_TOOLS = {
       applies: (s) => textured(slotOf(s)),
       value: (s) => `${fmt(slotOf(s)?.depthMm ?? 0)} mm`,
       dial: (s) => ({ label: perSlot('Depth')(s), unit: 'mm', ...L('depthMm', {}), step: 0.1, decimals: 1, value: slotOf(s)?.depthMm ?? 0 }),
-      set: (d, v, s) => { const slot = d.surface[slotKey(s)]; if (slot) slot.depthMm = v; },
+      set: (d, v, s) => { const slot = d.form.detail[slotKey(s)]; if (slot) slot.depthMm = v; },
     },
     {
       id: 'repeats', name: perSlot('Repeats'), kind: 'dial',
@@ -153,7 +153,7 @@ export const DOCK_TOOLS = {
         if (s.design.form.plan.footprint === 'rectangle' && (slot?.repeats ?? 1) % 4 !== 0) note += ' · try a multiple of 4';
         return { label: perSlot('Repeats around')(s), unit: '×', ...L('repeats', {}), step: 1, decimals: 0, value: slot?.repeats ?? 1, note };
       },
-      set: (d, v, s) => { const slot = d.surface[slotKey(s)]; if (slot) slot.repeats = Math.max(1, Math.round(v)); },
+      set: (d, v, s) => { const slot = d.form.detail[slotKey(s)]; if (slot) slot.repeats = Math.max(1, Math.round(v)); },
     },
     {
       id: 'tile', name: perSlot('Tile'), kind: 'dial',
@@ -168,54 +168,54 @@ export const DOCK_TOOLS = {
           note: `${Math.round(v / lh)} layers per tile`,
         };
       },
-      set: (d, v, s) => { const slot = d.surface[slotKey(s)]; if (slot) slot.tileHeightMm = snapToLayers(v, d.layers.layerHeightMm); },
+      set: (d, v, s) => { const slot = d.form.detail[slotKey(s)]; if (slot) slot.tileHeightMm = snapToLayers(v, d.layers.layerHeightMm); },
     },
     {
       id: 'from', name: 'From', kind: 'dial',
-      applies: (s) => textured(s.design.surface.a) || textured(s.design.surface.b),
-      value: (s) => `${fmt(s.design.surface.fromMm, 0)} mm`,
+      applies: (s) => textured(s.design.form.detail.a) || textured(s.design.form.detail.b),
+      value: (s) => `${fmt(s.design.form.detail.fromMm, 0)} mm`,
       dial: (s) => ({
-        label: 'Pattern from', unit: 'mm', min: 0, max: s.design.form.height, step: 1, decimals: 1, value: s.design.surface.fromMm,
+        label: 'Pattern from', unit: 'mm', min: 0, max: s.design.form.height, step: 1, decimals: 1, value: s.design.form.detail.fromMm,
         note: 'Or drag the bracket beside the pot',
       }),
-      set: (d, v) => { d.surface.fromMm = Math.max(0, Math.min(v, d.surface.toMm - 1)); },
+      set: (d, v) => { d.form.detail.fromMm = Math.max(0, Math.min(v, d.form.detail.toMm - 1)); },
     },
     {
       id: 'to', name: 'To', kind: 'dial',
-      applies: (s) => textured(s.design.surface.a) || textured(s.design.surface.b),
-      value: (s) => `${fmt(s.design.surface.toMm, 0)} mm`,
+      applies: (s) => textured(s.design.form.detail.a) || textured(s.design.form.detail.b),
+      value: (s) => `${fmt(s.design.form.detail.toMm, 0)} mm`,
       dial: (s) => ({
-        label: 'Pattern to', unit: 'mm', min: 0, max: s.design.form.height, step: 1, decimals: 1, value: s.design.surface.toMm,
+        label: 'Pattern to', unit: 'mm', min: 0, max: s.design.form.height, step: 1, decimals: 1, value: s.design.form.detail.toMm,
         note: 'Or drag the bracket beside the pot',
       }),
-      set: (d, v) => { d.surface.toMm = Math.min(d.form.height, Math.max(v, d.surface.fromMm + 1)); },
+      set: (d, v) => { d.form.detail.toMm = Math.min(d.form.height, Math.max(v, d.form.detail.fromMm + 1)); },
     },
     {
       id: 'blend', name: 'Blend', kind: 'options',
-      applies: (s) => !!s.design.surface.b,
-      options: [{ value: 'even', label: 'Even' }, { value: 'fadesUp', label: 'Fades up' }, { value: 'middle', label: 'Middle' }],
-      current: (s) => s.design.surface.blend?.shape ?? 'fadesUp',
-      value: (s) => ({ even: 'Even', fadesUp: 'Fades up', middle: 'Middle' })[s.design.surface.blend?.shape] ?? '',
+      applies: (s) => !!s.design.form.detail.b,
+      options: [{ value: 'even', label: 'Even' }, { value: 'fadesUp', label: 'Fades up' }, { value: 'fadesDown', label: 'Fades down' }, { value: 'middle', label: 'Middle' }],
+      current: (s) => s.design.form.detail.blend?.shape ?? 'fadesUp',
+      value: (s) => ({ even: 'Even', fadesUp: 'Fades up', fadesDown: 'Fades down', middle: 'Middle' })[s.design.form.detail.blend?.shape] ?? '',
       note: () => 'How B comes in over A, bottom to top',
       choose: (d, v) => {
-        if (!d.surface.blend) d.surface.blend = { shape: v, amount: 1 };
-        d.surface.blend.shape = v;
+        if (!d.form.detail.blend) d.form.detail.blend = { shape: v, amount: 1 };
+        d.form.detail.blend.shape = v;
         // Even at full amount is all B; start at half so the first tap shows a mix.
-        if (v === 'even' && d.surface.blend.amount === 1) d.surface.blend.amount = 0.5;
+        if (v === 'even' && d.form.detail.blend.amount === 1) d.form.detail.blend.amount = 0.5;
       },
       label: () => 'Blend',
     },
     {
       id: 'amount', name: 'Amount', kind: 'dial',
-      applies: (s) => !!s.design.surface.b,
-      value: (s) => `${Math.round((s.design.surface.blend?.amount ?? 1) * 100)} %`,
+      applies: (s) => !!s.design.form.detail.b,
+      value: (s) => `${Math.round((s.design.form.detail.blend?.amount ?? 1) * 100)} %`,
       dial: (s) => {
-        const blend = s.design.surface.blend ?? { shape: 'fadesUp', amount: 1 };
+        const blend = s.design.form.detail.blend ?? { shape: 'fadesUp', amount: 1 };
         const b = Math.round(blend.amount * 100);
-        const where = { fadesUp: 'At the top: ', middle: 'Halfway up: ' }[blend.shape] ?? '';
+        const where = { fadesUp: 'At the top: ', fadesDown: 'At the bottom: ', middle: 'Halfway up: ' }[blend.shape] ?? '';
         return { label: 'Blend amount', unit: '%', min: 0, max: 100, step: 5, decimals: 0, value: b, note: `${where}A ${100 - b} % · B ${b} %` };
       },
-      set: (d, v) => { if (d.surface.blend) d.surface.blend.amount = Math.min(1, Math.max(0, v / 100)); },
+      set: (d, v) => { if (d.form.detail.blend) d.form.detail.blend.amount = Math.min(1, Math.max(0, v / 100)); },
     },
   ],
 
@@ -263,9 +263,9 @@ export const DOCK_TOOLS = {
     },
     {
       id: 'overhang', name: 'Overhang', kind: 'dial',
-      value: (s) => `${fmt(s.design.layers.overhangLimitDeg, 0)}°`,
-      dial: (s) => ({ label: 'Overhang limit', unit: '°', ...L('overhangLimitDeg', {}), step: 1, decimals: 0, value: s.design.layers.overhangLimitDeg }),
-      set: (d, v) => { d.layers.overhangLimitDeg = v; },
+      value: (s) => `${fmt(s.design.rules.overhangLimitDeg, 0)}°`,
+      dial: (s) => ({ label: 'Overhang limit', unit: '°', ...L('overhangLimitDeg', {}), step: 1, decimals: 0, value: s.design.rules.overhangLimitDeg }),
+      set: (d, v) => { d.rules.overhangLimitDeg = v; },
     },
   ],
 
@@ -331,7 +331,7 @@ export function currentTool(stepId, state) {
  * @returns {{ name: string, entry: object | null, slot: object | null }}
  */
 export function slotInfo(state, library, s, saved) {
-  const slot = state.design.surface[s];
+  const slot = state.design.form.detail[s];
   if (!slot) return { name: 'None', entry: null, slot: null };
   const entry = findEntry(library, slot.pattern, state.design.assets, saved);
   return { name: entry?.name ?? (slot.pattern === PLAIN.id ? 'Plain' : slot.pattern), entry, slot };

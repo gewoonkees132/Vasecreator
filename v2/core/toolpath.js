@@ -13,9 +13,18 @@
 //
 // The wall point is P = B(z, u) + D(z, u)·d̂: B the footprint outline scaled
 // by the profile radius and turned by the twist, d̂ its radial direction in
-// XY, and D the surface pattern displacement in mm. Pattern coordinates are
-// x = repeats·u and y = z / tile height, with u riding on the outline, so whole
-// repeats meet without a seam and the pattern follows the twist.
+// XY, and D the displacement in mm: the Detailed morph (form.detail, D35)
+// plus the Pattern (design.pattern, core/layer-pattern.js). Detailed morph
+// coordinates are x = repeats·u and y = z / tile height, with u riding on the
+// outline, so whole repeats meet without a seam and the relief follows the
+// twist.
+//
+// The Pattern is per layer and per node (D37, D39): inside its range every
+// layer has the same N nodes at u = j / N, plus the same k points in every
+// gap, so a layer has N·(k + 1) points and every (k + 1)-th is a node. The
+// seam sits on a node there, so the ramp never cuts a cell in half. It is
+// exempt from the overhang and the two-layers-per-bump rules and has its own
+// bead-support rule (D43).
 //
 // Phase 2: the geometry morph M(z, u) (core/morph.js) is added to the profile
 // radius before the footprint, D and the minimum-radius clamp, so the walls,
@@ -25,7 +34,8 @@
 
 import { TAU, dcos, dsin, radians } from './math.js';
 import { PLAIN, evaluatePattern, findPattern } from './patterns.js';
-import { surfaceWeights } from './surface.js';
+import { detailWeights } from './surface.js';
+import { createLayerPattern } from './layer-pattern.js';
 import { createProfile } from './profile.js';
 import { snapTileHeight } from './design.js';
 import { createPlan } from './plan.js';
@@ -69,16 +79,23 @@ export function patternFeatures(recipe) {
     const [around, up] = SHAPE_FEATURES[recipe.shape] ?? [1, 1];
     return { around, up };
   }
-  if (recipe.kind === 'motif') {
-    const n = recipe.cells.length;
-    const layout = recipe.layout ?? 'stripes';
-    return { around: n, up: layout === 'stripes' ? 0 : layout === 'diagonal' ? n : 2 };
+  if (recipe.kind === 'bitmap') {
+    // A grid whose rows are all the same has no bumps up; one whose columns
+    // are all the same has none around.
+    const { columns, rows, cells } = recipe;
+    let around = 0;
+    let up = 0;
+    for (let r = 0; r < rows && !around; r++) {
+      for (let c = 1; c < columns; c++) if (cells[r * columns + c] !== cells[r * columns]) { around = columns; break; }
+    }
+    for (let i = columns; i < cells.length; i++) if (cells[i] !== cells[i % columns]) { up = rows; break; }
+    return { around, up };
   }
   return { around: 0, up: 0 };
 }
 
 /**
- * Resolves the surface slots: library ids against the pattern library,
+ * Resolves the Detailed morph's slots: library ids against the pattern library,
  * 'user:…' against the recipes in design.assets, 'img:…' against the rasters
  * in `images` (by the asset's hash). A pattern that can't be found prints
  * plain and is reported (missing, or missingImages for an image this device
@@ -96,7 +113,7 @@ export function resolveSlots(design, library, { images, perimeterMm = 0 } = {}) 
   const h = design.layers.layerHeightMm;
   const w = design.layers.beadWidthMm;
   for (const key of ['a', 'b']) {
-    const slot = design.surface[key];
+    const slot = design.form.detail[key];
     if (!slot) continue;
     let recipe = PLAIN.recipe;
     let evaluate = null;
@@ -161,7 +178,8 @@ function widestProfileRadius(profile, H, h) {
  * @param {{ images?: Map<string, object> }} [options]
  */
 export function createWallModel(design, library, { images } = {}) {
-  const { form, surface, layers, base } = design;
+  const { form, layers, base } = design;
+  const detail = form.detail;
   const h = layers.layerHeightMm;
   const w = layers.beadWidthMm;
   const H = form.height;
@@ -172,11 +190,16 @@ export function createWallModel(design, library, { images } = {}) {
   const plan = createPlan(form.plan);
   const twistPerMm = radians(form.twist.degrees) / H;
   const rMin = 2 * w;
-  const needsWidest = design.form.morph || ['a', 'b'].some((k) => String(design.surface[k]?.pattern ?? '').startsWith('img:'));
+  const needsWidest = form.morph || ['a', 'b'].some((k) => String(detail[k]?.pattern ?? '').startsWith('img:'));
   const widestMm = needsWidest ? widestProfileRadius(profile, H, h) * plan.unitPerimeter : 0;
   const morph = createMorph(design, { images, perimeterMm: widestMm });
   const { slots, missing, missingImages } = resolveSlots(design, library, { images, perimeterMm: widestMm });
   if (morph?.missingImage) missingImages.push(design.form.morph.map);
+  const pattern = createLayerPattern(design, library, {
+    profile, unitPerimeter: plan.unitPerimeter, layerCount, baseLayers, maxNodes: MAX_POINTS_PER_LAYER,
+  });
+  if (pattern?.missing) missing.push(pattern.drawing);
+  const lp = pattern?.active ? pattern : null;
   const morphOn = !!morph && morph.amplitude > 0;
   const morphAmp = morphOn ? morph.amplitude : 0;
   /** The morph's radial push in mm at height z, position u (0 without a morph). */
@@ -194,8 +217,9 @@ export function createWallModel(design, library, { images } = {}) {
     return { lo, hi };
   }
   const active = slots.filter((s) => s.active);
-  const limit = radians(layers.overhangLimitDeg);
+  const limit = radians(design.rules.overhangLimitDeg);
   const stepLimit = (h * dsin(limit)) / dcos(limit);
+  const supportLimit = design.rules.supportRatio * w;
 
   // Two-entry weight cache: wall points alternate between their own height
   // and the height one layer below (for the overhang check).
@@ -204,7 +228,7 @@ export function createWallModel(design, library, { images } = {}) {
   function weightsAt(z) {
     if (z === zA) { weight.a = aA; weight.b = bA; return weight; }
     if (z === zB) { weight.a = aB; weight.b = bB; return weight; }
-    const s = surfaceWeights(surface, z, h);
+    const s = detailWeights(detail, z, h);
     if (flip) { zA = z; aA = s.a; bA = s.b; } else { zB = z; aB = s.a; bB = s.b; }
     flip = !flip;
     weight.a = s.a;
@@ -212,8 +236,8 @@ export function createWallModel(design, library, { images } = {}) {
     return weight;
   }
 
-  /** Pattern displacement D in mm at height z, position u. Never on the base. */
-  function displacement(z, u) {
+  /** The Detailed morph's displacement in mm at height z, position u. Never on the base. */
+  function detailAt(z, u) {
     if (z <= baseTop || active.length === 0) return 0;
     const wt = weightsAt(z);
     let d = 0;
@@ -223,6 +247,20 @@ export function createWallModel(design, library, { images } = {}) {
       if (ws > 0) d += ws * s.depthMm * s.evaluate(s.repeats * u, z / s.tileHeightMm);
     }
     return d;
+  }
+
+  /** The wall layer a height lies on: layer i runs from i·h up to its top at (i + 1)·h. */
+  const layerAt = (z) => Math.max(0, Math.ceil(z / h - 1e-6) - 1);
+  /** The Pattern's displacement in mm on wall layer i at u (0 outside its range). */
+  const patternAt = lp ? lp.at : () => 0;
+
+  /**
+   * All the displacement D in mm at height z, position u: the Detailed
+   * morph plus the Pattern of `layer` (by default the layer z lies on; the
+   * toolpath passes it, as the first point of a ramp sits on the layer below's top).
+   */
+  function displacement(z, u, layer = layerAt(z)) {
+    return detailAt(z, u) + (lp ? lp.at(layer, u) : 0);
   }
 
   let tz = NaN, tc = 1, ts = 0;
@@ -241,18 +279,21 @@ export function createWallModel(design, library, { images } = {}) {
   }
 
   const unitXY = new Float64Array(2);
-  const centre = { x: 0, y: 0, D: 0, radius: 0, unitLength: 1, narrow: false };
+  const centre = { x: 0, y: 0, D: 0, P: 0, radius: 0, bare: 0, unitLength: 1, narrow: false };
   /**
-   * The outer wall's centreline at outline position u and height z: the
-   * toolpath's wall point and the CAD solid's skeleton (core/cad.js). The
-   * returned object is reused; copy what you need before the next call.
-   * D is the pattern displacement, radius the distance along the unit
-   * outline (|unit| = unitLength), narrow whether the minimum radius clamped it.
+   * The outer wall's centreline at outline position u and height z (on wall
+   * layer `layer`, by default the one z lies on): the toolpath's wall point
+   * and the CAD solid's skeleton (core/cad.js). The returned object is
+   * reused; copy what you need before the next call. D is the displacement
+   * (the Detailed morph plus P, the Pattern), radius the distance along the
+   * unit outline (|unit| = unitLength), bare that radius without the Pattern
+   * (for the overhang check, D43), narrow whether the minimum radius clamped it.
    */
-  function centrePoint(u, z) {
+  function centrePoint(u, z, layer = layerAt(z)) {
     plan.unitPoint(u, unitXY);
     const unitLength = Math.sqrt(unitXY[0] * unitXY[0] + unitXY[1] * unitXY[1]);
-    const D = displacement(z, u);
+    const P = lp ? lp.at(layer, u) : 0;
+    const D = detailAt(z, u) + P;
     let narrow = false;
     let base = profile.at(z);
     if (morphOn) {
@@ -262,29 +303,53 @@ export function createWallModel(design, library, { images } = {}) {
     let radius = base * unitLength + D;
     // A hair of slack: a circle of exactly r_min must not flag itself.
     if (radius < rMin - 1e-9) { radius = rMin; narrow = true; }
+    let bare = radius;
+    if (P !== 0) {
+      bare = base * unitLength + D - P;
+      if (bare < rMin - 1e-9) bare = rMin;
+    }
     const t = twistAt(z);
     const s = radius / unitLength;
     centre.x = (unitXY[0] * t.c - unitXY[1] * t.s) * s;
     centre.y = (unitXY[0] * t.s + unitXY[1] * t.c) * s;
     centre.D = D;
+    centre.P = P;
     centre.radius = radius;
+    centre.bare = bare;
     centre.unitLength = unitLength;
     centre.narrow = narrow;
     return centre;
   }
 
-  return {
+  const model = {
     design, h, w, H, layerCount, baseLayers, baseTop, profile, plan, twistPerMm, rMin,
-    slots, active, missing, missingImages, stepLimit, displacement, weightsAt, twistAt, centrePoint,
+    slots, active, missing, missingImages, stepLimit, supportLimit,
+    detailAt, patternAt, displacement, layerAt, weightsAt, twistAt, centrePoint,
     morph: morphOn ? morph : null, morphAmp, morphAt, morphRange,
+    /** The Pattern (core/layer-pattern.js) when it prints, else null. */
+    pattern: lp,
+    /** Points per layer in the Pattern's range: N·(k + 1), the same on every layer there. */
+    patternPoints: 0,
   };
+  if (lp) {
+    // k extra points in each gap, enough for the outline, the Morph and the
+    // Detailed morph on the layer that needs the most (§3.1, §3.2).
+    const N = lp.nodes;
+    let need = 0;
+    for (let i = lp.first; i <= lp.last; i++) need = Math.max(need, pointsNeeded(model, i * h, (i + 1) * h));
+    const k = Math.max(0, Math.min(Math.ceil(need / N) - 1, Math.floor(MAX_POINTS_PER_LAYER / N) - 1));
+    model.patternPoints = N * (k + 1);
+  }
+  return model;
 }
 
 // Growable point buffer: Float64 positions (the canonical toolpath) plus
-// per-point kind, issue bits and layer index.
+// per-point kind, issue bits and layer index, and with a Pattern a flag for
+// the points that are its nodes.
 class PathBuffer {
-  constructor(capacity) {
+  constructor(capacity, withNodes = false) {
     this.n = 0;
+    this.withNodes = withNodes;
     this.alloc(Math.max(capacity, 1024));
   }
 
@@ -293,16 +358,18 @@ class PathBuffer {
     const kinds = new Uint8Array(capacity);
     const issues = new Uint8Array(capacity);
     const layer = new Uint16Array(capacity);
+    const node = this.withNodes ? new Uint8Array(capacity) : null;
     if (this.xyz) {
       xyz.set(this.xyz.subarray(0, this.n * 3));
       kinds.set(this.kinds.subarray(0, this.n));
       issues.set(this.issues.subarray(0, this.n));
       layer.set(this.layer.subarray(0, this.n));
+      if (node) node.set(this.node.subarray(0, this.n));
     }
-    Object.assign(this, { xyz, kinds, issues, layer, capacity });
+    Object.assign(this, { xyz, kinds, issues, layer, node, capacity });
   }
 
-  push(x, y, z, kind, issue, layer) {
+  push(x, y, z, kind, issue, layer, node = 0) {
     if (this.n === this.capacity) this.alloc(this.capacity * 2);
     const i = this.n++;
     this.xyz[3 * i] = x;
@@ -311,6 +378,7 @@ class PathBuffer {
     this.kinds[i] = kind;
     this.issues[i] = issue;
     this.layer[i] = layer;
+    if (this.node) this.node[i] = node;
   }
 
   // True when (x, y, z) is where the path already is: no zero-length beads.
@@ -337,7 +405,7 @@ class PathBuffer {
  *   Where the wall is plain the seam holds its place.
  */
 function seamPositions(m) {
-  const { design, plan, h, w, layerCount } = m;
+  const { design, plan, h, w, layerCount, pattern: lp } = m;
   const { position, angleDeg } = design.layers.seam;
   const angle = radians(angleDeg);
   const seams = new Float64Array(layerCount);
@@ -361,19 +429,34 @@ function seamPositions(m) {
     // top puts those starts on the chosen angle.
     const zSeam = m.twistPerMm > 0 ? (i + 1) * h : zStart;
     if (position === 'fixed') u = plan.uAtAngle(angle - m.twistPerMm * zSeam);
-    else if (position === 'hidden') u = plan.footprint === 'rectangle' ? corner : groove(m, (i + 1) * h, previous, w);
+    else if (position === 'hidden') u = plan.footprint === 'rectangle' ? corner : groove(m, i, previous, w);
+    if (lp?.inRange(i)) {
+      // On a node, so the ramp never cuts a cell in half. A hidden seam
+      // still moves at most a bead width a layer, in whole nodes.
+      const N = lp.nodes;
+      u = Math.round(u * N) / N;
+      if (position === 'hidden' && lp.inRange(i - 1)) {
+        const most = Math.floor((w / (m.profile.at((i + 1) * h) * plan.unitPerimeter)) * N + 1e-9);
+        const steps = Math.round((u - previous) * N);
+        u = previous + Math.max(-most, Math.min(most, steps)) / N;
+      }
+    }
     seams[i] = u;
     previous = u;
   }
   return seams;
 }
 
-function groove(m, z, centre, w) {
+// The deepest groove of layer i near u = centre, over the widest tile in
+// play there (the Detailed morph's or the Pattern's).
+function groove(m, i, centre, w) {
+  const z = (i + 1) * m.h;
   const wt = m.weightsAt(z);
   let repeats = 0;
   for (const s of m.active) {
     if ((s.key === 'a' ? wt.a : wt.b) > 0 && (repeats === 0 || s.repeats < repeats)) repeats = s.repeats;
   }
+  if (m.pattern?.inRange(i) && (repeats === 0 || m.pattern.repeats < repeats)) repeats = m.pattern.repeats;
   if (repeats === 0) return centre;
   const half = 0.5 / repeats;
   const samples = 64;
@@ -382,7 +465,7 @@ function groove(m, z, centre, w) {
   let best = centre;
   for (let k = 0; k <= samples; k++) {
     const u = centre - half + (2 * half * k) / samples;
-    const d = m.displacement(z, u);
+    const d = m.displacement(z, u, i);
     if (d < lo || (d === lo && Math.abs(u - centre) < Math.abs(best - centre))) { lo = d; best = u; }
     if (d > hi) hi = d;
   }
@@ -391,13 +474,10 @@ function groove(m, z, centre, w) {
   return centre + Math.min(Math.max(best - centre, -maxStep), maxStep);
 }
 
-/**
- * Points around for a layer at height z (lead decision 5): bead spacing of
- * w/2, at least 8 points per pattern feature, then the 64–1600 clamp, or
- * the lower `cap` the point budget allows.
- * @returns {{ n: number, capped: boolean }}
- */
-export function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
+// Points the outline, the Morph and the Detailed morph need on the layer
+// from zStart to zTop (lead decision 5): a bead spacing of w/2 and at least
+// 8 points per feature, before any clamp.
+function pointsNeeded(m, zStart, zTop) {
   const perimeter = (m.profile.at(zTop) + m.morphAmp) * m.plan.unitPerimeter;
   let need = Math.max(Math.ceil(perimeter / (m.w / 2)), MIN_POINTS_PER_LAYER);
   if (m.morph) need = Math.max(need, 8 * m.morph.repeats * m.morph.featuresAround);
@@ -409,8 +489,27 @@ export function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
     const on = s.key === 'a' ? loA > 0 || hi.a > 0 : loB > 0 || hi.b > 0;
     if (on) need = Math.max(need, 8 * s.repeats * s.features.around);
   }
+  return need;
+}
+
+/**
+ * Points around for the layer from zStart to zTop: pointsNeeded, then the
+ * 64–1600 clamp, or the lower `cap` the point budget allows. In the
+ * Pattern's range it is the same N·(k + 1) on every layer
+ * (m.patternPoints), with fewer extra points k under a lower cap.
+ * @returns {{ n: number, capped: boolean, simplified: boolean }}
+ */
+export function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
+  const need = pointsNeeded(m, zStart, zTop);
+  const capped = need > MAX_POINTS_PER_LAYER;
+  if (m.pattern?.inRange(Math.round(zTop / m.h) - 1)) {
+    const N = m.pattern.nodes;
+    let n = m.patternPoints;
+    if (n > cap) n = N <= cap ? N * Math.floor(cap / N) : cap;
+    return { n, capped, simplified: n < m.patternPoints };
+  }
   const n = Math.min(need, MAX_POINTS_PER_LAYER);
-  return { n: Math.min(n, cap), capped: need > MAX_POINTS_PER_LAYER, simplified: n > cap };
+  return { n: Math.min(n, cap), capped, simplified: n > cap };
 }
 
 /**
@@ -423,7 +522,7 @@ export function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
  */
 export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOLPATH_POINTS, images } = {}) {
   const m = createWallModel(design, library, { images });
-  const { h, w, layerCount: L, baseLayers: nb, profile, plan, rMin, stepLimit } = m;
+  const { h, w, layerCount: L, baseLayers: nb, profile, plan, rMin, stepLimit, supportLimit, pattern: lp } = m;
   const spacing = design.finish.wallSpacingMm;
   const innerWall = design.finish.innerWall;
   const rampMm = design.layers.seam.rampLengthMm;
@@ -443,7 +542,13 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
 
   const around = Math.min(Math.max((profile.at(design.form.height / 2) * plan.unitPerimeter) / (w / 2), MIN_POINTS_PER_LAYER), layerCap);
   const estimate = Math.ceil((L - nb) * walls * 1.1 * around + Math.min(basePoints, 0.25 * maxPoints) + nb * 2 * layerCap);
-  const buf = new PathBuffer(estimate);
+  const buf = new PathBuffer(estimate, !!lp);
+  // Whether outline position u is a node of the Pattern on layer i.
+  const isNode = (i, u) => {
+    if (!lp || !lp.inRange(i)) return 0;
+    const x = u * lp.nodes;
+    return Math.abs(x - Math.round(x)) < 1e-6 ? 1 : 0;
+  };
   const layerStarts = new Uint32Array(L + 1);
   const layerZ = new Float64Array(L);
   const cappedLayers = new Uint8Array(L);
@@ -454,12 +559,15 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   let minD = 0;
   let maxD = 0;
 
-  // One outer wall point at outline position u and height z, into wx, wy, wIssue.
-  let wx = 0, wy = 0, wIssue = 0;
+  // One outer wall point of layer i at outline position u and height z, into
+  // wx, wy, wIssue. The overhang check compares the walls without the
+  // Pattern; bead support (D43) compares them with it, on the Pattern's
+  // layers and the layer on top of them.
+  let wx = 0, wy = 0, wIssue = 0, wNode = 0;
   const morphed = !!m.morph;
-  function wallPoint(u, z, checkOverhang) {
-    const c = m.centrePoint(u, z);
-    const { D, radius, unitLength } = c;
+  function wallPoint(u, z, checkOverhang, i) {
+    const c = m.centrePoint(u, z, i);
+    const { D, radius, bare, unitLength } = c;
     if (D < minD) minD = D;
     if (D > maxD) maxD = D;
     let issue = c.narrow ? ISSUE.narrow : 0;
@@ -467,13 +575,33 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       const zb = z - h;
       let baseBelow = profile.at(zb);
       if (morphed) baseBelow = Math.max(baseBelow + m.morphAt(zb, u), rMin);
-      let below = baseBelow * unitLength + m.displacement(zb, u);
+      const bareBelow = baseBelow * unitLength + m.detailAt(zb, u);
+      let below = bareBelow;
       if (below < rMin - 1e-9) below = rMin;
-      if (Math.abs(radius - below) > stepLimit) issue |= ISSUE.overhang;
+      if (Math.abs(bare - below) > stepLimit) issue |= ISSUE.overhang;
+      if (lp && (lp.inRange(i) || lp.inRange(i - 1))) {
+        below = bareBelow + lp.at(i - 1, u);
+        if (below < rMin - 1e-9) below = rMin;
+        if (Math.abs(radius - below) > supportLimit + 1e-9) issue |= ISSUE.support;
+      }
     }
     wx = c.x;
     wy = c.y;
     wIssue = issue;
+    wNode = isNode(i, u);
+  }
+
+  // Outline positions on the grid of n points per turn from u0 to u1, into
+  // `grid`: u0, every grid point after it, then u1. In the Pattern's range
+  // the grid holds the nodes, so they print exactly where they are drawn,
+  // also when the layer starts off the grid (where the seam moved back).
+  const grid = new Float64Array(MAX_POINTS_PER_LAYER + 3);
+  function gridPoints(u0, u1, n) {
+    let c = 0;
+    grid[c++] = u0;
+    for (let g = Math.floor(u0 * n + 1e-7) + 1; g < u1 * n - 1e-7; g++) grid[c++] = g / n;
+    grid[c++] = u1;
+    return c - 1;
   }
 
   // The outer wall (or a base ring) of layer i from u0 round to u1, n points
@@ -487,20 +615,21 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
     const perimeter = profile.at(zTop) * plan.unitPerimeter;
     const rampLength = Math.min(rampMm, perimeter / 2);
     const span = u1 - u0;
-    const count = Math.max(1, Math.round(n * span));
+    const onGrid = !!lp && lp.inRange(i) && n <= MAX_POINTS_PER_LAYER;
+    const count = onGrid ? gridPoints(u0, u1, n) : Math.max(1, Math.round(n * span));
     for (let j = 0; j <= count; j++) {
-      const u = j === count ? u1 : u0 + (span * j) / count;
+      const u = onGrid ? grid[j] : j === count ? u1 : u0 + (span * j) / count;
       let z = zTop;
       if (rise > 0) {
         if (j === 0) z = zLow;
-        else if (rampLength > 0) z = zLow + rise * Math.min(((span * j) / count) * perimeter / rampLength, 1);
+        else if (rampLength > 0) z = zLow + rise * Math.min((onGrid ? u - u0 : (span * j) / count) * perimeter / rampLength, 1);
       }
-      wallPoint(u, z, checkOverhang);
+      wallPoint(u, z, checkOverhang, i);
       if (j === 0) {
         if (buf.at(wx, wy, z)) continue;
-        buf.push(wx, wy, z, buf.n === 0 ? KIND.none : firstKind, wIssue, i);
+        buf.push(wx, wy, z, buf.n === 0 ? KIND.none : firstKind, wIssue, i, wNode);
       } else {
-        buf.push(wx, wy, z, kind, wIssue, i);
+        buf.push(wx, wy, z, kind, wIssue, i, wNode);
       }
     }
   }
@@ -509,13 +638,13 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   // of `kind` when the path is elsewhere (a seam that moved on, or a
   // connector out from the inner wall), nothing when it is already there.
   function stepOnto(i, u, z, kind, checkOverhang) {
-    wallPoint(u, z, checkOverhang);
-    if (buf.n > 0 && !buf.at(wx, wy, z)) buf.push(wx, wy, z, kind, wIssue, i);
+    wallPoint(u, z, checkOverhang, i);
+    if (buf.n > 0 && !buf.at(wx, wy, z)) buf.push(wx, wy, z, kind, wIssue, i, wNode);
   }
 
   // The seam marker of wall layer i: where the layer starts.
   function markSeam(i, u, z) {
-    wallPoint(u, z, false);
+    wallPoint(u, z, false, i);
     const k = 3 * (i - nb);
     seamLine[k] = wx;
     seamLine[k + 1] = wy;
@@ -532,7 +661,7 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       const u = uS + j / n;
       plan.unitPoint(u, unit);
       const unitLength = Math.sqrt(unit[0] * unit[0] + unit[1] * unit[1]);
-      const D = innerWall === 'smooth' ? layerMinD : m.displacement(zTop, u);
+      const D = innerWall === 'smooth' ? layerMinD : m.displacement(zTop, u, i);
       let base = profile.at(zTop);
       if (morphed) base = Math.max(base + m.morphAt(zTop, u), rMin);
       let radius = base * unitLength + D - spacing;
@@ -540,7 +669,8 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       if (radius < floor) { radius = floor; issue |= ISSUE.narrow; }
       const t = m.twistAt(zTop);
       const s = radius / unitLength;
-      buf.push((unit[0] * t.c - unit[1] * t.s) * s, (unit[0] * t.s + unit[1] * t.c) * s, zTop, j === 0 ? firstKind : KIND.inner, issue, i);
+      const node = innerWall === 'smooth' ? 0 : isNode(i, u);
+      buf.push((unit[0] * t.c - unit[1] * t.s) * s, (unit[0] * t.s + unit[1] * t.c) * s, zTop, j === 0 ? firstKind : KIND.inner, issue, i, node);
     }
   }
 
@@ -672,6 +802,8 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
     kinds: buf.kinds.slice(0, count),
     issues: buf.issues.slice(0, count),
     layerOf: buf.layer.slice(0, count),
+    /** 1 where a point is a node of the Pattern (D37), or null without one. */
+    nodes: buf.node ? buf.node.slice(0, count) : null,
     layerStarts,
     layerZ,
     cappedLayers,

@@ -30,7 +30,7 @@ function noise(width, height) {
 function imageDesign(raster, hash, slot = {}) {
   const d = defaultDesign();
   d.assets = { [`img:${hash}`]: { kind: 'image', name: 'test.png', hash, width: raster.width, height: raster.height } };
-  d.surface.a = { pattern: `img:${hash}`, depthMm: 2, repeats: 2, tileHeightMm: 19.5, ...slot };
+  d.form.detail.a = { pattern: `img:${hash}`, depthMm: 2, repeats: 2, tileHeightMm: 19.5, ...slot };
   return d;
 }
 
@@ -38,8 +38,8 @@ test('normaliseDesign keeps valid assets and drops bad ones', () => {
   const n = normaliseDesign({
     ...defaultDesign(),
     assets: {
-      'user:ribs': { kind: 'recipe', name: '  My ribs ', recipe: { kind: 'motif', cells: [1, -1, 0], layout: 'brick', edges: 'soft' } },
-      'user:bad': { kind: 'recipe', name: 'Bad', recipe: { kind: 'motif', cells: [5] } },
+      'user:ribs': { kind: 'recipe', name: '  My ribs ', recipe: { kind: 'bitmap', columns: 3, rows: 2, cells: '+-0-+0', edges: 'soft' } },
+      'user:bad': { kind: 'recipe', name: 'Bad', recipe: { kind: 'bitmap', columns: 1, rows: 1, cells: '5' } },
       'user:unknown': { kind: 'recipe', recipe: { kind: 'shape', shape: 'nope' } },
       [`img:${HASH}`]: { kind: 'image', name: 'bark.jpg', hash: HASH, width: 256, height: 128 },
       'img:short': { kind: 'image', hash: 'abc', width: 10, height: 10 },
@@ -57,8 +57,8 @@ test('normaliseDesign keeps valid assets and drops bad ones', () => {
   assert.equal(Object.keys(normaliseDesign({ ...defaultDesign(), assets: many }).assets).length, MAX_ASSETS);
   // A slot that points at a missing asset is kept; the toolpath reports it.
   const d = defaultDesign();
-  d.surface.a.pattern = 'user:gone';
-  assert.equal(normaliseDesign(d).surface.a.pattern, 'user:gone');
+  d.form.detail.a.pattern = 'user:gone';
+  assert.equal(normaliseDesign(d).form.detail.a.pattern, 'user:gone');
 });
 
 test('normaliseDesign fills and clamps the morph', () => {
@@ -85,10 +85,10 @@ test('normaliseDesign fills and clamps the morph', () => {
 
 test('a user recipe slot prints exactly like the same recipe from the library', () => {
   const lib = defaultDesign();
-  const entry = library.patterns.find((p) => p.id === lib.surface.a.pattern);
+  const entry = library.patterns.find((p) => p.id === lib.form.detail.a.pattern);
   const user = defaultDesign();
   user.assets = { 'user:mine': { kind: 'recipe', name: 'Mine', recipe: structuredClone(entry.recipe) } };
-  user.surface.a.pattern = 'user:mine';
+  user.form.detail.a.pattern = 'user:mine';
   const a = computePreview(lib, { library });
   const b = computePreview(user, { library });
   assert.deepEqual(b.positions, a.positions);
@@ -132,7 +132,7 @@ test('a missing image prints plain, warns, and blocks export', () => {
   const hash = hashRaster(raster);
   const d = imageDesign(raster, hash);
   const plain = defaultDesign();
-  plain.surface.a = { ...d.surface.a, pattern: 'plain' };
+  plain.form.detail.a = { ...d.form.detail.a, pattern: 'plain' };
   const preview = computePreview(d, { library, images: new Map() });
   const warning = preview.warnings.find((w) => w.id === 'missingImage');
   assert.equal(warning?.severity, 'warning');

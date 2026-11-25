@@ -41,7 +41,7 @@ test('computePrint adds the final walls and the checks', () => {
 
 test('an unknown pattern prints plain and says so', () => {
   const d = defaultDesign();
-  d.surface.a.pattern = 'lib:gone@1';
+  d.form.detail.a.pattern = 'lib:gone@1';
   const r = computePreview(d, { library });
   assert.ok(r.warnings.some((w) => w.id === 'missingPattern'));
 });

@@ -1,5 +1,6 @@
-// Pattern section (design §9.2, C7, C8, C16, C18; "Surface" before issue #1,
-// and still the design's `surface` key): two pattern slots, the swatch grid
+// Pattern section (design §9.2, C7, C8, C16, C18; "Surface" before issue #1).
+// It edits the Detailed morph, design.form.detail (D35), until slice 2 of the
+// pattern studio moves it into Shape: two pattern slots, the swatch grid
 // that fills the selected slot, per-slot settings, and the shared range and
 // blend, as the parts Swatch, Depth, Repeats, From / to and Blend of the
 // Pattern step. Phase 2 (D24): "My patterns" (your own recipes and images)
@@ -18,7 +19,7 @@ import {
 } from '../pattern-actions.js';
 
 const SLOT_SUB = { a: 'main pattern', b: 'blends in' };
-const BLEND_LABELS = { even: 'even', fadesUp: 'fades up', middle: 'middle' };
+const BLEND_LABELS = { even: 'even', fadesUp: 'fades up', fadesDown: 'fades down', middle: 'middle' };
 const GRID_SWATCH = 52;
 const SLOT_SWATCH = 34;
 
@@ -46,7 +47,7 @@ const section = {
   summary(design, ctx) {
     const lib = ctx?.library;
     const name = (slot) => (lib && findEntry(lib, slot.pattern, design.assets)?.name) || prettyId(slot.pattern);
-    const s = design.surface;
+    const s = design.form.detail;
     if (!s.b) return s.a.pattern === PLAIN.id ? 'plain' : `${name(s.a)} · ${s.a.depthMm} mm`;
     return `${name(s.a)} → ${name(s.b)} · ${BLEND_LABELS[s.blend.shape] ?? s.blend.shape}`;
   },
@@ -59,7 +60,7 @@ const section = {
    * @returns {string[]}
    */
   applies(state) {
-    const s = state.design.surface;
+    const s = state.design.form.detail;
     const out = ['swatch'];
     if (textured(s[state.view.slot === 'b' ? 'b' : 'a'])) out.push('depth', 'repeats');
     if (textured(s.a) || textured(s.b)) out.push('range');
@@ -88,11 +89,11 @@ const section = {
     };
     const swap = h('button', { type: 'button', class: 'icon-btn swap-btn', 'aria-label': 'Swap A and B', title: 'Swap A and B', text: '⇅' });
     swap.addEventListener('click', () => {
-      if (!store.state.design.surface.b) return;
+      if (!store.state.design.form.detail.b) return;
       store.apply('Swap A and B', (d) => {
-        const t = d.surface.a;
-        d.surface.a = d.surface.b;
-        d.surface.b = t;
+        const t = d.form.detail.a;
+        d.form.detail.a = d.form.detail.b;
+        d.form.detail.b = t;
       });
     });
     const slots = h('div', { class: 'slot-row' }, [makeSlotCard('a'), swap, makeSlotCard('b')]);
@@ -261,7 +262,7 @@ const section = {
 
     // Per-slot settings. Each reads the selected slot when it fires.
     const editSlot = (label, fn) => (v) => store.change(`${label} ${S()}`, (d) => {
-      const slot = d.surface[slotOf()];
+      const slot = d.form.detail[slotOf()];
       if (slot) fn(slot, v, d);
     });
     const depthLim = limit(['depthMm', 'surface.depthMm', 'patternDepth'], { min: 0, max: 8, step: 0.1 });
@@ -283,7 +284,7 @@ const section = {
       onCommit: (v) => {
         const lh = store.state.design.layers.layerHeightMm;
         store.change(`Tile height ${S()}`, (d) => {
-          const slot = d.surface[slotOf()];
+          const slot = d.form.detail[slotOf()];
           if (slot) slot.tileHeightMm = snapToLayers(v, lh);
         });
         store.commit();
@@ -298,12 +299,12 @@ const section = {
     const rangeLim = limit(['fromMm', 'surface.fromMm'], { min: 0, max: 600, step: 1 });
     const from = numberField({
       label: 'From', unit: 'mm', compact: true, ...rangeLim, decimals: 1, value: 0,
-      onInput: (v) => store.change('From', (d) => { d.surface.fromMm = Math.min(v, d.surface.toMm - 1); }),
+      onInput: (v) => store.change('From', (d) => { d.form.detail.fromMm = Math.min(v, d.form.detail.toMm - 1); }),
       onCommit: commit,
     });
     const to = numberField({
       label: 'To', unit: 'mm', compact: true, ...rangeLim, decimals: 1, value: 0,
-      onInput: (v) => store.change('To', (d) => { d.surface.toMm = Math.max(v, d.surface.fromMm + 1); }),
+      onInput: (v) => store.change('To', (d) => { d.form.detail.toMm = Math.max(v, d.form.detail.fromMm + 1); }),
       onCommit: commit,
     });
     const rangeRow = h('div', { class: 'nf range-row' }, [
@@ -312,18 +313,18 @@ const section = {
     ]);
     const blend = segmented({
       label: 'Blend',
-      options: [{ value: 'even', label: 'Even' }, { value: 'fadesUp', label: 'Fades up' }, { value: 'middle', label: 'Middle' }],
+      options: [{ value: 'even', label: 'Even' }, { value: 'fadesUp', label: 'Fades up' }, { value: 'fadesDown', label: 'Fades down' }, { value: 'middle', label: 'Middle' }],
       value: 'fadesUp',
       onChange: (v) => store.apply('Blend', (d) => {
-        if (!d.surface.blend) d.surface.blend = { shape: v, amount: 1 };
-        d.surface.blend.shape = v;
+        if (!d.form.detail.blend) d.form.detail.blend = { shape: v, amount: 1 };
+        d.form.detail.blend.shape = v;
         // Even at full amount is all B; start at half so the first click shows a mix.
-        if (v === 'even' && d.surface.blend.amount === 1) d.surface.blend.amount = 0.5;
+        if (v === 'even' && d.form.detail.blend.amount === 1) d.form.detail.blend.amount = 0.5;
       }),
     });
     const amount = slider({
       label: 'Amount', unit: '×', min: 0, max: 1, step: 0.01, snap: 0.05, decimals: 2, value: 1, info: '',
-      onInput: (v) => store.change('Amount', (d) => { d.surface.blend.amount = v; }),
+      onInput: (v) => store.change('Amount', (d) => { d.form.detail.blend.amount = v; }),
       onCommit: commit,
     });
     const blendBox = h('div', { class: 'blend-settings' }, [blend.el, amount.el]);
@@ -345,7 +346,7 @@ const section = {
 
     const update = (state) => {
       const d = state.design;
-      const surf = d.surface;
+      const surf = d.form.detail;
       const s = state.view.slot === 'b' ? 'b' : 'a';
       const slot = surf[s];
       const fp = footprintAt(d);
@@ -413,7 +414,7 @@ const section = {
         blend.set(surf.blend.shape);
         amount.set(surf.blend.amount);
         const b = Math.round(surf.blend.amount * 100);
-        const where = { fadesUp: 'At the top: ', middle: 'Halfway up: ' }[surf.blend.shape] ?? '';
+        const where = { fadesUp: 'At the top: ', fadesDown: 'At the bottom: ', middle: 'Halfway up: ' }[surf.blend.shape] ?? '';
         amount.setInfo(`${where}A ${100 - b} % · B ${b} %`);
       }
     };

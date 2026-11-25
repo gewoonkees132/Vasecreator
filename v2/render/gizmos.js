@@ -169,14 +169,14 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
   }
 
   function rangeValues() {
-    const sf = design.surface;
+    const sf = design.form.detail;
     return { from: live.from ?? sf.fromMm, to: live.to ?? sf.toMm };
   }
 
   function layoutRange() {
     const { from, to } = rangeValues();
     const k = silhouetteFactor();
-    const sf = design.surface;
+    const sf = design.form.detail;
     const outward = Math.max(sf.a?.depthMm ?? 0, sf.b?.depthMm ?? 0) + (design.form.morph?.map ? (design.form.morph.strengthMm ?? 0) : 0)
       + design.layers.beadWidthMm / 2 + GAP_MM;
     const at = (z) => {
@@ -311,7 +311,7 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
   }
 
   function clampRange(kind, v) {
-    const sf = design.surface;
+    const sf = design.form.detail;
     const step = design.layers.layerHeightMm;
     const lo = kind === 'from' ? 0 : (live.from ?? sf.fromMm) + step;
     const hi = kind === 'from' ? (live.to ?? sf.toMm) - step : design.form.height;

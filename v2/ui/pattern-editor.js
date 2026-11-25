@@ -1,11 +1,16 @@
-// Pattern editor (design §9.2, D24): the motif generator for the selected slot.
-// Cells (out, middle, in), layout, edges and row height, with a live tile
-// preview and a live pot: every edit is a store.change inside one gesture, so
-// Apply adds a single history step and Cancel puts the design back as it was.
+// Pattern editor (design §9.2, D24): one row of cells laid out over a tile
+// for the selected Detailed morph slot. Cells (out, middle, in), layout,
+// edges and row height, with a live tile preview and a live pot: every edit
+// is a store.change inside one gesture, so Apply adds a single history step
+// and Cancel puts the design back as it was.
+//
+// Since the pattern studio's slice 1 it writes a `bitmap` recipe through the
+// quick fills (core/patterns.js fillBitmap); the `motif` kind is gone (D45).
+// This is a stopgap: slice 3 replaces it with the 2D editor (D46).
 
 import { h, segmented } from './controls.js';
 import { drawSwatch, beadGrid } from './swatch.js';
-import { MOTIF_LAYOUTS, validateRecipe } from '../core/patterns.js';
+import { FILL_LAYOUTS, bitmapValues, fillBitmap, validateRecipe } from '../core/patterns.js';
 import { LIMITS } from '../core/design.js';
 import { savePattern } from '../store/assets.js';
 import { footprintAt } from './sections/shape.js';
@@ -14,7 +19,7 @@ const MIN_CELLS = 2;
 const MAX_CELLS = 8;
 const MAX_ROW_LAYERS = 60;
 const PREVIEW_PX = 168;
-const DEFAULT_RECIPE = { kind: 'motif', cells: [1, -1, 1], layout: 'brick', edges: 'soft' };
+const DEFAULT_MOTIF = { cells: [1, -1, 1], layout: 'brick', edges: 'soft' };
 // A new slot made by the editor (slot B was off).
 const NEW_SLOT = { depthMm: 1.5, repeats: 8 };
 
@@ -28,15 +33,39 @@ export function newPatternId() {
   return `user:${Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')}`;
 }
 
-/** Rows of cells per tile: brick and checker alternate two rows. */
-export function rowsPerTile(layout) {
-  return layout === 'brick' || layout === 'checker' ? 2 : 1;
+/** Rows of cells per tile: brick and checker alternate two rows, a diagonal steps once per cell. */
+export function rowsPerTile(layout, cells) {
+  return layout === 'brick' || layout === 'checker' ? 2 : layout === 'diagonal' ? cells : 1;
 }
 
-function tileHeightFor(layout, rowLayers, layerHeightMm) {
+/**
+ * The row and layout a bitmap was filled from, so the editor can open it
+ * again: the first quick fill that gives exactly its cells, or null.
+ * @param {object} recipe
+ * @returns {{ cells: number[], layout: string, edges: string } | null}
+ */
+export function motifOf(recipe) {
+  if (recipe?.kind !== 'bitmap') return null;
+  const values = [...bitmapValues(recipe)];
+  const row = values.slice(0, recipe.columns);
+  const halves = row.filter((_, c) => c % 2 === 0);
+  const candidates = [row, halves];
+  for (const layout of ['stripes', 'checker', 'brick', 'diagonal']) {
+    for (const cells of candidates) {
+      if (cells.length < MIN_CELLS || cells.length > MAX_CELLS) continue;
+      const fill = fillBitmap(cells, layout);
+      if (fill.columns === recipe.columns && fill.rows === recipe.rows && fill.cells === recipe.cells) {
+        return { cells, layout, edges: recipe.edges ?? 'soft' };
+      }
+    }
+  }
+  return null;
+}
+
+function tileHeightFor(layout, cells, rowLayers, layerHeightMm) {
   const min = LIMITS.tileHeightMm?.min ?? 0;
   const max = LIMITS.tileHeightMm?.max ?? Infinity;
-  let layers = rowsPerTile(layout) * rowLayers;
+  let layers = rowsPerTile(layout, cells) * rowLayers;
   layers = Math.max(layers, Math.ceil(min / layerHeightMm - 1e-9));
   layers = Math.min(layers, Math.max(1, Math.floor(max / layerHeightMm + 1e-9)));
   return Math.round(layers * layerHeightMm * 1000) / 1000;
@@ -77,42 +106,45 @@ export function openPatternEditor(ctx, { slot: slotKey, findRecipe, onSaved }) {
 
   const start = store.state.design;
   const before = {
-    surface: structuredClone(start.surface),
+    detail: structuredClone(start.form.detail),
     hadAssets: Object.hasOwn(start, 'assets'),
     assets: structuredClone(start.assets ?? {}),
   };
-  const slot0 = start.surface[slotKey];
+  const slot0 = start.form.detail[slotKey];
   const found = slot0 && findRecipe(slot0.pattern);
-  const fromMotif = found?.recipe?.kind === 'motif';
-  const recipe = structuredClone(fromMotif ? found.recipe : DEFAULT_RECIPE);
-  recipe.layout ??= 'stripes';
-  recipe.edges ??= 'soft';
+  const opened = motifOf(found?.recipe);
+  const fromMotif = !!opened;
+  const recipe = structuredClone(opened ?? DEFAULT_MOTIF);
+  /** The bitmap the cells, layout and edges make. */
+  const bitmap = () => fillBitmap(recipe.cells, recipe.layout, recipe.edges);
   // Editing one of your own patterns keeps its id, so saving updates it.
   const id = fromMotif && String(slot0.pattern).startsWith('user:') ? slot0.pattern : newPatternId();
   let name = fromMotif && String(slot0.pattern).startsWith('user:') ? found.name : fromMotif ? `${found.name} (mine)` : 'My pattern';
   const lh = start.layers.layerHeightMm;
   let rowLayers = slot0
-    ? Math.max(1, Math.min(MAX_ROW_LAYERS, Math.round(slot0.tileHeightMm / lh / rowsPerTile(recipe.layout))))
+    ? Math.max(1, Math.min(MAX_ROW_LAYERS, Math.round(slot0.tileHeightMm / lh / rowsPerTile(recipe.layout, recipe.cells.length))))
     : 10;
   const S = slotKey.toUpperCase();
   const label = () => `Pattern ${S}: ${name}`;
 
   // ---- Live edit: the recipe goes into design.assets and the slot points at it.
   const push = () => {
-    validateRecipe(recipe);
+    const made = bitmap();
+    validateRecipe(made);
     store.change(label(), (d) => {
       d.assets ??= {};
-      d.assets[id] = { kind: 'recipe', name, recipe: structuredClone(recipe) };
-      let s = d.surface[slotKey];
+      d.assets[id] = { kind: 'recipe', name, recipe: made };
+      let s = d.form.detail[slotKey];
       if (!s) {
-        s = d.surface[slotKey] = { pattern: id, ...NEW_SLOT, tileHeightMm: 0 };
-        if (slotKey === 'b') d.surface.blend = { ...d.surface.blend, shape: 'fadesUp', amount: 1 };
+        s = d.form.detail[slotKey] = { pattern: id, ...NEW_SLOT, tileHeightMm: 0 };
+        if (slotKey === 'b') d.form.detail.blend = { ...d.form.detail.blend, shape: 'fadesUp', amount: 1 };
       }
       if (!(s.depthMm > 0)) s.depthMm = NEW_SLOT.depthMm;
       s.pattern = id;
-      s.tileHeightMm = tileHeightFor(recipe.layout, rowLayers, d.layers.layerHeightMm);
+      s.tileHeightMm = tileHeightFor(recipe.layout, recipe.cells.length, rowLayers, d.layers.layerHeightMm);
     });
     drawPreview();
+    updateRowHint();
   };
 
   // ---- Cells
@@ -158,7 +190,7 @@ export function openPatternEditor(ctx, { slot: slotKey, findRecipe, onSaved }) {
   // ---- Layout, edges, row height
   const layout = segmented({
     label: 'Layout',
-    options: MOTIF_LAYOUTS.map((v) => ({ value: v, label: LAYOUT_LABEL[v] ?? v })),
+    options: FILL_LAYOUTS.map((v) => ({ value: v, label: LAYOUT_LABEL[v] ?? v })),
     value: recipe.layout,
     onChange: (v) => {
       recipe.layout = v;
@@ -196,10 +228,10 @@ export function openPatternEditor(ctx, { slot: slotKey, findRecipe, onSaved }) {
   rowInput.setAttribute('aria-describedby', rowHint.id);
   const updateRowHint = () => {
     const d = store.state.design;
-    const tile = tileHeightFor(recipe.layout, rowLayers, d.layers.layerHeightMm);
-    const two = rowsPerTile(recipe.layout) === 2;
-    rowHint.textContent = two
-      ? `${LAYOUT_LABEL[recipe.layout]} repeats every 2 rows, so one tile is ${round1(tile)} mm high.`
+    const tile = tileHeightFor(recipe.layout, recipe.cells.length, rowLayers, d.layers.layerHeightMm);
+    const rows = rowsPerTile(recipe.layout, recipe.cells.length);
+    rowHint.textContent = rows > 1
+      ? `${LAYOUT_LABEL[recipe.layout]} repeats every ${rows} rows, so one tile is ${round1(tile)} mm high.`
       : `${LAYOUT_LABEL[recipe.layout]} uses one row per tile, so one tile is ${round1(tile)} mm high.`;
     rowMinus.disabled = rowLayers <= 1;
     rowPlus.disabled = rowLayers >= MAX_ROW_LAYERS;
@@ -209,11 +241,11 @@ export function openPatternEditor(ctx, { slot: slotKey, findRecipe, onSaved }) {
   const preview = h('canvas', { class: 'pe-preview', width: 1, height: 1, role: 'img', 'aria-label': 'Preview of the pattern, 2 by 2 tiles' });
   const drawPreview = () => {
     const d = store.state.design;
-    const s = d.surface[slotKey] ?? { repeats: NEW_SLOT.repeats };
+    const s = d.form.detail[slotKey] ?? { repeats: NEW_SLOT.repeats };
     const fp = footprintAt(d);
-    const tile = tileHeightFor(recipe.layout, rowLayers, d.layers.layerHeightMm);
+    const tile = tileHeightFor(recipe.layout, recipe.cells.length, rowLayers, d.layers.layerHeightMm);
     const g = beadGrid({ repeats: s.repeats, tileHeightMm: tile }, fp.perimeterMm, d.layers);
-    drawSwatch(preview, recipe, { size: PREVIEW_PX, columns: g.columns, rows: g.rows, tiles: 2 });
+    drawSwatch(preview, bitmap(), { size: PREVIEW_PX, columns: g.columns, rows: g.rows, tiles: 2 });
   };
 
   // ---- Name, save, apply
@@ -227,7 +259,7 @@ export function openPatternEditor(ctx, { slot: slotKey, findRecipe, onSaved }) {
   saveBtn.addEventListener('click', async () => {
     saveBtn.disabled = true;
     try {
-      const saved = await savePattern({ id, name, recipe: structuredClone(recipe) });
+      const saved = await savePattern({ id, name, recipe: bitmap() });
       if (!saved) throw new Error('not stored');
       status.textContent = `Saved “${name}” to My patterns.`;
       onSaved?.();
@@ -288,7 +320,7 @@ export function openPatternEditor(ctx, { slot: slotKey, findRecipe, onSaved }) {
       store.commit();
     } else {
       store.change(label(), (d) => {
-        d.surface = structuredClone(before.surface);
+        d.form.detail = structuredClone(before.detail);
         if (before.hadAssets) d.assets = structuredClone(before.assets);
         else delete d.assets;
       });

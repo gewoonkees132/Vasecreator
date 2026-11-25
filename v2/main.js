@@ -227,8 +227,8 @@ async function boot() {
       dragging = true;
       store.change(which === 'from' ? 'Pattern from' : 'Pattern to', (d) => {
         const lh = d.layers.layerHeightMm;
-        if (which === 'from') d.surface.fromMm = Math.max(0, Math.min(z, d.surface.toMm - lh));
-        else d.surface.toMm = Math.min(d.form.height, Math.max(z, d.surface.fromMm + lh));
+        if (which === 'from') d.form.detail.fromMm = Math.max(0, Math.min(z, d.form.detail.toMm - lh));
+        else d.form.detail.toMm = Math.min(d.form.height, Math.max(z, d.form.detail.fromMm + lh));
       });
     },
     onSeam(angle) {
@@ -494,7 +494,7 @@ async function boot() {
     const { view: v, design } = store.state;
     let mode = null;
     if (v.mode === 'design' && v.step === 'layers') mode = 'seam';
-    else if (v.mode === 'design' && v.step === 'pattern' && (textured(design.surface.a) || textured(design.surface.b))) mode = 'range';
+    else if (v.mode === 'design' && v.step === 'pattern' && (textured(design.form.detail.a) || textured(design.form.detail.b))) mode = 'range';
     gizmos.setMode(mode);
     if (mode) gizmos.update(design, store.state.result);
   }

@@ -2,7 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normaliseDesign } from '../core/design.js';
 import { KIND, RAMP_IN_LAYERS, buildToolpath, patternFeatures } from '../core/toolpath.js';
-import { cylinder, distance, library, presets } from './support/fixtures.js';
+import { TILES, cylinder, distance, library, presets, withPattern } from './support/fixtures.js';
+
+// Designs with a Pattern (D37): a hidden seam, two walls that follow it, and a
+// fixed seam on a twisted pot, whose seam snaps from node to node.
+const fixedOnTwist = withPattern(structuredClone(presets[1]), TILES.knit, { fromMm: 10, toMm: 140 });
+fixedOnTwist.layers.seam.position = 'fixed';
 
 const build = (d, walls = 1) => {
   const design = normaliseDesign(d);
@@ -17,6 +22,9 @@ const variants = [
   ['four base layers with a hole', { ...cylinder({ baseLayers: 4 }), base: { layers: 4, pattern: 'spiral', spacingRatio: 0.9, outline: true, hole: { diameter: 20 } } }],
   ['two walls', { ...presets[0], finish: { walls: 2, wallSpacingMm: 2.7, innerWall: 'smooth' } }, 2],
   ['two walls following the pattern', { ...presets[2], finish: { walls: 2, wallSpacingMm: 2.7, innerWall: 'followPattern' } }, 2],
+  ['a Pattern with a hidden seam', withPattern(structuredClone(presets[0]), TILES.knit, { fromMm: 10, toMm: 150 })],
+  ['a Pattern with two walls following it', withPattern({ ...structuredClone(presets[2]), finish: { walls: 2, wallSpacingMm: 2.7, innerWall: 'followPattern' } }, TILES.knit, { fromMm: 8, toMm: 100 }), 2],
+  ['a Pattern on a twisted pot with a fixed seam', fixedOnTwist],
 ];
 
 for (const [name, d, walls = 1] of variants) {
@@ -233,7 +241,7 @@ test('a hidden seam sits in a flute groove', () => {
   const x = tp.seamLine[3 * i];
   const y = tp.seamLine[3 * i + 1];
   const z = tp.seamLine[3 * i + 2];
-  const repeats = design.surface.a.repeats;
+  const repeats = design.form.detail.a.repeats;
   const u = Math.atan2(y, x) / (2 * Math.PI);
   // Flutes are cos(2π·repeats·u): a groove is where that is −1.
   assert.ok(Math.cos(2 * Math.PI * repeats * u) < -0.99, `seam at u ${u}, z ${z}`);
@@ -273,9 +281,11 @@ test('patterns follow the twist', () => {
 
 test('pattern features drive the points per layer', () => {
   assert.deepEqual(patternFeatures({ kind: 'shape', shape: 'flutes' }), { around: 1, up: 0 });
-  assert.deepEqual(patternFeatures({ kind: 'motif', cells: [1, -1, 1], layout: 'brick' }), { around: 3, up: 2 });
+  assert.deepEqual(patternFeatures({ kind: 'bitmap', columns: 6, rows: 2, cells: '++--++-++++-' }), { around: 6, up: 2 });
+  assert.deepEqual(patternFeatures({ kind: 'bitmap', columns: 3, rows: 2, cells: '+-0+-0' }), { around: 3, up: 0 });
+  assert.deepEqual(patternFeatures({ kind: 'bitmap', columns: 2, rows: 2, cells: '++--' }), { around: 0, up: 2 });
   const d = cylinder({ radius: 30, height: 30 });
-  d.surface.a = { pattern: 'lib:flutes@1', depthMm: 0.5, repeats: 60, tileHeightMm: 20 };
+  d.form.detail.a = { pattern: 'lib:flutes@1', depthMm: 0.5, repeats: 60, tileHeightMm: 20 };
   const { tp } = build(d);
   const i = 15;
   assert.ok(tp.layerStarts[i + 1] - tp.layerStarts[i] >= 8 * 60);

@@ -39,15 +39,15 @@ test('a steep cone leans past the limit between the expected heights', () => {
 
 test('the overhang limit is a design setting', () => {
   const d = linearDesign([[0, 40], [40, 40], [80, 70], [100, 70]]);
-  d.layers.overhangLimitDeg = 30;
+  d.rules.overhangLimitDeg = 30;
   assert.match(warning(computePreview(d, { library }), 'overhang').message, /^Leans past 30° /);
 });
 
 test('a needle is too narrow for the bead', () => {
   const d = linearDesign([[0, 6], [80, 6]]);
-  d.surface.a = { pattern: 'lib:flutes@1', depthMm: 2, repeats: 4, tileHeightMm: 20 };
-  d.surface.fromMm = 10;
-  d.surface.toMm = 70;
+  d.form.detail.a = { pattern: 'lib:flutes@1', depthMm: 2, repeats: 4, tileHeightMm: 20 };
+  d.form.detail.fromMm = 10;
+  d.form.detail.toMm = 70;
   const r = computePreview(d, { library });
   const w = warning(r, 'narrow');
   assert.ok(w);
@@ -89,7 +89,7 @@ test('an unusual layer height for the bead is a warning without beads', () => {
 
 test('a pattern finer than the bead is flagged', () => {
   const d = cylinder({ radius: 30, height: 60 });
-  d.surface.a = { pattern: 'lib:flutes@1', depthMm: 3, repeats: 40, tileHeightMm: 20 };
+  d.form.detail.a = { pattern: 'lib:flutes@1', depthMm: 3, repeats: 40, tileHeightMm: 20 };
   const r = computePreview(d, { library });
   const w = warning(r, 'finePattern');
   assert.ok(w);
@@ -97,7 +97,7 @@ test('a pattern finer than the bead is flagged', () => {
   assert.match(w.message, /^Pattern finer than the bead can print at \d+–\d+ mm$/);
   // Rows closer than two layers are flagged too, without beads.
   const rows = cylinder();
-  rows.surface.a = { pattern: 'lib:dots@1', depthMm: 0.3, repeats: 4, tileHeightMm: 5 };
+  rows.form.detail.a = { pattern: 'lib:dots@1', depthMm: 0.3, repeats: 4, tileHeightMm: 5 };
   const rw = warning(computePreview(rows, { library }), 'finePattern');
   assert.ok(rw);
 });

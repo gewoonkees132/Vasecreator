@@ -62,7 +62,7 @@
       "id": "lib:out-in-out@1",
       "name": "Out·In·Out",
       "description": "Cells pushed out, in and out again, laid like bricks.",
-      "recipe": { "kind": "motif", "cells": [1, -1, 1], "layout": "brick", "edges": "soft" },
+      "recipe": { "kind": "bitmap", "columns": 6, "rows": 4, "cells": "++--++++--++-++++--++++-", "edges": "round" },
       "range": [-1, 1],
       "defaults": { "depthMm": 1, "repeats": 6, "tileHeightMm": 30 }
     },

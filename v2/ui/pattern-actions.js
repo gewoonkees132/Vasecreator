@@ -41,9 +41,10 @@ export function findEntry(library, id, assets, saved) {
   return library.patterns.find((p) => p.id === id) ?? saved?.find((p) => p.id === id) ?? null;
 }
 
-/** Whether the design draws with an asset (a slot or the morph map uses it). */
+/** Whether the design draws with an asset (a slot, the morph map or the Pattern uses it). */
 export function usesAsset(d, id) {
-  return d.surface?.a?.pattern === id || d.surface?.b?.pattern === id || d.form?.morph?.map === id;
+  const detail = d.form?.detail;
+  return detail?.a?.pattern === id || detail?.b?.pattern === id || d.form?.morph?.map === id || d.pattern?.drawing === id;
 }
 
 /** A slot with a texture: set, and not Plain. */
@@ -67,7 +68,7 @@ export function snapToLayers(mm, layerHeightMm) {
  * repeat is wide times the image's aspect, in whole layers. Mutates d.
  */
 export function placeImage(d, s, id, asset) {
-  const surf = d.surface;
+  const surf = d.form.detail;
   const lh = d.layers.layerHeightMm;
   let cur = surf[s];
   if (!cur) {
@@ -93,7 +94,7 @@ export function placeImage(d, s, id, asset) {
  * @param {object | null} entry  findEntry's result for id
  */
 export function setSlotPattern(d, s, id, entry) {
-  const surf = d.surface;
+  const surf = d.form.detail;
   if (!id) {
     if (s === 'b') surf.b = null;
     return;
@@ -166,7 +167,7 @@ export async function importImageFile(ctx, file, s) {
   return { id, asset };
 }
 
-/** Opens the motif editor for slot `s` (D24). */
+/** Opens the pattern editor for slot `s` (D24; a stopgap until the 2D editor, D46). */
 export function openEditor(ctx, s, { findRecipe, onSaved } = {}) {
   return loadEditor().then((m) => m.openPatternEditor(ctx, { slot: s, findRecipe, onSaved }));
 }
