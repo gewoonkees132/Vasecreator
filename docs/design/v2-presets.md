@@ -1,7 +1,7 @@
 # Vasecreator v2: the presets (audit and five new ones)
 
 - **Date:** 2026-11-25
-- **Status:** Built on `t3/vase-presets`, cut from `t3/pattern-studio` (`0403f10`), so the presets use design version 3. Not pushed. The five new presets wait for the owner's look, as the first three did (Q10).
+- **Status:** Built on `t3/vase-presets`, cut from `t3/pattern-studio` (`0403f10`), so the presets use design version 3. Pushed for the owner's review. The owner kept the five new presets on 2026-11-25 and agreed to leave the Classic vase as it is and to the builder's calls (§7).
 - **The request:** "audit the preset defaults, build 5 unique high quality vases and audit the pr set default". Read as:
   1. Audit the three presets and the default design.
   2. Build five new presets.
@@ -221,6 +221,8 @@ Findings:
 - 366 tests at the start, 428 now, all passing.
 
 ## 7. For the owner
+
+**The owner's answers (2026-11-25):** 1 yes, the five stay; 2 the Classic vase stays as it is; 3 no answer, so the descriptions stay unshown for now; 4 agreed. Item 5 is information only.
 
 1. **Do the five new presets stay?** Bud vase, Petal bowl, Double gourd, Faceted flask and Drape vase, after the three confirmed ones. Their names, forms and order are the builder's.
 2. **The Classic vase's 0.45° margin (finding 1).** Recommendation: leave it.
