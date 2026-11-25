@@ -521,7 +521,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
   - Ratios of a bead width show as percentages, as the bead support default of 50 % reads in D44.
   - The limits: bead support 10–100 % (as before), the tightest curve 10–150 %, layers per bump 1–6.
   - The wording of the passing lines: "Nothing leans past the limit", "Every bead sits on the one below", "Nothing finer than the bead can print". The info lines under the fields say what a percentage is of.
-  - **Desktop placement.** With its rules the card is up to about 520 px tall, and hanging under the chip it covered half the pot (D22). So on desktop it (and the size card, which shares its frame) now opens below the chips at the window's right edge, over the history column. At 1280 × 800 it clears the Classic vase (the pot spans x 577–889, the card 964–1264). In a narrower desktop window it can still reach the pot's right side. The phone layout is unchanged: the card opens over the dock or sheet (`--bottom-chrome`) and scrolls.
+  - **Desktop placement.** With its rules the card is up to about 520 px tall, and hanging under the chip it covered half the pot (D22). So on desktop it (and the size card, which shares its frame) now opens below the chips at the window's right edge, over the history column. At 1280 × 800 it clears the Classic vase (the pot spans x 577–889, the card 964–1264). In a narrower desktop window it can still reach the pot's right side. The phone layout is unchanged: the card opens over the dock or sheet (`--bottom-chrome`) and scrolls. The owner kept this placement for now (2026-11-25).
 - **Tests:** `test/rules.test.js` covers the fields against `design.rules`, the percentages and limits, writing a value back, the layout and the pinning, that no dock tool or part sets a rule, and a card edit changing the warning. There are also a design test for the rules' defaults and limits and two checks tests for the new rules. That makes 344 in all.
 - **Browser check:** as in §11.1, on port 8041, with scratch scripts.
   - **Desktop, 1280 × 800:**
@@ -554,7 +554,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 
 ## 13. Open for the owner, and left to the builder
 
-**Settled by the owner (2026-11-25):** presets keep their relief (D52), coarse grids keep *Sharp, Soft, Round* (D53), and the A/B blend gains *Diagonal* (D54). After slice 3: no *Cancel* in the editor (D55), cells that stay easy to hit (D56), and pinch to zoom with a clickable cap (D57). Nothing is open for the owner now.
+**Settled by the owner (2026-11-25):** presets keep their relief (D52), coarse grids keep *Sharp, Soft, Round* (D53), and the A/B blend gains *Diagonal* (D54). After slice 3: no *Cancel* in the editor (D55), cells that stay easy to hit (D56), and pinch to zoom with a clickable cap (D57). After slice 4: the warnings and size cards keep opening over the history column on desktop, for now (§11.4). Nothing is open for the owner now.
 
 **Left to the builder:**
 - the exact *Diagonal* fade formula (slice 1: 1 − a·sin²(π(t + u)))
