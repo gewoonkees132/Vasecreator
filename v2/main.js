@@ -558,7 +558,10 @@ async function boot() {
         gizmos.update(state.design, state.result);
         handles.update(state.design, state.result.profileLine);
         applyHighlight();
-        if (fitPending) {
+        // Only a result of the design on hand fits the camera. Opening a
+        // design from another step first asks for a preview of the old one
+        // (the step change), and that result can still arrive first.
+        if (fitPending && shownDesign === state.design) {
           fitPending = false;
           layout('reset');
         }
