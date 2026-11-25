@@ -85,6 +85,7 @@ function defaultView() {
     selectedKnot: null,
     highlight: null,
     designsOpen: false,
+    editor: null,
     sizeLocked: true,
   };
 }
@@ -154,6 +155,10 @@ export function createStore({ design, history = null, printer = null, label = 'S
 
   const listeners = new Set();
   let gestureLabel = null;
+  // Which kind of gesture is open: null for the controls, 'editor' for an
+  // editor session (D46). A change of another kind ends the open gesture
+  // first, so each lands as its own step.
+  let gestureGroup = null;
 
   // Persistence bookkeeping: steps changed since the last save.
   const dirty = new Set();
@@ -310,13 +315,18 @@ export function createStore({ design, history = null, printer = null, label = 'S
     /**
      * Live edit inside a gesture (a drag, a scrub). The mutator edits a draft
      * copy; subscribers get a new design object. No history step yet.
+     * A gesture of another `group` (an editor session is 'editor', the
+     * controls null) is committed first, so the two never share a step.
      * @param {string} stepLabel
      * @param {(draft: object) => void} mutator
+     * @param {{ group?: string | null }} [options]
      */
-    change(stepLabel, mutator) {
+    change(stepLabel, mutator, { group = null } = {}) {
+      if (gestureLabel && gestureGroup !== group) store.commit();
       const draft = structuredClone(state.design);
       mutator(draft);
       gestureLabel = stepLabel;
+      gestureGroup = group;
       state.design = draft;
       emit('design');
     },
@@ -325,6 +335,7 @@ export function createStore({ design, history = null, printer = null, label = 'S
     commit() {
       const stepLabel = gestureLabel || 'Change';
       gestureLabel = null;
+      gestureGroup = null;
       if (key(state.design) === key(steps[pointer].design)) return false;
       pushStep(stepLabel, state.design);
       emit('history');
@@ -336,8 +347,8 @@ export function createStore({ design, history = null, printer = null, label = 'S
      * @param {string} stepLabel
      * @param {(draft: object) => void} mutator
      */
-    apply(stepLabel, mutator) {
-      store.change(stepLabel, mutator);
+    apply(stepLabel, mutator, options) {
+      store.change(stepLabel, mutator, options);
       return store.commit();
     },
 
@@ -349,7 +360,11 @@ export function createStore({ design, history = null, printer = null, label = 'S
      * @param {{ savedId?: string | null }} [options]  the saved tile it came from
      */
     open(design, stepLabel, { savedId = null } = {}) {
+      // An editor session's edits stay a step of their own; a control's
+      // half-done gesture is dropped, as before.
+      if (gestureLabel && gestureGroup) store.commit();
       gestureLabel = null;
+      gestureGroup = null;
       state.design = structuredClone(design);
       state.savedId = savedId;
       const same = key(design) === key(steps[pointer].design) && savedId === steps[pointer].savedId;

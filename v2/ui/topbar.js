@@ -1,7 +1,9 @@
 // Top bar actions (design §8.1): undo, redo, Designs and Save design. Print is
 // step 5 of the step frame (issue #1), so the bar has no print button. On a
 // phone (C11) Designs and Save design move into the menu behind the logo, and
-// the bar keeps undo and redo.
+// the bar keeps undo and redo. While the 2D editor is open, undo and redo
+// step through the editor's own history (ctx.editorHistory, D46), so its
+// session stays one step of the design's history.
 
 const UNDO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 const REDO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>';
@@ -37,12 +39,12 @@ export function mountTopbar(header, ctx) {
   const undo = el('button', {
     type: 'button', class: 'btn btn-icon', html: UNDO_ICON,
     'aria-label': 'Undo', title: `Undo (${isMac ? '⌘' : 'Ctrl+'}Z)`,
-    onclick: () => store.undo(),
+    onclick: () => (ctx.editorHistory ? ctx.editorHistory.undo() : store.undo()),
   });
   const redo = el('button', {
     type: 'button', class: 'btn btn-icon', html: REDO_ICON,
     'aria-label': 'Redo', title: `Redo (${isMac ? '⇧⌘Z' : 'Ctrl+Y'})`,
-    onclick: () => store.redo(),
+    onclick: () => (ctx.editorHistory ? ctx.editorHistory.redo() : store.redo()),
   });
   const designsBtn = el('button', {
     type: 'button', class: 'btn designs-btn', text: 'Designs', 'data-desk-only': true,
@@ -98,8 +100,12 @@ export function mountTopbar(header, ctx) {
   function update() {
     const printing = store.state.view.mode === 'print';
     // Undo, redo and saving in Print would change the design under a computed print (C31).
-    undo.disabled = printing || !store.canUndo();
-    redo.disabled = printing || !store.canRedo();
+    const ed = ctx.editorHistory;
+    undo.disabled = printing || !(ed ? ed.canUndo() : store.canUndo());
+    redo.disabled = printing || !(ed ? ed.canRedo() : store.canRedo());
+    const where = ed ? ' in the editor' : '';
+    undo.title = `Undo${where} (${isMac ? '⌘' : 'Ctrl+'}Z)`;
+    redo.title = `Redo${where} (${isMac ? '⇧⌘Z' : 'Ctrl+Y'})`;
     saveBtn.disabled = printing;
     menuSave.disabled = printing;
   }

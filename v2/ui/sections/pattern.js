@@ -1,6 +1,8 @@
 // Pattern section (D35–D48, docs/design/v2-pattern-studio.md §3): the
 // bead-scale Pattern, design.pattern, as the parts of the Pattern step:
-//   Pattern   the starter drawings at the pot's own bead scale, None, and your own
+//   Pattern   the starter drawings at the pot's own bead scale, None, your
+//             own, Make (the 2D editor on an empty grid) and Edit (on the
+//             drawing on the pot: a starter as a copy, your own in place)
 //   Depth     out = +depth, in = −depth, up to half a bead (D38)
 //   Density   the node spacing around, as mm or as points per layer, with the
 //             readout "96 points per layer · 3.8–6.1 mm" (D40)
@@ -15,6 +17,7 @@ import { DEPTH_BEADS, SPACING_BEADS } from '../../core/layer-pattern.js';
 import { BLEND_OPTIONS } from '../dock-tools.js';
 import {
   findLayerEntry, layerMineEntries, pickLayerPattern, drawLayerEntry, readoutOf, densityText, densityLimits, setDensityFace,
+  openEditor, editableEntry,
 } from '../pattern-actions.js';
 
 const SWATCH = 52;
@@ -63,6 +66,26 @@ const section = {
     grid.append(...tiles.map((t) => t.btn));
     let mineTiles = [];
     let mineKey = null;
+
+    // Make your own (an empty grid) and Edit (the drawing on the pot), in the 2D editor (§3.8, D46).
+    const editorMsg = h('p', { class: 'panel-note image-msg', role: 'alert', hidden: true });
+    const actionTile = (glyph, name, label, mode) => {
+      const btn = h('button', { type: 'button', class: 'swatch swatch-action', title: label, 'aria-label': label }, [
+        h('span', { class: 'swatch-add', 'aria-hidden': 'true', text: glyph }),
+        h('span', { class: 'swatch-name', text: name }),
+      ]);
+      btn.addEventListener('click', () => {
+        editorMsg.hidden = true;
+        openEditor(ctx, { kind: 'pattern' }, { mode, returnFocus: btn }).catch((err) => {
+          console.warn('Editor not loaded', err);
+          editorMsg.textContent = 'The editor didn’t load. Reload the page to try again.';
+          editorMsg.hidden = false;
+        });
+      });
+      return btn;
+    };
+    const makeBtn = actionTile('+', 'Make', 'Make your own pattern', 'make');
+    const editBtn = actionTile('✎', 'Edit', 'Edit the pattern', 'edit');
 
     // ---- Depth ----
     const depth = slider({
@@ -136,13 +159,13 @@ const section = {
     });
 
     // The Pattern step's parts (ui/steps.js).
-    for (const e of [strip, about]) e.dataset.part = 'drawing';
+    for (const e of [strip, editorMsg, about]) e.dataset.part = 'drawing';
     depth.el.dataset.part = 'depth';
     densityBox.dataset.part = 'density';
     rangeBox.dataset.part = 'range';
     fadeBox.dataset.part = 'fade';
     soften.el.dataset.part = 'soften';
-    el.append(strip, about, depth.el, densityBox, rangeBox, fadeBox, soften.el);
+    el.append(strip, editorMsg, about, depth.el, densityBox, rangeBox, fadeBox, soften.el);
 
     function renderMine(d, current, r) {
       const list = layerMineEntries(library, d);
@@ -150,9 +173,15 @@ const section = {
       if (key !== mineKey) {
         mineKey = key;
         mineTiles = list.map((e) => tile(e.id, e.name, e));
-        mineGrid.replaceChildren(...mineTiles.map((t) => t.btn));
+        mineGrid.replaceChildren(...mineTiles.map((t) => t.btn), makeBtn, editBtn);
       }
-      mineLabel.hidden = mineGrid.hidden = !list.length;
+      const editable = editableEntry(d, library, { kind: 'pattern' });
+      editBtn.hidden = !editable;
+      if (editable) {
+        const label = editable.own ? `Edit ${editable.name}` : `Edit a copy of ${editable.name}`;
+        editBtn.setAttribute('aria-label', label);
+        editBtn.title = label;
+      }
       for (const t of mineTiles) {
         t.btn.setAttribute('aria-pressed', String(t.id === current));
         drawLayerEntry(t, t.entry, d, SWATCH, t.id === current ? r?.spacingMinMm : undefined);

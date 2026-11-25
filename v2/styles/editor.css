@@ -1,0 +1,192 @@
+/* Vasecreator v2: the 2D editor (ui/pattern-editor.js, pattern studio D45,
+   D46, §6). It stands in for the step frame while it is open and never
+   covers the pot: a wide panel in the left column on desktop, the lower
+   part of the screen on a phone. main.js fits the pot into what is left.
+   Uses only the shared tokens from app.css :root. */
+
+html.is-editing #panel { display: none !important; }
+
+.editor {
+  position: fixed;
+  top: var(--content-top);
+  left: var(--gap);
+  bottom: var(--gap);
+  /* Wider than the step frame, and the pot keeps at least 300 px. */
+  width: min(560px, calc(100vw - var(--rightcol-w) - var(--gap) * 4 - 300px));
+  min-width: var(--sidebar-w);
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-card);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-2);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--c-text);
+}
+
+.ed-head {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-2) var(--space-4);
+  background: #fff;
+  border-bottom: 1px solid var(--c-border);
+}
+.ed-titles { flex: 1; min-width: 0; }
+.ed-title-row { display: flex; align-items: baseline; gap: var(--space-2); }
+.ed-title { font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ed-size { flex: none; font-size: 13px; font-weight: 600; color: var(--c-text-2); font-variant-numeric: tabular-nums; }
+.ed-sub { margin-top: 2px; font-size: 12px; line-height: 1.35; color: var(--c-text-2); }
+
+/* The grid: the tile in full colour, its repeats dimmed round it. */
+.ed-stage { position: relative; flex: 1 1 auto; min-height: 140px; overflow: hidden; }
+.ed-canvas { position: absolute; inset: 0; display: block; touch-action: none; cursor: crosshair; }
+.ed-canvas:focus-visible { outline: 2px solid var(--c-primary-dark); outline-offset: -3px; box-shadow: none; }
+
+/* The tools: every group on desktop, one tab's groups on a phone. */
+.ed-tools {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--c-border);
+  background: rgba(255,255,255,.55);
+}
+.ed-group { display: none; flex-direction: column; gap: 4px; }
+.ed-group.is-tab { display: flex; }
+.ed-group-title { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--c-text-2); white-space: nowrap; }
+.ed-row { display: flex; gap: 4px; }
+.ed-group .seg { gap: 0; }
+.ed-group .seg-btn { min-height: 38px; }
+
+.ed-btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--c-input-border);
+  border-radius: var(--radius-ctl);
+  background: #fff;
+  color: var(--c-text);
+  cursor: pointer;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
+.ed-btn:hover:not(:disabled) { border-color: var(--c-primary-light); }
+.ed-btn:disabled { opacity: .35; cursor: default; }
+.ed-btn:focus-visible { outline-offset: 1px; }
+.ed-btn[aria-checked="true"] { border-color: var(--c-primary-dark); background: rgba(139,197,193,.3); box-shadow: inset 0 0 0 1px var(--c-primary-dark); }
+/* Set shows the state it sets in its corner. */
+.ed-set::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--ed-tone, #fff);
+  box-shadow: 0 0 0 1px rgba(18,47,45,.55);
+}
+.ed-btn.ed-done { width: 40px; height: 40px; border-color: var(--c-primary-dark); background: var(--c-primary-dark); color: #fff; }
+.ed-btn.ed-done:hover { background: var(--c-primary-dark-hover); }
+
+.ed-tabs { display: none; }
+.ed-status { flex: none; min-height: 28px; padding: 6px var(--space-4); font-size: 12px; color: var(--c-text-2); border-top: 1px solid var(--c-border); }
+
+/* A long press on a phone shows an icon button's name (ui/press-label.js, D49). */
+.press-label {
+  position: fixed;
+  z-index: 200;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--c-primary-dark);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: var(--shadow-3);
+}
+
+@media (pointer: coarse) {
+  .ed-btn { width: 44px; height: 44px; }
+  .ed-group .seg-btn { min-height: 44px; }
+}
+
+/* ---------- Phone: the lower part of the screen; the pot stays live above ---------- */
+
+@media (max-width: 760px) {
+  .editor {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    min-width: 0;
+    height: clamp(300px, 54dvh, 460px);
+    padding-bottom: env(safe-area-inset-bottom);
+    border: 0;
+    border-radius: var(--radius-card) var(--radius-card) 0 0;
+    background: rgb(250,250,250);
+    box-shadow: 0 -4px 16px rgba(0,0,0,.08);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .ed-head { align-items: center; padding: 6px 6px 2px var(--space-4); background: none; border: 0; }
+  .ed-sub { display: none; }
+  .ed-btn.ed-done { width: 48px; height: 40px; border-radius: 12px; }
+  .ed-stage { min-height: 110px; }
+  .ed-tools { flex-wrap: nowrap; justify-content: center; align-items: center; gap: 10px; padding: 6px var(--space-2); border-top: 0; background: none; }
+  .ed-group-title { display: none; }
+  .ed-group.is-tab { flex-direction: row; }
+  .ed-row { gap: 6px; }
+  .ed-btn { width: 44px; height: 44px; border-radius: 12px; }
+  .editor [data-desk] { display: none !important; }
+  .ed-tabs {
+    flex: none;
+    display: flex;
+    gap: 2px;
+    padding: 4px var(--space-2) 6px;
+    border-top: 1px solid var(--c-border);
+    background: #fff;
+  }
+  .ed-tab {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(18,47,45,.66);
+    cursor: pointer;
+  }
+  .ed-tab[aria-selected="true"] { background: var(--c-primary-dark); color: #fff; }
+  .ed-tab:focus-visible { outline-offset: -2px; }
+  /* Still read out, never shown: the phone has no room for it. */
+  .ed-status {
+    position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+}
+
+/* A short screen (a phone held sideways) keeps some room for the pot. */
+@media (max-width: 760px) and (max-height: 520px) {
+  .editor { height: clamp(220px, 62dvh, 300px); }
+  .ed-head { padding-top: 2px; }
+}

@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Owner decisions D35–D54. D52–D54 settled §13's open questions on 2026-11-25. Slices 1 (the engine, commit `a916a65`) and 2 (the Pattern and Shape steps) are built on `t3/pattern-studio` (local, not pushed); slices 3–6 are next (§11, notes in §11.1 and §11.2).
+- **Status:** Owner decisions D35–D54. D52–D54 settled §13's open questions on 2026-11-25. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`) and 3 (the 2D editor) are built on `t3/pattern-studio` (local, not pushed); slices 4–6 are next (§11, notes in §11.1–§11.3).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -344,6 +344,7 @@ These go on the branch `t3/pattern-studio`, cut from `t3/guided-journey`. Each s
 3. **The 2D editor.**
    - Build: the phone and desktop tool sets in §6, live on the pot, also opened from Detailed morph with a coarse grid, a soft render and *Sharp, Soft, Round* (D53).
    - Accept when: on a phone the pot stays visible and live while drawing; inverting a column or a diagonal works across the dimmed repeats; one history entry per session.
+   - **Built** (§11.3).
 4. **The warnings card rules.**
    - Build: overhang limit, bead support and fineness, editable in the card; the overhang limit removed from *Layers & seam* and the dock.
 5. **The *Next* and icon-first sweep** (§8).
@@ -411,7 +412,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 - **Left for later slices:**
   - *Make your own* and *Edit* in the carousel wait for the 2D editor (slice 3).
   - The Pattern's *My patterns* lists only a drawing the design carries, until *Save pattern* (slice 6).
-  - The stopgap editor still opens from the Detailed morph's *Edit swatch…*.
+  - The stopgap editor still opens from the Detailed morph's *Edit swatch…*. (Slice 3 replaced it, §11.3.)
 - **Browser check:** as in §11.1, on port 8041, with scratch scripts.
   - **Desktop, 1280 × 800:**
     - A first visit opens the Classic vase with its flutes and the dark bracket.
@@ -424,6 +425,68 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
     - The five Fade options fit, and the sheet shows the parts of Shape and Pattern.
     - The pot's region ends above the dock, and the handles stay inside it.
   - **Headless flick:** in headless Chrome the dial's flick can run on for seconds after a scripted drag, so values keep changing after the drag. That is the flick, not a bug.
+
+### 11.3 Slice 3 as built (notes for the next slices)
+
+- **Where it lives.** `ui/pattern-editor.js` is the 2D editor and replaces the stopgap. Its grid operations are pure functions in `core/bitmap.js`. `ui/pattern-actions.js` says what a session starts from and how its drawing goes into the design (`editorStart`, `writeEditorDrawing`, `editableEntry`, `detailTileFor`). `ui/press-label.js` shows an icon button's name on a long press. `styles/editor.css` lays it out, and `index.html` has an `aside#editor` for it. The contracts are in `v2/ARCHITECTURE.md` ("UI contracts", "Store").
+- **Layout (D46).** While it is open, the editor stands in for the step frame: `<html>` gets `is-editing`, which hides the panel, and `main.js` fits the pot into what is left.
+  - **Desktop:** a panel in the left column, up to 560 px wide. At 1280 × 800 the pot keeps a region 540 px wide beside it.
+  - **Phone:** the lower part of the screen (clamp(300px, 54dvh, 460px)). The dock, the sheet and the step bar give way. At 360 × 660 the editor takes 356 px and the pot keeps 224 px above it, live.
+  - The drag points, the brackets and the seam grip hide while the editor is open, so nothing else can land in history meanwhile.
+- **The grid.** One canvas.
+  - The tile is in full colour in the middle, and its repeats are dimmed round it towards a mid grey, so out, flat and in keep their order there too.
+  - Cells are at their true proportions (§6), and never larger than 80 × 56 px, so a small tile shows more repeats.
+  - The Pattern is crisp, with darker lines between rows (the layers). A Detailed morph grid is drawn soft as it prints (`evaluatePattern`), with faint cell lines.
+  - Cells big enough carry a + or − mark, so the states never rest on tone alone.
+  - A tap, a stroke or a selection in a dimmed repeat is the tile's own cell.
+- **Tools as built** (single-task buttons are icons with a tooltip, a long-press label and an accessible name, D49):
+
+  | Group | Phone (tabs Draw, Select, Tile, Fill; Edges for a Detailed morph) | Desktop adds |
+  |---|---|---|
+  | Draw | *Out*, *Flat*, *In*; tap or drag on the grid | keys 1, 2, 3 |
+  | Select | *Row*, *Column*, *Diagonal ↗*, *Diagonal ↘*; a tap picks the line through a cell | *Paint* and *Rectangle* as tools; keys P, R, C; arrow keys move the current cell, Space draws or selects, Shift+arrows grow a rectangle |
+  | Selection | *Set* (to the state you draw with; its corner shows it), *Invert* | keys S, I; Esc lets go of the selection, then closes |
+  | Move | | shift a selected row ← →, a selected column ↑ ↓, otherwise the whole tile; mirror left to right, top to bottom |
+  | Tile | add a copy of the current row or column, remove it, *Double rows* | |
+  | Fill | *Stripes*, *Brick*, *Diagonal*, *Checker* from the current row | |
+  | Edges | *Sharp*, *Soft*, *Round* (Detailed morph only, D53) | |
+  | Done | ✓ in the header | Esc |
+
+- **History.**
+  - Every edit is live: `store.change` in the `'editor'` group, with strokes sent once a frame. *Done* commits once, as "Edited pattern" or "Edited Detailed morph A".
+  - The editor keeps its own undo stack. While it is open, the top bar's undo and redo and Ctrl/Cmd+Z step through it (`ctx.editorHistory`), and the design's history doesn't move.
+  - A drawing back where it started puts the design back as it was, so opening and closing the editor, or undoing every edit, adds no step.
+  - **Store change:** `store.change` and `apply` take a `group`. A change of another group first commits the open gesture, and `open` keeps an editor session as its own step. Existing callers pass no group, so their behaviour is unchanged. If something else replaces the drawing during a session (a restore, opening a design), the editor closes; any other change (the size card) splits the session into two steps instead of mixing them.
+- **Builder's calls made:**
+  - *Make your own* opens an empty grid: 8 × 8 for a Pattern, 6 × 4 with soft edges for a Detailed morph. The pot doesn't change until the first edit.
+  - *Edit* opens a library drawing as a copy named "Knit (mine)" under a new `user:` id, and your own drawing in place. A drawing that two places use (slots A and B) is copied instead.
+  - A first Pattern made in the editor is 0.14 bead deep and one bead apart (`OWN_PATTERN_DEFAULTS`), like the starters, so a first drawing doesn't warn on the presets. Over an existing Pattern, depth, density, range, Fade and Soften are kept.
+  - **A Detailed morph grid's cells keep their size when the tile grows.** One row more is one cell height more (in whole layers). One column more takes the wall of one more cell, so fewer repeats fit around (20 repeats at 6 columns become 15 at 8). A slot with a texture starts from its own repeats, tile height and depth; a flat or empty one from 8 repeats, 20 mm and 1.5 mm. Grids go up to 16 cells a side (D45's "about 4–16"); a Pattern up to 64.
+  - With nothing selected, *Set* and *Invert* act on the whole tile. Picking a line tool selects the line through the current cell at once, and picking it again lets go.
+  - A diagonal runs on through the repeats, so in the tile it covers lcm(columns, rows) cells: every cell when the sides share no factor, every other cell on a 6 × 4 tile. This is what makes it unbroken across the dimmed repeats.
+  - Rows count from the bottom, so row 1 is the first layer printed, and columns count from the left.
+  - There is no *Cancel*. The design's undo takes a whole session back in one step, and the editor's own undo goes back edit by edit.
+  - There is no name field yet. Your own drawings are "My pattern", "My swatch" or "… (mine)"; naming comes with *Save pattern* (slice 6).
+  - In the Detailed morph's grid (sheet and dock), *Edit swatch…* became two tiles beside *+ Image*: *Make* and *Edit*. The Pattern's carousel and grid end with the same two tiles after *None* and My patterns (§3.8). *Edit* shows only when the target holds a bitmap (`editableEntry`): analytic shapes, images and Plain stay library-only (D45).
+  - `setLayerPattern` now drops a drawing of your own that it replaces when nothing else draws with it. Before this, a Pattern drawing you switched away from stayed in `assets` and showed among the Detailed morph's own swatches, which mixed the two.
+- **Tests:** `test/bitmap.test.js` (the operations, including a column and a diagonal picked in a repeat), `test/editor.test.js` (the geometry, and what a session starts from and writes, on the presets), and two store tests for the groups. That makes 330 in all.
+- **Browser check:** as in §11.1, on port 8041, with scratch scripts.
+  - **Desktop, 1280 × 800:**
+    - *Make* opens an empty 8 × 8 grid, and a mouse stroke goes live on the pot (0.42 mm, no warnings).
+    - A column picked in the repeat to the left takes Set and Invert. A ↗ diagonal inverts its 8 wrapped cells.
+    - Ctrl+Z and the top bar's undo step the editor. *Double rows* gives 8 × 16 and the readout follows.
+    - *Done* adds one "Edited pattern", and the design's undo takes it all back.
+    - An edit undone before *Done* adds no step. *Edit* on Knit makes "Knit (mine)" and keeps 0.42 mm.
+    - From Shape, the Detailed morph's *Make* draws soft. *Brick* and *Round* go live, and *Done* adds "Edited Detailed morph A".
+  - **Phone, 360 × 660 with touch:**
+    - *Make* in the dock's carousel opens the editor in the lower 356 px with the pot live above it, and a finger stroke repaints the pot.
+    - A column picked in the repeat below and a ↘ diagonal picked in the repeat above invert the tile's cells.
+    - A long press shows "Invert the ↘ diagonal" and doesn't invert. *Double rows*, *Checker* and the top bar's undo work.
+    - *Done* gives one step and brings the dock back. The Detailed morph opens from the Morph tool's carousel, with an Edges tab.
+- **Left for later:**
+  - *Save pattern* and names (slice 6).
+  - The *Next* and icon sweep (slice 5) can reuse `ui/press-label.js`.
+  - A 64 × 64 Pattern is usable on desktop, but its cells are small on a phone: pinch-to-zoom on the grid would help.
 
 ---
 
@@ -447,7 +510,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 - the default density and depth (see §3.2–§3.3; slice 2: one bead apart, 0.14 bead deep, 0.2 for the ribs)
 - the default range over a Detailed morph (slice 2: inside its soft start and end, §11.2)
 - how the Morph and Detailed morph nest in the phone dock (slice 2: a group tool with a *Large · Detailed* toggle, §11.2)
-- the editor's exact layout and icons, within §6
+- the editor's exact layout and icons, within §6 (slice 3: §11.3)
 - where `rules` sits in the design JSON (slice 1: top level, `design.rules`)
 - the warning text for bead support (slice 1: "Bead not supported" plus the heights)
 

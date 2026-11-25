@@ -3,8 +3,9 @@
 // part of Shape beside Morph. Two slots, the swatch grid that fills the
 // selected slot, per-slot settings, and the shared range and blend (Even,
 // Fades up, Fades down, Middle, Diagonal). Phase 2 (D24): "My patterns"
-// (your own recipes and images) after the library, + Image, and Edit
-// swatch… (a stopgap until the 2D editor, D45).
+// (your own recipes and images) after the library, then + Image, Make (the
+// 2D editor on an empty coarse grid, D45) and Edit (on the slot's grid: a
+// library one as a copy, your own in place).
 
 import { numberField, slider, segmented, h } from '../controls.js';
 import { drawSwatch, beadGrid } from '../swatch.js';
@@ -16,7 +17,7 @@ import { listPatterns, deletePattern, onPatternsChanged } from '../../store/asse
 import { printableResolution } from '../../core/raster.js';
 import {
   IMAGE_ACCEPT, findEntry, usesAsset, snapToLayers, pickPattern, loadImages,
-  importImageFile, openEditor, drawEntry, mineEntries,
+  importImageFile, openEditor, drawEntry, mineEntries, editableEntry,
 } from '../pattern-actions.js';
 
 const SLOT_SUB = { a: 'main swatch', b: 'blends in' };
@@ -99,7 +100,6 @@ const section = {
     for (const p of library.patterns) addTile(p.id, p.name, p.recipe);
     addTile(PLAIN.id, PLAIN.name, PLAIN.recipe);
 
-    const entryOf = (id, d = store.state.design) => findEntry(library, id, d.assets, saved);
     const pick = (id) => pickPattern(ctx, slotOf(), id, saved);
     // An image swatch draws once its pixels are in.
     const redraw = () => update(store.state);
@@ -122,9 +122,23 @@ const section = {
       h('span', { class: 'swatch-add', 'aria-hidden': 'true', text: '+' }),
       h('span', { class: 'swatch-name', text: 'Image' }),
     ]);
-    const editBtn = h('button', { type: 'button', class: 'btn edit-pattern-btn', text: 'Edit swatch…' });
+    const editorTile = (glyph, name, label, mode) => {
+      const btn = h('button', { type: 'button', class: 'swatch swatch-action', title: label, 'aria-label': label }, [
+        h('span', { class: 'swatch-add', 'aria-hidden': 'true', text: glyph }),
+        h('span', { class: 'swatch-name', text: name }),
+      ]);
+      btn.addEventListener('click', () => {
+        showImageMsg('');
+        openEditor(ctx, { kind: 'detail', slot: slotOf() }, { mode, saved, returnFocus: btn }).catch((err) => {
+          console.warn('Editor not loaded', err);
+          showImageMsg('The editor didn’t load. Reload the page to try again.');
+        });
+      });
+      return btn;
+    };
+    const makeBtn = editorTile('+', 'Make', 'Make your own swatch', 'make');
+    const editBtn = editorTile('✎', 'Edit', 'Edit the swatch', 'edit');
     const imageMsg = h('p', { class: 'panel-note image-msg', role: 'alert', hidden: true });
-    const actions = h('div', { class: 'pattern-actions' }, [editBtn]);
 
     // Deleting one of My patterns, after a confirmation under the grid. The
     // design keeps its own copy when it uses the pattern, so the pot never
@@ -208,15 +222,6 @@ const section = {
         imageBtn.removeAttribute('aria-busy');
       }
     });
-    editBtn.addEventListener('click', () => {
-      showImageMsg('');
-      openEditor(ctx, slotOf(), { findRecipe: (id) => entryOf(id), onSaved: refreshSaved })
-        .catch((err) => {
-          console.warn('Pattern editor not loaded', err);
-          showImageMsg('The pattern editor didn’t load. Reload the page to try again.');
-        });
-    });
-
     const renderMine = (d, fp, layers, slot) => {
       const list = mineEntries(library, d, saved);
       const savedIds = new Set(saved.map((p) => p.id));
@@ -235,7 +240,7 @@ const section = {
           del.addEventListener('click', () => askDelete(e, del));
           return { id: e.id, el: h('div', { class: 'swatch-item' }, [btn, del]), btn, canvas, drawn: '' };
         });
-        mineGrid.replaceChildren(...mineTiles.map((t) => t.el), imageBtn);
+        mineGrid.replaceChildren(...mineTiles.map((t) => t.el), imageBtn, makeBtn, editBtn);
         if (pendingDelete && !savedIds.has(pendingDelete.id)) closeConfirm(false);
       }
       for (const t of mineTiles) {
@@ -319,7 +324,7 @@ const section = {
     // grids, on a phone it is one row that scrolls sideways (C35).
     const strip = h('div', { class: 'swatch-strip' }, [grid, mineLabel, mineGrid]);
 
-    el.append(slots, gridLabel, strip, confirmBox, fileInput, imageMsg, actions, emptyNote, plainNote, slotBox, rangeRow, blendBox);
+    el.append(slots, gridLabel, strip, confirmBox, fileInput, imageMsg, emptyNote, plainNote, slotBox, rangeRow, blendBox);
 
     const update = (state) => {
       const d = state.design;
@@ -360,7 +365,14 @@ const section = {
       }
 
       renderMine(d, fp, layers, slot);
-      editBtn.setAttribute('aria-label', `Edit swatch ${s.toUpperCase()}`);
+      const editable = editableEntry(d, library, { kind: 'detail', slot: s }, saved);
+      editBtn.hidden = !editable;
+      if (editable) {
+        const label = editable.own || String(editable.id).startsWith('user:') ? `Edit ${editable.name}` : `Edit a copy of ${editable.name}`;
+        editBtn.setAttribute('aria-label', label);
+        editBtn.title = label;
+      }
+      makeBtn.setAttribute('aria-label', `Make your own swatch for ${s.toUpperCase()}`);
 
       const isPlain = slot && slot.pattern === PLAIN.id;
       const isImage = !!slot && d.assets?.[slot.pattern]?.kind === 'image';

@@ -304,3 +304,31 @@ test('the step drives the mode, and switching steps adds no history step', () =>
   assert.equal(store.state.view.mode, 'design');
   assert.equal(store.history().length, steps);
 });
+
+test('an editor session is one step, even when a control edits the design meanwhile', () => {
+  const store = createStore({ design: base, label: 'Start' });
+  const editor = { group: 'editor' };
+  store.change('Edited pattern', (d) => { d.form.cells = '+'; }, editor);
+  store.change('Edited pattern', (d) => { d.form.cells = '+-'; }, editor);
+  // A control's edit first ends the session's gesture: two steps, each with its own label.
+  store.apply('Height 120', (d) => { d.form.height = 120; });
+  store.change('Edited pattern', (d) => { d.form.cells = '+-0'; }, editor);
+  store.commit();
+  assert.deepEqual(store.history().map((s) => s.label).reverse(), ['Start', 'Edited pattern', 'Height 120', 'Edited pattern']);
+  assert.equal(store.state.design.form.cells, '+-0');
+  // A control's half-done gesture is committed before a session's first edit too.
+  store.change('Height 130', (d) => { d.form.height = 130; });
+  store.change('Edited pattern', (d) => { d.form.cells = '0'; }, editor);
+  store.commit();
+  assert.deepEqual(store.history().slice(0, 2).map((s) => s.label), ['Edited pattern', 'Height 130']);
+});
+
+test('opening a design keeps an editor session as its own step; a control\'s half gesture is dropped as before', () => {
+  const store = createStore({ design: base, label: 'Start' });
+  store.change('Edited pattern', (d) => { d.form.cells = '+'; }, { group: 'editor' });
+  store.open({ ...base, form: { height: 50 } }, 'Opened: Other');
+  assert.deepEqual(store.history().map((s) => s.label).reverse(), ['Start', 'Edited pattern', 'Opened: Other']);
+  store.change('Height 60', (d) => { d.form.height = 60; });
+  store.open({ ...base, form: { height: 70 } }, 'Opened: Third');
+  assert.deepEqual(store.history().slice(0, 2).map((s) => s.label), ['Opened: Third', 'Opened: Other']);
+});

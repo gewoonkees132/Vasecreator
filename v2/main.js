@@ -270,6 +270,8 @@ async function boot() {
     /** Whether store.state.result is of the shape copy (Shape, D29, D36): no Pattern in it. */
     resultIsPlain: () => shownPlain,
     designs: null,
+    /** The open 2D editor's own undo and redo (ui/pattern-editor.js), or null; the top bar uses it. */
+    editorHistory: null,
   };
 
   // ---------- Previews ----------
@@ -405,6 +407,11 @@ async function boot() {
 
   // ---------- Layout ----------
 
+  // The 2D editor (ui/pattern-editor.js) stands in for the step frame while
+  // it is open: the pot fits beside it (desktop) or above it (phone).
+  const editorEl = $('#editor');
+  const chrome = () => (document.documentElement.classList.contains('is-editing') && editorEl ? editorEl : panel);
+
   function viewportRect() {
     const v = view.getBoundingClientRect();
     const c = chips.getBoundingClientRect();
@@ -415,12 +422,12 @@ async function boot() {
       // fits between the top bar (and the chips, wherever they sit) and the
       // dock or sheet, clear of the history column. Nothing covers it (D22).
       const bar = $('header.topbar').getBoundingClientRect();
-      const p = panel.getBoundingClientRect();
+      const p = chrome().getBoundingClientRect();
       const y = Math.max(0, Math.max(bar.bottom, c.bottom) - v.top + gap);
       const bottom = Math.min(v.height, p.top - v.top) - gap;
       return { x: gap, y, width: Math.max(40, r.left - v.left - gap * 2), height: Math.max(40, bottom - y) };
     }
-    const p = panel.getBoundingClientRect();
+    const p = chrome().getBoundingClientRect();
     const x = p.right - v.left + gap;
     const y = c.bottom - v.top + gap;
     return { x, y, width: Math.max(40, r.left - v.left - gap - x), height: Math.max(40, v.height - y - gap) };
@@ -431,7 +438,7 @@ async function boot() {
     // The warnings, size and history lists open over the dock or sheet on a
     // phone, never over the pot (D22): they get the height below the stage.
     if (PHONE.matches) {
-      document.documentElement.style.setProperty('--bottom-chrome', `${Math.round(Math.max(120, innerHeight - panel.getBoundingClientRect().top))}px`);
+      document.documentElement.style.setProperty('--bottom-chrome', `${Math.round(Math.max(120, innerHeight - chrome().getBoundingClientRect().top))}px`);
     }
     renderer.resize();
     renderer.setViewport(viewportRect());
@@ -456,6 +463,7 @@ async function boot() {
   const resizeObserver = new ResizeObserver(onResize);
   resizeObserver.observe(view);
   resizeObserver.observe(panel);
+  if (editorEl) resizeObserver.observe(editorEl);
 
   // ---------- Store wiring ----------
 
@@ -477,11 +485,12 @@ async function boot() {
   // in Print. Switching steps never moves the camera and never adds a history
   // step; it costs at most one preview, when the pot turns plain or full.
   let shownStep = null;
+  let shownEditor = false;
   function applyStep() {
     const { step, selectedKnot } = store.state.view;
     const was = shownStep;
     shownStep = step;
-    handles.setVisible(step === 'shape');
+    handles.setVisible(step === 'shape' && !store.state.view.editor);
     applyGizmos();
     renderer.setSeamMarker(step === 'layers');
     renderer.setBed(step === 'print' ? bedOf(store.state.printer) : null);
@@ -500,11 +509,14 @@ async function boot() {
 
   // The handles on the pot for this step (M7, M8): the Detailed morph's
   // range in Shape once it has a swatch, the Pattern's in Pattern once there
-  // is one, the seam grip in Layers & seam; none in Print.
+  // is one, the seam grip in Layers & seam; none in Print. While the 2D
+  // editor is open the pot is a live view only: no handles, so nothing but
+  // the editor's session lands in history meanwhile (D46).
   function applyGizmos() {
     const { view: v, design } = store.state;
     let mode = null;
-    if (v.mode === 'design' && v.step === 'layers') mode = 'seam';
+    if (v.editor) mode = null;
+    else if (v.mode === 'design' && v.step === 'layers') mode = 'seam';
     else if (v.mode === 'design' && v.step === 'shape' && (textured(design.form.detail.a) || textured(design.form.detail.b))) mode = 'detail';
     else if (v.mode === 'design' && v.step === 'pattern' && design.pattern) mode = 'pattern';
     gizmos.setMode(mode);
@@ -562,6 +574,11 @@ async function boot() {
       applyHighlight();
       handles.setSelected(state.view.selectedKnot);
       if (state.view.step !== shownStep) applyStep();
+      else if (!!state.view.editor !== shownEditor) {
+        handles.setVisible(state.view.step === 'shape' && !state.view.editor);
+        applyGizmos();
+      }
+      shownEditor = !!state.view.editor;
     }
   });
 

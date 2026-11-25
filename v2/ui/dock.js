@@ -17,8 +17,8 @@ import { depthLocked } from './sections/shape.js';
 import { PLAIN } from '../core/patterns.js';
 import { listPatterns, onPatternsChanged } from '../store/assets.js';
 import {
-  IMAGE_ACCEPT, findEntry, pickPattern, importImageFile, openEditor, drawEntry, mineEntries, loadImages,
-  pickLayerPattern, layerMineEntries, drawLayerEntry, readoutOf, setDensityFace,
+  IMAGE_ACCEPT, pickPattern, importImageFile, openEditor, drawEntry, mineEntries, loadImages,
+  pickLayerPattern, layerMineEntries, drawLayerEntry, readoutOf, setDensityFace, editableEntry,
 } from './pattern-actions.js';
 
 const SWATCH = 52;
@@ -193,13 +193,26 @@ export function mountDock(el, ctx, frame) {
     fileInput.value = '';
     fileInput.click();
   });
-  const makeTile = actionTile('dock-swatch--make', '✎', 'Make', 'Make your own swatch', () => {
-    openEditor(ctx, carouselSlot, { findRecipe: (id) => findEntry(library, id, store.state.design.assets, saved), onSaved: refreshSaved })
-      .catch((err) => {
-        console.warn('Pattern editor not loaded', err);
-        say('The editor didn’t load. Reload the page to try again.');
-      });
-  });
+  // The 2D editor (D45, D46): Make starts an empty grid, Edit the drawing in use.
+  const edit = (target, mode, from) => {
+    openEditor(ctx, target, { mode, saved, returnFocus: from }).catch((err) => {
+      console.warn('Editor not loaded', err);
+      say('The editor didn’t load. Reload the page to try again.');
+    });
+  };
+  const makeTile = actionTile('dock-swatch--make', '+', 'Make', 'Make your own swatch', () => edit({ kind: 'detail', slot: carouselSlot }, 'make', makeTile));
+  const editTile = actionTile('dock-swatch--edit', '✎', 'Edit', 'Edit the swatch', () => edit({ kind: 'detail', slot: carouselSlot }, 'edit', editTile));
+  const makeDrawingTile = actionTile('dock-swatch--make', '+', 'Make', 'Make your own pattern', () => edit({ kind: 'pattern' }, 'make', makeDrawingTile));
+  const editDrawingTile = actionTile('dock-swatch--edit', '✎', 'Edit', 'Edit the pattern', () => edit({ kind: 'pattern' }, 'edit', editDrawingTile));
+  /** Shows an Edit tile only when the target holds a drawing, named for what it edits. */
+  function syncEditTile(tileEl, target, d) {
+    const e = editableEntry(d, library, target, saved);
+    tileEl.hidden = !e;
+    if (!e) return;
+    const label = e.own || String(e.id).startsWith('user:') ? `Edit ${e.name}` : `Edit a copy of ${e.name}`;
+    tileEl.setAttribute('aria-label', label);
+    tileEl.title = label;
+  }
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];
     if (!file) return;
@@ -230,10 +243,11 @@ export function mountDock(el, ctx, frame) {
       const mineTiles = mine.map((e) => ({ ...swatchTile(e.id, e.name, 'dock-swatch--mine'), entry: e }));
       if (mineTiles.length) mineTiles[0].btn.classList.add('is-first-mine');
       tiles.push(...mineTiles);
-      carousel.replaceChildren(...tiles.map((t) => t.btn), imageTile, makeTile, fileInput);
+      carousel.replaceChildren(...tiles.map((t) => t.btn), imageTile, makeTile, editTile, fileInput);
       carousel.setAttribute('aria-label', `Detailed morph swatches for ${s.toUpperCase()}`);
     }
     const slot = d.form.detail[s];
+    syncEditTile(editTile, { kind: 'detail', slot: s }, d);
     let selected = null;
     for (const t of tiles) {
       const on = slot ? t.id === slot.pattern : t.id === null;
@@ -264,8 +278,9 @@ export function mountDock(el, ctx, frame) {
       const mineTiles = mine.map((e) => ({ ...swatchTile(e.id, e.name, 'dock-swatch--mine', () => pickLayerPattern(ctx, e.id)), entry: e }));
       if (mineTiles.length) mineTiles[0].btn.classList.add('is-first-mine');
       drawingTiles.push(...mineTiles);
-      drawings.replaceChildren(...drawingTiles.map((t) => t.btn));
+      drawings.replaceChildren(...drawingTiles.map((t) => t.btn), makeDrawingTile, editDrawingTile);
     }
+    syncEditTile(editDrawingTile, { kind: 'pattern' }, d);
     const current = d.pattern?.drawing ?? null;
     const r = readoutOf(d, library);
     let selected = null;

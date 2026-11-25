@@ -4,14 +4,18 @@
 // stage, M11).
 //
 // The Detailed morph (form.detail, D35): finding a swatch by id, putting it
-// in slot A or B with its own defaults, images, whole-layer tile heights, the
-// editor, and drawing a swatch on the pot's own bead grid.
+// in slot A or B with its own defaults, images, whole-layer tile heights, and
+// drawing a swatch on the pot's own bead grid.
 //
 // The Pattern (design.pattern, D37–D48): finding a drawing (the starters in
 // library.layerPatterns, or your own), putting it on the pot in one tap, the
 // density readout and its two faces, and drawing it crisp at the pot's bead scale.
+//
+// The 2D editor (D45, D46, ui/pattern-editor.js): what a session starts from
+// (an empty grid, a copy of a library drawing, or your own drawing edited in
+// place) and how its drawing goes into the design, for both kinds.
 
-import { PLAIN } from '../core/patterns.js';
+import { PLAIN, makeBitmap } from '../core/patterns.js';
 import { LIMITS } from '../core/design.js';
 import { MAX_NODES, SPACING_BEADS, drawingDefaults, newPattern, patternReadout } from '../core/layer-pattern.js';
 import { footprintAt } from './sections/shape.js';
@@ -50,8 +54,26 @@ export function findEntry(library, id, assets, saved) {
 
 /** Whether the design draws with an asset (a slot, the morph map or the Pattern uses it). */
 export function usesAsset(d, id) {
+  return assetUses(d, id) > 0;
+}
+
+/** How many places draw with an asset: slots A and B, the morph map and the Pattern. */
+export function assetUses(d, id) {
   const detail = d.form?.detail;
-  return detail?.a?.pattern === id || detail?.b?.pattern === id || d.form?.morph?.map === id || d.pattern?.drawing === id;
+  return [detail?.a?.pattern, detail?.b?.pattern, d.form?.morph?.map, d.pattern?.drawing].filter((x) => x === id).length;
+}
+
+/** A new id for a drawing of your own: 'user:' + 8 hex characters. */
+export function newOwnId() {
+  const b = crypto.getRandomValues(new Uint8Array(4));
+  return `user:${Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')}`;
+}
+
+// A Pattern drawing of your own that nothing draws with any more goes, so it
+// can't turn up among the Detailed morph's own swatches. Until Save pattern
+// keeps drawings across designs (D48), nothing lists it anyway. Mutates d.
+function dropUnusedDrawing(d, id) {
+  if (typeof id === 'string' && id.startsWith('user:') && d.assets?.[id] && !usesAsset(d, id)) delete d.assets[id];
 }
 
 /** A slot with a texture: set, and not Plain. */
@@ -174,9 +196,16 @@ export async function importImageFile(ctx, file, s) {
   return { id, asset };
 }
 
-/** Opens the pattern editor for slot `s` (D24; a stopgap until the 2D editor, D46). */
-export function openEditor(ctx, s, { findRecipe, onSaved } = {}) {
-  return loadEditor().then((m) => m.openPatternEditor(ctx, { slot: s, findRecipe, onSaved }));
+/**
+ * Opens the 2D editor (D45, D46) on the Pattern ({ kind: 'pattern' }) or on a
+ * Detailed morph slot ({ kind: 'detail', slot: 'a' | 'b' }). `mode` 'make'
+ * starts an empty grid; 'edit' the drawing the target holds (editableEntry).
+ * @param {object} ctx  main.js's ctx
+ * @param {{ kind: 'pattern' } | { kind: 'detail', slot: 'a' | 'b' }} target
+ * @param {{ mode?: 'make' | 'edit', saved?: object[], returnFocus?: HTMLElement | null }} [opts]
+ */
+export function openEditor(ctx, target, opts = {}) {
+  return loadEditor().then((m) => m.openPatternEditor(ctx, target, opts));
 }
 
 /**
@@ -259,13 +288,16 @@ export function findLayerEntry(library, id, assets) {
  * A first Pattern starts from newPattern (its range over the Detailed
  * morph's, D41). Switching drawings keeps From / To, Fade and Soften; a
  * starter brings its own depth and density, which pass bead support on the
- * presets (§3.8), and one of your own keeps the ones you had. Mutates d.
+ * presets (§3.8), and one of your own keeps the ones you had. A drawing of
+ * your own that it replaces, and nothing else uses, goes. Mutates d.
  * @param {object} d  a draft design (inside store.apply)
  * @param {object | null} entry  findLayerEntry's result
  */
 export function setLayerPattern(d, entry) {
+  const old = d.pattern?.drawing;
   if (!entry) {
     d.pattern = null;
+    dropUnusedDrawing(d, old);
     return;
   }
   if (entry.own) {
@@ -278,6 +310,7 @@ export function setLayerPattern(d, entry) {
   }
   d.pattern.drawing = entry.id;
   if (entry.defaults) Object.assign(d.pattern, drawingDefaults(d, entry.defaults));
+  dropUnusedDrawing(d, old);
 }
 
 /**
@@ -393,4 +426,152 @@ export function drawLayerEntry(target, entry, design, size, spacingMm) {
   drawBitmapSwatch(target.canvas, entry.recipe, {
     id: entry.own ? undefined : entry.id, size, cellWidthMm: spacing, cellHeightMm: h, windowMm: LAYER_SWATCH_BEADS * w,
   });
+}
+
+// ---------- The 2D editor (D45, D46) ----------
+
+/** The most cells a side: a Pattern up to 64 (D48), a Detailed morph's coarse grid up to 16 (D45). */
+export const EDITOR_MAX = Object.freeze({ pattern: 64, detail: 16 });
+/** The grid *Make your own* starts with. */
+export const NEW_GRID = Object.freeze({ pattern: { columns: 8, rows: 8 }, detail: { columns: 6, rows: 4 } });
+/**
+ * A first Pattern drawn in the editor starts as deep and as dense as the
+ * starters (§11.2): 0.14 bead passes bead support on every preset.
+ */
+export const OWN_PATTERN_DEFAULTS = Object.freeze({ depthBeads: 0.14, spacingBeads: 1 });
+
+const copyName = (name) => `${name} (mine)`.slice(0, 80);
+const sessionLabel = (target) => (target.kind === 'pattern' ? 'Edited pattern' : `Edited Detailed morph ${target.slot.toUpperCase()}`);
+
+/**
+ * The drawing the editor would open on *Edit* for a target, or null when it
+ * holds none (no Pattern, or a slot with a shape, an image or Plain: the
+ * analytic shapes stay library-only, D45).
+ * @param {object} design
+ * @param {object} library
+ * @param {{ kind: 'pattern' } | { kind: 'detail', slot: 'a' | 'b' }} target
+ * @param {object[]} [saved]  My patterns
+ */
+export function editableEntry(design, library, target, saved) {
+  if (target.kind === 'pattern') {
+    const id = design.pattern?.drawing;
+    return id ? findLayerEntry(library, id, design.assets) : null;
+  }
+  const slot = design.form.detail[target.slot];
+  const entry = slot ? findEntry(library, slot.pattern, design.assets, saved) : null;
+  return entry?.recipe?.kind === 'bitmap' ? entry : null;
+}
+
+/** The id of the drawing a target shows now, or null. */
+export function targetDrawingId(design, target) {
+  if (target.kind === 'pattern') return design.pattern?.drawing ?? null;
+  return design.form.detail[target.slot]?.pattern ?? null;
+}
+
+/**
+ * What an editor session starts from. *Make your own* is an empty grid
+ * (NEW_GRID). *Edit* opens the target's drawing: a library one as a copy
+ * ("Knit (mine)"), your own in place, unless something else draws with it
+ * too, which then keeps its own.
+ *
+ * A Detailed morph grid keeps its cells their size when the tile grows or
+ * shrinks (`base`, writeEditorDrawing). On a slot with a texture it starts
+ * from the slot's repeats and tile height; on a flat or empty one from
+ * USER_SLOT.
+ * @param {object} design  normalised
+ * @param {object} library
+ * @param {{ kind: 'pattern' } | { kind: 'detail', slot: 'a' | 'b' }} target
+ * @param {'make' | 'edit'} mode
+ * @param {object[]} [saved]
+ * @returns {{ target: object, mode: string, id: string, name: string, recipe: object, label: string,
+ *   opened: { drawing: string | null, cells: string | null },
+ *   base: null | { columns: number, rows: number, repeats: number, tileHeightMm: number } }}
+ */
+export function editorStart(design, library, target, mode, saved) {
+  const entry = editableEntry(design, library, target, saved);
+  const opened = { drawing: targetDrawingId(design, target), cells: entry?.recipe?.cells ?? null };
+  const label = sessionLabel(target);
+  let id;
+  let name;
+  let recipe;
+  if (mode === 'edit' && entry) {
+    const inPlace = (entry.own || String(entry.id).startsWith('user:')) && assetUses(design, entry.id) <= 1;
+    id = inPlace ? entry.id : newOwnId();
+    name = inPlace ? entry.name : copyName(entry.name);
+    recipe = structuredClone(entry.recipe);
+    if (target.kind === 'pattern') delete recipe.edges;          // a Pattern is always crisp (D53)
+    else recipe.edges ??= 'soft';
+  } else {
+    const size = NEW_GRID[target.kind];
+    id = newOwnId();
+    name = target.kind === 'pattern' ? 'My pattern' : 'My swatch';
+    recipe = makeBitmap(size.columns, size.rows, new Int8Array(size.columns * size.rows), target.kind === 'detail' ? 'soft' : undefined);
+  }
+  let base = null;
+  if (target.kind === 'detail') {
+    const slot = design.form.detail[target.slot];
+    const kept = textured(slot) && slot.depthMm > 0;
+    base = {
+      columns: recipe.columns,
+      rows: recipe.rows,
+      repeats: kept ? slot.repeats : USER_SLOT.repeats,
+      tileHeightMm: kept ? slot.tileHeightMm : snapToLayers(USER_SLOT.tileHeightMm, design.layers.layerHeightMm),
+    };
+  }
+  return { target, mode, id, name, recipe, label, opened, base };
+}
+
+/**
+ * The repeats and tile height of a Detailed morph grid of `columns × rows`
+ * whose cells keep the size they had when the session started: a tile one
+ * row taller is one cell height taller (in whole layers), one column wider
+ * takes the wall of one more cell, so fewer repeats fit around.
+ * @param {{ columns: number, rows: number, repeats: number, tileHeightMm: number }} base
+ */
+export function detailTileFor(base, columns, rows, layerHeightMm) {
+  const maxRepeats = LIMITS.repeats?.max ?? Infinity;
+  const repeats = columns === base.columns
+    ? base.repeats
+    : Math.min(maxRepeats, Math.max(1, Math.round((base.repeats * base.columns) / columns)));
+  const tileHeightMm = rows === base.rows ? base.tileHeightMm : snapToLayers((base.tileHeightMm * rows) / base.rows, layerHeightMm);
+  return { repeats, tileHeightMm };
+}
+
+/**
+ * Puts the editor's drawing on the draft design (inside store.change): the
+ * recipe goes into design.assets under the session's id and the target
+ * draws with it. A first Pattern starts from newPattern with
+ * OWN_PATTERN_DEFAULTS; an existing one keeps its depth, density, range,
+ * Fade and Soften. A Detailed morph slot gets the grid at its cells' size
+ * (detailTileFor) and, when it was flat or empty, USER_SLOT's depth.
+ * Mutates d.
+ * @param {object} d
+ * @param {ReturnType<typeof editorStart>} start
+ * @param {object} recipe  the bitmap the editor holds
+ */
+export function writeEditorDrawing(d, start, recipe) {
+  d.assets ??= {};
+  d.assets[start.id] = { kind: 'recipe', name: start.name, recipe: structuredClone(recipe) };
+  if (start.target.kind === 'pattern') {
+    if (!d.pattern) {
+      d.pattern = newPattern(d, start.id, OWN_PATTERN_DEFAULTS);
+      return;
+    }
+    const old = d.pattern.drawing;
+    d.pattern.drawing = start.id;
+    dropUnusedDrawing(d, old);
+    return;
+  }
+  const s = start.target.slot;
+  const surf = d.form.detail;
+  const { repeats, tileHeightMm } = detailTileFor(start.base, recipe.columns, recipe.rows, d.layers.layerHeightMm);
+  let slot = surf[s];
+  if (!slot) {
+    slot = surf[s] = { pattern: start.id, depthMm: USER_SLOT.depthMm, repeats, tileHeightMm };
+    if (s === 'b') surf.blend = { ...surf.blend, shape: 'fadesUp', amount: 1 };
+  }
+  if (slot.pattern === PLAIN.id || !(slot.depthMm > 0)) slot.depthMm = USER_SLOT.depthMm;
+  slot.pattern = start.id;
+  slot.repeats = repeats;
+  slot.tileHeightMm = tileHeightMm;
 }

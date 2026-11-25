@@ -798,95 +798,15 @@
 .mine-confirm[hidden] { display: none; }
 .mine-confirm-text { font-size: 13px; color: var(--c-text); }
 .mine-confirm-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
-.pattern-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.edit-pattern-btn { flex: 1 1 auto; }
 .image-msg { color: var(--c-text); }
 .res-note { margin-top: calc(var(--space-1) * -1); }
 
-/* Editor dialog: a card on desktop, a full-screen sheet on phones. */
-.pattern-editor { width: min(640px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
-.pe-body { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5); }
-.pe-head h2 { font-size: 18px; font-weight: 600; }
-.pe-sub { margin-top: var(--space-1); font-size: 13px; color: var(--c-text-2); }
-.pe-grid { display: grid; grid-template-columns: auto 1fr; gap: var(--space-5); align-items: start; }
-.pe-preview-box { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); }
-.pe-preview { display: block; border-radius: 8px; box-shadow: 0 0 0 1px var(--c-border), var(--shadow-1); }
-.pe-controls { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
-.pe-field { display: flex; flex-direction: column; gap: var(--space-2); }
-.pe-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
-.pe-label { font-size: 13px; font-weight: 500; }
-.pe-count, .pe-unit { font-size: 12px; color: var(--c-text-2); }
-.pe-hint { font-size: 12px; color: var(--c-text-2); }
-.pe-cells { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-.pe-cell, .pe-cell-btn, .pe-step {
-  min-width: 52px;
-  min-height: 36px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--c-input-border);
-  border-radius: var(--radius-ctl);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--c-text);
-  cursor: pointer;
-}
-/* Out reads as white (raised), in as grey (pulled in), like the swatches. */
-.pe-cell--out { background: #fff; box-shadow: var(--shadow-1); }
-.pe-cell--middle { background: rgb(214,214,214); }
-.pe-cell--in { background: rgb(150,150,150); color: #fff; border-color: rgb(130,130,130); }
-.pe-cell-btn, .pe-step { min-width: 36px; background: var(--c-input-bg); font-size: 18px; line-height: 1; }
-.pe-cell-btn:disabled, .pe-step:disabled { opacity: .4; cursor: default; }
-.pe-cell:hover, .pe-cell-btn:hover:not(:disabled), .pe-step:hover:not(:disabled) { border-color: var(--c-primary-light); }
-.pe-row { display: flex; align-items: center; gap: var(--space-2); }
-.pe-row-input, .pe-name {
-  height: 36px;
-  padding: 0 var(--space-2);
-  border: 1px solid var(--c-input-border);
-  border-radius: var(--radius-ctl);
-  background: var(--c-input-bg);
-  font: inherit;
-  font-size: 14px;
-  color: var(--c-text);
-}
-.pe-row-input { width: 64px; text-align: right; }
-.pe-name { width: 100%; }
-.pe-row-input:focus-visible, .pe-name:focus-visible { border-color: var(--c-primary-dark); outline: none; box-shadow: var(--focus-ring); }
-.pe-status { min-height: 1em; font-size: 13px; color: var(--c-text-2); }
-.pe-status:empty { display: none; }
-.pe-actions { align-items: center; }
-.pe-spacer { flex: 1; }
-
 @media (pointer: coarse) {
-  .pe-cell, .pe-cell-btn, .pe-step, .pe-row-input, .pe-name { min-height: 44px; height: auto; }
-  .pe-cell-btn, .pe-step { min-width: 44px; }
-  .pe-row-input, .pe-name { height: 44px; font-size: 16px; }
   .swatch-add { width: 60px; height: 60px; }
-  .edit-pattern-btn { min-height: 44px; }
   /* A 44 px target whose dot stays on the swatch's corner. */
   .swatch-del { top: -14px; right: calc(50% - 48px); width: 44px; height: 44px; }
   .swatch-del-dot { width: 24px; height: 24px; font-size: 15px; }
   .mine-confirm-actions .btn { min-height: 44px; }
-}
-
-@media (max-width: 760px) {
-  .pattern-editor {
-    width: 100vw;
-    max-width: 100vw;
-    height: 100dvh;
-    max-height: 100dvh;
-    margin: 0;
-    border-radius: 0;
-  }
-  .pe-body { min-height: 100%; padding: var(--space-4); }
-  .pe-grid { grid-template-columns: 1fr; gap: var(--space-4); }
-  .pe-actions { position: sticky; bottom: 0; margin: auto calc(var(--space-4) * -1) calc(var(--space-4) * -1); padding: var(--space-3) var(--space-4); background: rgb(250,250,250); border-top: 1px solid var(--c-border); }
-  .pe-actions .btn { min-height: 44px; }
-}
-
-/* Desktop: the editor sits over the step panel with a light backdrop, so the
-   pot stays in view and shows each edit live. */
-@media (min-width: 761px) {
-  .pattern-editor { width: min(600px, calc(100vw - 32px)); margin: calc(var(--topbar-h) + 32px) auto auto 16px; }
-  .pattern-editor::backdrop { background: rgba(18,47,45,.12); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 
 /* ---------- The phone dock (mobile stage M3, M4, M9; ui/dock.js, ui/dial.js) ---------- */
