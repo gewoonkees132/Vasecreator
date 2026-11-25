@@ -71,6 +71,23 @@ D0–D5 stand as recorded in research §11.1. These were added in the brainstorm
 | D32 | **Issue #1: on desktop the same five emblems sit at the top of the left panel,** and a step shows all its parts under small headings | Owner |
 | D33 | **Issue #1: the Advanced button goes** (reverses D19). Profile curve, profile points and geometry morph become parts of Shape; Footprint appears once, in Shape | Accepted |
 | D34 | **Issue #1: the Twisted column preset gets rounded square corners,** so its twist shows on the bare shape (revises C4) | Owner |
+| D35 | **Pattern studio (issue #3): two kinds of surface detail.** *Detailed morph* is today's mm-scale relief (A/B, blend). *Pattern* is a new bead-scale bitmap matched to the layers. Morph stays as it is. See [the pattern studio design](v2-pattern-studio.md) | Owner |
+| D36 | **Detailed morph moves to Shape, beside Morph; the Pattern step holds only the bitmap Pattern.** Phones get one dock tool with a *Large · Detailed* toggle. Shape shows Morph and Detailed morph (revises D29) | Accepted |
+| D37 | **One bitmap row is one layer, always; one cell is one node (a single toolpath point),** with straight lines between nodes | Owner |
+| D38 | **Cells are in, flat or out;** one Depth in mm, from 0 to ½ bead width | Accepted |
+| D39 | **Pattern columns are aligned:** the same nodes on every layer in range, whole repeats, no seam | Accepted |
+| D40 | **Density is one slider for the node spacing around** (½ to 3 bead widths, snapped to whole repeats), shown as mm spacing or points per layer; the face set last stays fixed. Rows never scale | Owner (slider, point count); accepted (details) |
+| D41 | **The Pattern has its own From / To** (a second bracket); one Pattern, no A/B; it starts and stops sharply | Accepted |
+| D42 | **Pattern filters that never change the drawing:** Fade (Even, Fades up, Fades down, Middle, Diagonal, plus an amount) and Soften (blur, 0–2 cells, default 0). Detailed morph's blend gains *Fades down* (extends D17) | Owner (idea); accepted (set) |
+| D43 | **Bead-support rule:** warn where a node sits more than ½ bead width off the node below. The Pattern's own steps are exempt from the 45° and fineness rules. Warns, never blocks | Accepted |
+| D44 | **The warnings card is the one place to set each rule** (overhang limit moved there, bead support, fineness) | Owner (idea); accepted (placement) |
+| D45 | **One 2D editor for Pattern and Detailed morph:** node scale and crisp, or a coarse grid drawn soft. Motif layouts become quick fills, and the `motif` recipe kind goes (replaces D24) | Accepted |
+| D46 | **The editor edits one tile** with cell, row, column and diagonal operations (Set, Invert). It never covers the pot: the lower half on phones, a wide panel on desktop, with repeats shown dimmed | Owner (operations); accepted (layout) |
+| D47 | **A starter library of about 8 Patterns** (Knit, Rib 1×1, Rib 2×2, Brick bond, Seed, Herringbone, Basket, Diamond) | Accepted |
+| D48 | **Patterns are saved apart from designs** (the whole setup except From / To) and apply to any design; the design keeps its own copy. Stored as a compact `bitmap` recipe of up to 64 × 64 | Owner (separate); accepted (details) |
+| D49 | **App-wide: the *Next* buttons go** (reverses that part of D28); single-task buttons are icons with text as tooltip, long-press label and accessible name | Owner |
+| D50 | **No backwards compatibility** for the pattern studio: old files, saved designs and the golden G-code may change | Owner |
+| D51 | **Issue #3 folds into the pattern studio,** built on `t3/pattern-studio` from `t3/guided-journey` in six slices | Accepted |
 
 ---
 
@@ -288,6 +305,8 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 
 ### 9.2 Surface: patterns
 
+> **Being revised (D35–D51, 2026-11-25):** this section's slots, settings and blending become **Detailed morph**, which moves to Shape. A new bead-scale bitmap **Pattern** takes over the Pattern step. The motif recipe and the editor described below are replaced by one 2D editor. See [`v2-pattern-studio.md`](v2-pattern-studio.md).
+
 **What the user sees:** two pattern slots, **A** (the main pattern) and **B** (the one that blends in), each showing a small swatch and a name. Below them is a grid of pattern swatches; clicking one applies it to the selected slot. Then come a few settings.
 
 ```
@@ -362,6 +381,8 @@ Fixed behaviour, from research §5.4 stage 6: the infill alternates direction pe
 - **Footprint.** Circle and rectangle in phase 1, the same control as in Shape. Polygon and *Custom* (a 2D outline) appear here later (D11).
 
 ### 9.6 Geometry morph (phase 2, D23)
+
+> **Note (D36, 2026-11-25):** Morph stays as described here. It gets a sibling in Shape, **Detailed morph** (the old §9.2 relief), and on a phone the two share one dock tool with a *Large · Detailed* toggle. See [`v2-pattern-studio.md`](v2-pattern-studio.md).
 
 **What it is.** A soft greyscale map reshapes the *whole form* before patterns are applied. It makes lobes, a lean, a waist, a swirl or blobs, or follows your own image. Patterns then sit on top of the morphed form.
 

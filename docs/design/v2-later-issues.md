@@ -6,6 +6,7 @@ How to use it:
 
 - Issues 1–14 follow §15.4 in order. §15.4 puts **Mesh import** and **multi-copy layout** on one line. They touch different code, so they are two issues here (13 and 14).
 - Issues 15 and 16 came out of the build. They are the checks that `v2/ARCHITECTURE.md` (Status) still lists as open.
+- Issues 17–19 were parked in the pattern studio brainstorm ([`v2-pattern-studio.md`](v2-pattern-studio.md) §12). They need that work built first.
 - Each section gives a title, suggested labels and a body. Copy the fenced block as the issue body.
 - "Design §" means `docs/design/v2-design-brainstorm.md`. "Research §" means `docs/research/toolpath-foundation.md`. File paths are relative to `v2/`.
 - Suggested labels: `enhancement`, `verification`, and the area labels `core`, `ui`, `printer`, `renderer`, `store`. Create them once before posting.
@@ -611,4 +612,95 @@ Print the cylinder and the three presets (the golden files) and check each proce
 
 ### Sources
 Design D4, D9, C19, §10; research §3.5 (E modes, start and end code, printers), §7 (V12, V16), §11.1 (D4); `ARCHITECTURE.md` (Status, Printer profile).
+```
+
+---
+
+Issues 17–19 were parked in the pattern studio brainstorm (2026-11-25, [`v2-pattern-studio.md`](v2-pattern-studio.md) §12). They build on D35–D51 and only make sense once that work is built.
+
+## 17. Pattern mask: only on raised or sunken parts
+
+**Title:** Pattern mask: apply the Pattern only on the raised or sunken parts of the Detailed morph
+**Labels:** `enhancement`, `core`, `ui`
+
+```markdown
+### Why
+The bitmap Pattern (D35) is added on top of the Detailed morph everywhere in its range (D41). Designers will want texture only inside the raised diamonds, or only in the grooves between flutes. This was parked in the pattern studio session (Q12 c).
+
+### Scope
+- A *Mask* setting on the Pattern: *Everywhere* (default), *On raised parts*, *On sunken parts*.
+- The Pattern's strength is multiplied by a soft step of the Detailed morph's value at that node (for example smoothstep over −0.2…0.2), so the edge of the mask follows the relief smoothly.
+- It updates live (D20), and the bead-support check (D43) sees the masked result.
+
+### Out of scope
+- Masks from images or from Morph.
+
+### Where it goes in the code
+- `core/toolpath.js`: the Pattern term in the wall evaluation.
+- The Pattern step's tools (`ui/dock-tools.js`, the Pattern section).
+- The design JSON: `pattern.mask`.
+
+### Acceptance criteria
+- [ ] With Diamonds as the Detailed morph and *On raised parts*, the Pattern prints only on the diamonds.
+- [ ] *Everywhere* gives exactly today's output.
+- [ ] Works on a mid-range Android phone in Chrome (D3).
+
+### Sources
+`docs/design/v2-pattern-studio.md` §3.4, §12; D35, D41, D43.
+```
+
+## 18. One-off edits on the whole wall
+
+**Title:** One-off Pattern edits on the whole wall (a band, a signature, a single motif)
+**Labels:** `enhancement`, `core`, `ui`, `store`
+
+```markdown
+### Why
+The Pattern is one repeating tile (D46). Sometimes you want something that happens once: your initials near the foot, a single band, one motif on the front. This was parked in the pattern studio session (Q10 c).
+
+### Scope
+- An editor view of the whole unrolled wall (every layer by every node in the Pattern's range), with the tile shown underneath.
+- Single edits on top of the tile, stored as (layer, node) → in / flat / out.
+- A clear rule for what happens to the edits when the height, the layer height, the density or the From / To changes: remap by relative position where it can, and say so when some edits can't stay.
+
+### Out of scope
+- Text tools and fonts (a later idea).
+
+### Where it goes in the code
+- The 2D editor (built in the pattern studio work), `core/toolpath.js` (the Pattern term), the design JSON (`pattern.overrides`).
+
+### Acceptance criteria
+- [ ] A single edited node prints once, at its place, and the tile prints everywhere else.
+- [ ] Changing the density keeps the edits at the same place on the pot, or reports the ones it dropped.
+- [ ] History holds one entry per editor session.
+
+### Sources
+`docs/design/v2-pattern-studio.md` §6, §12; D46, D48.
+```
+
+## 19. Image to Pattern
+
+**Title:** Turn an image into a bitmap Pattern
+**Labels:** `enhancement`, `ui`, `core`
+
+```markdown
+### Why
+Image swatches exist for the Detailed morph (mm scale, blurred). For the bead-scale Pattern, an image could give a starting drawing that you then touch up in the editor. This was parked in the pattern studio session (Q21 b).
+
+### Scope
+- *From image* in the Pattern carousel and in the editor: pick an image, choose the tile size in cells (up to 64 × 64), and it is reduced to in / flat / out with two thresholds you can drag, previewed live.
+- The result is an ordinary `bitmap` drawing, editable and saveable like any other (D48).
+
+### Out of scope
+- Dithering options beyond the two thresholds.
+
+### Where it goes in the code
+- `core/raster.js` (luminance and downsampling already exist), the 2D editor, `ui/pattern-actions.js`.
+
+### Acceptance criteria
+- [ ] A black and white logo becomes a clean in / out drawing at the chosen size.
+- [ ] The drawing is stored as a `bitmap` recipe, not as an image asset.
+
+### Sources
+`docs/design/v2-pattern-studio.md` §3.8, §12; D45, D48.
 ```
