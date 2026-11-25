@@ -112,7 +112,7 @@ function volume(mesh) {
 const cases = [
   ...presets.map((p) => [p.meta?.name, normaliseDesign(p)]),
   ['two smooth walls', (() => { const d = normaliseDesign(presets[0]); d.finish.walls = 2; return d; })()],
-  ['two walls that follow', (() => { const d = normaliseDesign(presets[2]); d.finish.walls = 2; d.finish.innerWall = 'follow'; return d; })()],
+  ['two walls that follow', (() => { const d = normaliseDesign(presets[2]); d.finish.walls = 2; d.finish.innerWall = 'followPattern'; return d; })()],
   ['a sleeve (no base)', normaliseDesign(cylinder({ baseLayers: 0 }))],
   ['a base with a hole', (() => { const d = normaliseDesign(cylinder({ baseLayers: 3 })); d.base.hole = { diameter: 20 }; return d; })()],
   ['a Pattern, two walls', (() => { const d = normaliseDesign(withPattern(structuredClone(presets[0]), TILES.knit, { fromMm: 10, toMm: 150 })); d.finish.walls = 2; return d; })()],
@@ -127,6 +127,21 @@ for (const [label, design] of cases) {
     assert.ok(v > 0, `${label}: volume ${v} (negative means it faces inward)`);
   });
 }
+
+test('solid: an inner wall that follows the pattern follows it in the solid too', () => {
+  // Smooth sits behind the deepest groove of each layer; following moves the
+  // inner skin out with every raised part, so the wall holds less.
+  const two = (innerWall) => {
+    const d = normaliseDesign(presets[2]);
+    d.finish.walls = 2;
+    d.finish.innerWall = innerWall;
+    return normaliseDesign(d);
+  };
+  assert.equal(two('followPattern').finish.innerWall, 'followPattern', 'a value normaliseDesign keeps');
+  const smooth = volume(buildSolid(two('smooth'), library));
+  const follow = volume(buildSolid(two('followPattern'), library));
+  assert.ok(follow < smooth * 0.995, `following ${follow.toFixed(0)} mm³, smooth ${smooth.toFixed(0)} mm³`);
+});
 
 test('solid: a plain cylinder has the volume of its wall and base', () => {
   const R = 30, H = 30, nb = 2;

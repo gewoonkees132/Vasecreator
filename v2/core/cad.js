@@ -115,7 +115,7 @@ export function buildSolid(design, library, { images, maxTriangles = MAX_SOLID_T
   const { h, w, layerCount: L, baseLayers: nb, rMin } = m;
   const walls = design.finish.walls === 2 ? 2 : 1;
   const spacing = design.finish.wallSpacingMm;
-  const smoothInner = design.finish.innerWall !== 'follow';
+  const smoothInner = design.finish.innerWall !== 'followPattern';
   const holeR = nb > 0 ? Math.max(0, (design.base.hole?.diameter ?? 0) / 2) : 0;
   const k0 = nb > 0 ? nb : 0; // the first inner ring: the floor's top, or the bottom of a sleeve
 
