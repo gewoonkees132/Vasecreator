@@ -7,8 +7,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normaliseDesign } from '../core/design.js';
 import { computePreview } from '../core/engine.js';
-import { emptyGrid, gridOf, paintCell, recipeOf, selectionMask, invertCells } from '../core/bitmap.js';
-import { gridView, hitCell, cellBox, lineThrough, sameKind, describeSelection } from '../ui/pattern-editor.js';
+import { emptyGrid, gridOf, paintCell, recipeOf, selectionMask, invertCells, insertColumn, doubleRows } from '../core/bitmap.js';
+import {
+  gridView, hitCell, cellBox, lineThrough, sameKind, describeSelection, zoomAt, pinchTo, panBy, MAX_ZOOM, MIN_CELL,
+} from '../ui/pattern-editor.js';
 import {
   EDITOR_MAX, NEW_GRID, OWN_PATTERN_DEFAULTS, editorStart, writeEditorDrawing, editableEntry, detailTileFor,
   targetDrawingId, setLayerPattern, findLayerEntry, mineEntries, layerMineEntries, assetUses,
@@ -79,7 +81,7 @@ test('Make your own starts an empty grid under a new id of your own', () => {
   const s = editorStart(d, library, PATTERN, 'make');
   assert.match(s.id, /^user:[0-9a-f]{8}$/);
   assert.deepEqual([s.recipe.columns, s.recipe.rows], [NEW_GRID.pattern.columns, NEW_GRID.pattern.rows]);
-  assert.equal(s.recipe.cells, '0'.repeat(64));
+  assert.equal(s.recipe.cells, '0'.repeat(36));
   assert.equal(s.recipe.edges, undefined);
   assert.equal(s.label, 'Edited pattern');
   const t = editorStart(d, library, slotA, 'make');
@@ -138,7 +140,7 @@ test('a first drawn Pattern starts as deep and dense as the starters, and prints
   assert.equal(targetDrawingId(out, PATTERN), s.id);
   // It previews, with a readout, and without warnings on the default pot.
   const preview = computePreview(out, { library });
-  assert.equal(preview.pattern.columns, 8);
+  assert.equal(preview.pattern.columns, 6);
   assert.deepEqual(preview.warnings.filter((w) => w.severity !== 'ok').map((w) => w.id), []);
 });
 
@@ -208,10 +210,71 @@ test('a grid on an empty slot B brings in B with your own defaults and a blend',
   assert.deepEqual(layerMineEntries(library, out), []);
 });
 
-test('the editor\'s limits: a Pattern up to 64 cells a side, a Detailed morph grid up to 16', () => {
-  assert.deepEqual({ ...EDITOR_MAX }, { pattern: 64, detail: 16 });
-  const big = emptyGrid(64, 64);
+test('the editor\'s limits (D57): a Pattern up to 24 cells a side, a Detailed morph grid up to 16', () => {
+  assert.deepEqual({ ...EDITOR_MAX }, { pattern: 24, detail: 16 });
+  // Growing stops at the cap; the format still holds a larger drawing from a file (D48).
+  assert.equal(insertColumn(emptyGrid(24, 4), 0, 0, EDITOR_MAX.pattern).columns, 24);
+  assert.equal(doubleRows(emptyGrid(4, 12), EDITOR_MAX.pattern).rows, 24);
+  assert.equal(doubleRows(emptyGrid(4, 13), EDITOR_MAX.pattern).rows, 13);
   const d = classic();
-  const out = written(d, editorStart(d, library, PATTERN, 'make'), paintCell(big, 63, 63, 1));
+  const out = written(d, editorStart(d, library, PATTERN, 'make'), paintCell(emptyGrid(64, 64), 63, 63, 1));
   assert.equal(out.assets[out.pattern.drawing].recipe.cells.length, 64 * 64);
+  // Every starter fits, and the tallest still doubles.
+  for (const p of library.layerPatterns) {
+    assert.ok(p.recipe.columns <= EDITOR_MAX.pattern && p.recipe.rows * 2 <= EDITOR_MAX.pattern, p.id);
+  }
+});
+
+// ---------- Clickable cells, zoom and pan (D56, D57) ----------
+
+test('cells never get smaller than a finger or a mouse hits easily; the tile then runs past the stage', () => {
+  // A 24 × 24 Pattern on a phone's grid (360 × 200), cells twice as wide as tall.
+  const v = gridView(360, 200, 24, 24, 0.5, { minCell: MIN_CELL.touch });
+  close(v.ch, MIN_CELL.touch);
+  close(v.cw, 2 * MIN_CELL.touch);
+  assert.ok(v.tw > 360 && v.th > 200);
+  assert.ok(v.fitZoom < 1);
+  // An empty Pattern (6 × 6) fits whole on a 360 px phone, also at the Classic vase's 3.4 mm spacing.
+  const small = gridView(360, 200, NEW_GRID.pattern.columns, NEW_GRID.pattern.rows, 1.5 / 3.4, { minCell: MIN_CELL.touch });
+  assert.ok(small.tw <= 360 && small.th <= 200);
+  // A tile that fits at a larger size is drawn larger, as before.
+  close(gridView(528, 390, 8, 8, 0.5, { minCell: MIN_CELL.mouse }).cw, 528 * 0.8 / 8);
+});
+
+test('zooming keeps the cell under the fingers or the pointer where it is', () => {
+  const v = gridView(360, 200, 12, 12, 0.5, { minCell: MIN_CELL.touch });
+  const p = { x: 250, y: 60 };
+  const before = hitCell(v, p.x, p.y);
+  const z = zoomAt(v, 2, p.x, p.y);
+  close(z.zoom, 2);
+  const after = gridView(360, 200, 12, 12, 0.5, { minCell: MIN_CELL.touch, ...z });
+  assert.deepEqual(hitCell(after, p.x, p.y), before);
+  // In to MAX_ZOOM, out until the whole tile and some repeats fit.
+  assert.equal(zoomAt(v, 100, 0, 0).zoom, MAX_ZOOM);
+  close(zoomAt(v, 0.01, 0, 0).zoom, v.fitZoom);
+  const fits = gridView(360, 200, 12, 12, 0.5, { minCell: MIN_CELL.touch, zoom: v.fitZoom });
+  assert.ok(fits.tw <= 360 * 0.8 + 1e-6 && fits.th <= 200 * 0.8 + 1e-6);
+});
+
+test('a pinch zooms by the fingers\' spread and moves with their middle', () => {
+  const v = gridView(360, 200, 8, 8, 0.5, { minCell: MIN_CELL.touch });
+  const mid = { x: 150, y: 100 };
+  const cell = hitCell(v, mid.x, mid.y);
+  const s = pinchTo(v, 80, mid, 160, { x: 170, y: 110 });
+  close(s.zoom, 2);
+  const after = gridView(360, 200, 8, 8, 0.5, { minCell: MIN_CELL.touch, ...s });
+  // The cell that was under the fingers' middle followed it.
+  assert.deepEqual(hitCell(after, 170, 110), cell);
+});
+
+test('the grid moves until an edge of the tile reaches the middle of the stage, no further', () => {
+  const v = gridView(360, 200, 24, 24, 0.5, { minCell: MIN_CELL.touch });
+  const far = panBy(v, 10000, -10000);
+  close(far.panX, v.tw / 2);
+  close(far.panY, -v.th / 2);
+  const moved = gridView(360, 200, 24, 24, 0.5, { minCell: MIN_CELL.touch, ...far });
+  close(moved.ox, 180);                    // the tile's left edge at the middle
+  close(moved.oy + moved.th, 100);         // its bottom edge at the middle
+  // Out-of-range pans passed straight to gridView are held too.
+  close(gridView(360, 200, 24, 24, 0.5, { minCell: MIN_CELL.touch, panX: -1e6 }).panX, -v.tw / 2);
 });

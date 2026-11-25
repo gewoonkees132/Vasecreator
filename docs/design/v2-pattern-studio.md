@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Owner decisions D35–D54. D52–D54 settled §13's open questions on 2026-11-25. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`) and 3 (the 2D editor) are built on `t3/pattern-studio` (local, not pushed); slices 4–6 are next (§11, notes in §11.1–§11.3).
+- **Status:** Owner decisions D35–D57. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`) and 3 (the 2D editor) are built on `t3/pattern-studio` (local, not pushed); slices 4–6 are next (§11, notes in §11.1–§11.3).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -99,6 +99,9 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 | D52 | **Presets open with their Detailed morph.** A preset is a shape (D30), and the Detailed morph is part of the shape now (D36), so the Classic vase opens with its flutes. `shapeOnly` strips only the Pattern. | Owner (§13, 2026-11-25) |
 | D53 | **Detailed morph grids keep *Sharp, Soft, Round*.** The bitmap's optional `edges` field stays, and the editor offers the three for a Detailed morph grid. A Pattern is always crisp. | Owner (§13, 2026-11-25) |
 | D54 | **The Detailed morph's A/B blend gains *Diagonal*:** the same winding band as the Pattern's Fade, with B's share amount × sin²(π(t + u)), one turn over From–To. | Owner (§13, 2026-11-25) |
+| D55 | **The editor has no *Cancel*.** *Done* (or Esc) keeps the edits; the design's undo takes a whole session back in one step, and the editor's own undo goes back edit by edit. | Owner (after slice 3, 2026-11-25) |
+| D56 | **Cells stay easy to hit.** A Detailed morph grid's cells keep their size on the wall, so adding columns widens the tile and lowers the repeats, which is allowed. On screen a cell is never smaller than a finger or a pointer hits easily (22 px on touch, 16 px with a mouse, on its short side); a tile that then runs past the grid's area moves instead. | Owner (after slice 3); sizes are the builder's |
+| D57 | **Pinch to zoom, and a cap that stays clickable.** Two fingers pinch and move the grid (Ctrl+wheel and the wheel on desktop). The editor draws a Pattern up to 24 × 24 cells and a Detailed morph grid up to 16 × 16; the `bitmap` format still holds 64 × 64 (D48), so a larger drawing from a file opens but can't grow. | Owner (after slice 3); the cap of 24 is the builder's |
 
 **What this revises:**
 - D16 (swatches from a bitmap generator) is now carried by D45 and D47.
@@ -436,6 +439,9 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 - **The grid.** One canvas.
   - The tile is in full colour in the middle, and its repeats are dimmed round it towards a mid grey, so out, flat and in keep their order there too.
   - Cells are at their true proportions (§6), and never larger than 80 × 56 px, so a small tile shows more repeats.
+  - **Cells stay easy to hit (D56).** The short side of a cell is never under 22 px on a touch screen or 16 px with a mouse (`MIN_CELL`). A tile larger than the grid's area at that size runs past it, and you move it. On the Classic vase a Pattern cell is then about 48 × 23 px on a phone.
+  - **Zoom and move (D57).** Two fingers pinch and move the grid. A finger that had already drawn when the second one lands is taken back, with nothing left in the undo stack. On desktop Ctrl+wheel (and a trackpad's pinch) zooms about the pointer, the wheel and the middle button move it, + and − zoom, and 0 resets. The zoom runs from the whole tile in view to 4× the clickable size. A reset button shows in the grid's corner once you have zoomed or moved. The arrow keys move the grid to keep the current cell in view.
+  - Before the first edit the grid already uses the node spacing the design will have with the new drawing, so it doesn't change scale on the first stroke.
   - The Pattern is crisp, with darker lines between rows (the layers). A Detailed morph grid is drawn soft as it prints (`evaluatePattern`), with faint cell lines.
   - Cells big enough carry a + or − mark, so the states never rest on tone alone.
   - A tap, a stroke or a selection in a dimmed repeat is the tile's own cell.
@@ -458,18 +464,18 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
   - A drawing back where it started puts the design back as it was, so opening and closing the editor, or undoing every edit, adds no step.
   - **Store change:** `store.change` and `apply` take a `group`. A change of another group first commits the open gesture, and `open` keeps an editor session as its own step. Existing callers pass no group, so their behaviour is unchanged. If something else replaces the drawing during a session (a restore, opening a design), the editor closes; any other change (the size card) splits the session into two steps instead of mixing them.
 - **Builder's calls made:**
-  - *Make your own* opens an empty grid: 8 × 8 for a Pattern, 6 × 4 with soft edges for a Detailed morph. The pot doesn't change until the first edit.
+  - *Make your own* opens an empty grid: 6 × 6 for a Pattern, so it fits a 360 px phone whole at the clickable size (it was 8 × 8 before D56), and 6 × 4 with soft edges for a Detailed morph. The pot doesn't change until the first edit.
   - *Edit* opens a library drawing as a copy named "Knit (mine)" under a new `user:` id, and your own drawing in place. A drawing that two places use (slots A and B) is copied instead.
   - A first Pattern made in the editor is 0.14 bead deep and one bead apart (`OWN_PATTERN_DEFAULTS`), like the starters, so a first drawing doesn't warn on the presets. Over an existing Pattern, depth, density, range, Fade and Soften are kept.
-  - **A Detailed morph grid's cells keep their size when the tile grows.** One row more is one cell height more (in whole layers). One column more takes the wall of one more cell, so fewer repeats fit around (20 repeats at 6 columns become 15 at 8). A slot with a texture starts from its own repeats, tile height and depth; a flat or empty one from 8 repeats, 20 mm and 1.5 mm. Grids go up to 16 cells a side (D45's "about 4–16"); a Pattern up to 64.
+  - **A Detailed morph grid's cells keep their size when the tile grows (D56).** One row more is one cell height more (in whole layers). One column more takes the wall of one more cell, so fewer repeats fit around (20 repeats at 6 columns become 15 at 8). A slot with a texture starts from its own repeats, tile height and depth; a flat or empty one from 8 repeats, 20 mm and 1.5 mm. Grids go up to 16 cells a side (D45's "about 4–16"); a Pattern up to 24 (D57). Every starter fits, and the 12-row ones still double.
   - With nothing selected, *Set* and *Invert* act on the whole tile. Picking a line tool selects the line through the current cell at once, and picking it again lets go.
   - A diagonal runs on through the repeats, so in the tile it covers lcm(columns, rows) cells: every cell when the sides share no factor, every other cell on a 6 × 4 tile. This is what makes it unbroken across the dimmed repeats.
   - Rows count from the bottom, so row 1 is the first layer printed, and columns count from the left.
-  - There is no *Cancel*. The design's undo takes a whole session back in one step, and the editor's own undo goes back edit by edit.
+  - There is no *Cancel* (D55). The design's undo takes a whole session back in one step, and the editor's own undo goes back edit by edit.
   - There is no name field yet. Your own drawings are "My pattern", "My swatch" or "… (mine)"; naming comes with *Save pattern* (slice 6).
   - In the Detailed morph's grid (sheet and dock), *Edit swatch…* became two tiles beside *+ Image*: *Make* and *Edit*. The Pattern's carousel and grid end with the same two tiles after *None* and My patterns (§3.8). *Edit* shows only when the target holds a bitmap (`editableEntry`): analytic shapes, images and Plain stay library-only (D45).
   - `setLayerPattern` now drops a drawing of your own that it replaces when nothing else draws with it. Before this, a Pattern drawing you switched away from stayed in `assets` and showed among the Detailed morph's own swatches, which mixed the two.
-- **Tests:** `test/bitmap.test.js` (the operations, including a column and a diagonal picked in a repeat), `test/editor.test.js` (the geometry, and what a session starts from and writes, on the presets), and two store tests for the groups. That makes 330 in all.
+- **Tests:** `test/bitmap.test.js` (the operations, including a column and a diagonal picked in a repeat), `test/editor.test.js` (the geometry, the clickable size, zoom, pinch and pan, the cap, and what a session starts from and writes, on the presets), and two store tests for the groups. That makes 334 in all.
 - **Browser check:** as in §11.1, on port 8041, with scratch scripts.
   - **Desktop, 1280 × 800:**
     - *Make* opens an empty 8 × 8 grid, and a mouse stroke goes live on the pot (0.42 mm, no warnings).
@@ -483,10 +489,12 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
     - A column picked in the repeat below and a ↘ diagonal picked in the repeat above invert the tile's cells.
     - A long press shows "Invert the ↘ diagonal" and doesn't invert. *Double rows*, *Checker* and the top bar's undo work.
     - *Done* gives one step and brings the dock back. The Detailed morph opens from the Morph tool's carousel, with an Edges tab.
+  - **After D55–D57:**
+    - **Phone:** an empty Pattern opens whole at 48 × 23 px cells, and keeps that scale after the first stroke. A pinch zooms 3×, and a finger that had drawn before the pinch is taken back. After zooming, a tap still draws the cell under it, and the reset button brings back the starting view. At 24 × 24 the buttons that would grow the tile are off, and two fingers move the grid.
+    - **Desktop:** Ctrl+wheel zooms 2× with the same cell under the pointer, the wheel moves the grid, and 0 resets. A 24 × 24 tile has cells 42 × 16 px, and the arrow keys bring column 24 into view.
 - **Left for later:**
   - *Save pattern* and names (slice 6).
   - The *Next* and icon sweep (slice 5) can reuse `ui/press-label.js`.
-  - A 64 × 64 Pattern is usable on desktop, but its cells are small on a phone: pinch-to-zoom on the grid would help.
 
 ---
 
@@ -500,7 +508,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 
 ## 13. Open for the owner, and left to the builder
 
-**Settled by the owner (2026-11-25):** presets keep their relief (D52), coarse grids keep *Sharp, Soft, Round* (D53), and the A/B blend gains *Diagonal* (D54). Nothing is open for the owner now.
+**Settled by the owner (2026-11-25):** presets keep their relief (D52), coarse grids keep *Sharp, Soft, Round* (D53), and the A/B blend gains *Diagonal* (D54). After slice 3: no *Cancel* in the editor (D55), cells that stay easy to hit (D56), and pinch to zoom with a clickable cap (D57). Nothing is open for the owner now.
 
 **Left to the builder:**
 - the exact *Diagonal* fade formula (slice 1: 1 − a·sin²(π(t + u)))

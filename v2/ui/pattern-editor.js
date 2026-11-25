@@ -19,6 +19,11 @@
 // selection in one of the dimmed repeats is the tile's own cell, and a
 // diagonal runs on through the repeats (core/bitmap.js).
 //
+// Cells stay easy to hit (D56): never smaller than MIN_CELL on screen, so a
+// large tile runs past the grid's area. Two fingers pinch and move it, and
+// on desktop Ctrl+wheel zooms and the wheel moves it (D57). The editor draws
+// a Pattern up to 24 × 24 cells and a Detailed morph grid up to 16 × 16.
+//
 // Every edit is live on the pot (D20): it goes into the design with
 // store.change in the 'editor' group, and Done commits once, so a session
 // is one history step ("Edited pattern"). Inside a session the top bar's
@@ -34,7 +39,7 @@ import {
   doubleRows, quickFill, fillSize, lineCells, wrapCell, cellIndex,
 } from '../core/bitmap.js';
 import { evaluatePattern } from '../core/patterns.js';
-import { drawingDefaults } from '../core/layer-pattern.js';
+import { drawingDefaults, patternReadout } from '../core/layer-pattern.js';
 import { footprintAt } from './sections/shape.js';
 import {
   EDITOR_MAX, OWN_PATTERN_DEFAULTS, editorStart, writeEditorDrawing, editableEntry, targetDrawingId,
@@ -42,6 +47,8 @@ import {
 } from './pattern-actions.js';
 
 const PHONE_QUERY = '(max-width: 760px)';
+/** The smallest side of a cell on screen, so it is easy to hit (D56): a finger, a mouse. */
+export const MIN_CELL = Object.freeze({ touch: 22, mouse: 16 });
 const UNDO_LIMIT = 200;
 const GROUP = 'editor';
 
@@ -75,19 +82,79 @@ const TABS = {
  *   ox: number, oy: number, tw: number, th: number, c0: number, c1: number, r0: number, r1: number }}
  *   ox, oy: the tile's top-left corner; c0…c1, r0…r1: the view cells in sight
  */
-export function gridView(width, height, columns, rows, aspect, { fill = 0.8, maxCellW = 80, maxCellH = 56 } = {}) {
+export function gridView(width, height, columns, rows, aspect, {
+  fill = 0.8, maxCellW = 80, maxCellH = 56, minCell = 0, zoom = 1, panX = 0, panY = 0,
+} = {}) {
   const a = aspect > 0 ? aspect : 1;
-  let cw = Math.min((width * fill) / columns, (height * fill) / (rows * a));
-  cw = Math.max(Math.min(cw, maxCellW, maxCellH / a), 1e-3);
+  const fitCw = Math.max(Math.min((width * fill) / columns, (height * fill) / (rows * a), maxCellW, maxCellH / a), 1e-3);
+  // Never smaller than a cell a finger or a pointer hits easily (D56): a
+  // tile that then runs past the stage pans instead.
+  const baseCw = Math.max(fitCw, minCell / Math.min(1, a));
+  const cw = baseCw * zoom;
   const ch = cw * a;
   const tw = cw * columns;
   const th = ch * rows;
-  const ox = (width - tw) / 2;
-  const oy = (height - th) / 2;
+  // The tile may move until an edge of it reaches the middle of the stage.
+  const px = clamp(panX, -tw / 2, tw / 2);
+  const py = clamp(panY, -th / 2, th / 2);
+  const ox = (width - tw) / 2 + px;
+  const oy = (height - th) / 2 + py;
   return {
     width, height, columns, rows, cw, ch, ox, oy, tw, th,
+    zoom, panX: px, panY: py, fitZoom: fitCw / baseCw,
     c0: Math.floor(-ox / cw), c1: Math.ceil((width - ox) / cw) - 1,
     r0: Math.floor(rows - (height - oy) / ch), r1: Math.ceil(rows + oy / ch) - 1,
+  };
+}
+
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+/** The most the grid zooms in, from its clickable size. */
+export const MAX_ZOOM = 4;
+
+/**
+ * Zooms by `factor` about a point of the stage (a pinch's middle, the
+ * pointer under a wheel), so the cell under it stays put. It zooms out as
+ * far as the whole tile with its repeats fits, and in to MAX_ZOOM.
+ * @returns {{ zoom: number, panX: number, panY: number }} for gridView
+ */
+export function zoomAt(view, factor, x, y) {
+  const zoom = clamp(view.zoom * factor, Math.min(1, view.fitZoom), MAX_ZOOM);
+  const k = zoom / view.zoom;
+  const tw = view.tw * k;
+  const th = view.th * k;
+  const ox = x - (x - view.ox) * k;
+  const oy = y - (y - view.oy) * k;
+  return {
+    zoom,
+    panX: clamp(ox - (view.width - tw) / 2, -tw / 2, tw / 2),
+    panY: clamp(oy - (view.height - th) / 2, -th / 2, th / 2),
+  };
+}
+
+/**
+ * A two-finger pinch: zooms by how far the fingers moved apart since it
+ * began, about where they began, and moves with their middle.
+ * @param {object} start  the view when the pinch began
+ * @returns {{ zoom: number, panX: number, panY: number }}
+ */
+export function pinchTo(start, startDist, startMid, dist, mid) {
+  const z = zoomAt(start, dist / Math.max(1, startDist), startMid.x, startMid.y);
+  const k = z.zoom / start.zoom;
+  const tw = start.tw * k;
+  const th = start.th * k;
+  return {
+    zoom: z.zoom,
+    panX: clamp(z.panX + mid.x - startMid.x, -tw / 2, tw / 2),
+    panY: clamp(z.panY + mid.y - startMid.y, -th / 2, th / 2),
+  };
+}
+
+/** Moves the grid by (dx, dy) px, within gridView's limits. */
+export function panBy(view, dx, dy) {
+  return {
+    zoom: view.zoom,
+    panX: clamp(view.panX + dx, -view.tw / 2, view.tw / 2),
+    panY: clamp(view.panY + dy, -view.th / 2, view.th / 2),
   };
 }
 
@@ -149,6 +216,7 @@ const fillIcon = (rows) => svg(
   + '<rect x="3" y="3" width="14" height="14" rx="1.5"/>',
 );
 const ICON = {
+  reset: svg('<path d="M3.5 7.5v-4h4M16.5 7.5v-4h-4M3.5 12.5v4h4M16.5 12.5v4h-4"/><rect x="7" y="7" width="6" height="6" rx="1"/>'),
   done: svg('<path d="M4.5 10.5l3.5 3.5 7.5-8" stroke-width="2.2"/>'),
   paint: svg('<path d="M12.8 3.6l3.6 3.6-8.6 8.6H4.2v-3.6z"/><path d="M11 5.4l3.6 3.6"/>'),
   row: gridIcon([[0, 1], [1, 1], [2, 1]]),
@@ -225,7 +293,13 @@ function createSession(ctx, target, mode, saved, returnFocus) {
   let selection = null;
   let drag = null;
   let view = null;
+  let zoom = 1;                  // 1: cells at their clickable size (D56); pinch or Ctrl+wheel changes it (D57)
+  let panX = 0;
+  let panY = 0;
   let closed = false;
+  // The smallest cell side a finger (coarse) or a mouse hits easily.
+  const coarse = matchMedia('(pointer: coarse)');
+  const minCell = () => (coarse.matches ? MIN_CELL.touch : MIN_CELL.mouse);
 
   // ---- The store side ----
   // The design as it was: put back when the drawing returns to where it
@@ -277,6 +351,9 @@ function createSession(ctx, target, mode, saved, returnFocus) {
 
   const canvas = h('canvas', { class: 'ed-canvas', tabIndex: 0, role: 'application', 'aria-roledescription': 'drawing grid', 'aria-describedby': 'ed-status' });
   const stage = h('div', { class: 'ed-stage' }, [canvas]);
+  const resetBtn = button('reset', 'Reset the view', () => moveView({ zoom: 1, panX: 0, panY: 0 }), { cls: 'ed-reset', title: 'Reset the view (0)' });
+  resetBtn.hidden = true;
+  stage.append(resetBtn);
   const status = h('p', { class: 'ed-status', id: 'ed-status', role: 'status', 'aria-live': 'polite' });
 
   function button(icon, label, onClick, { cls = '', title: tip = label } = {}) {
@@ -558,11 +635,6 @@ function createSession(ctx, target, mode, saved, returnFocus) {
 
   // ---- The grid: pointer and keys ----
 
-  function pointAt(e) {
-    const r = canvas.getBoundingClientRect();
-    return hitCell(view, e.clientX - r.left, e.clientY - r.top);
-  }
-
   function paintCells(cells) {
     let next = grid;
     for (const p of cells) next = paintCell(next, p.vc ?? p.c, p.vr ?? p.r, paintState);
@@ -575,14 +647,41 @@ function createSession(ctx, target, mode, saved, returnFocus) {
     schedulePush();
   }
 
-  canvas.addEventListener('pointerdown', (e) => {
-    if (!view || (e.button !== undefined && e.button > 0)) return;
-    e.preventDefault();
-    canvas.focus({ preventScroll: true });
-    canvas.setPointerCapture?.(e.pointerId);
-    const hit = pointAt(e);
+  /** Zooms and moves the grid (gridView keeps it in bounds). */
+  function moveView(next) {
+    zoom = next.zoom;
+    panX = next.panX;
+    panY = next.panY;
+    render();
+  }
+
+  /** Moves the grid just enough to show a cell of the tile (the keyboard's current cell). */
+  function showCell(c, r) {
+    if (!view) return;
+    const b = cellBox(view, c, r);
+    const dx = b.x < 0 ? -b.x : b.x + b.w > view.width ? view.width - b.x - b.w : 0;
+    const dy = b.y < 0 ? -b.y : b.y + b.h > view.height ? view.height - b.y - b.h : 0;
+    if (dx || dy) moveView(panBy(view, dx, dy));
+  }
+
+  // Pointers (D57): one finger, or the mouse, draws or selects; two fingers
+  // pinch to zoom and move the grid. On desktop Ctrl+wheel zooms (a
+  // trackpad's pinch sends that too), the wheel and the middle button move it.
+  const touches = new Map();     // pointerId → { x, y } in stage px
+  let pinch = null;
+  let panDrag = null;
+  const local = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+
+  function startDrag(e, p) {
+    const hit = hitCell(view, p.x, p.y);
     const t = tool();
-    drag = { id: e.pointerId, tool: t, start: hit, last: hit, before: { grid, edges }, recorded: false };
+    drag = {
+      id: e.pointerId, tool: t, start: hit, last: hit, before: { grid, edges }, recorded: false,
+      selectionBefore: selection, cursorBefore: cursor, redoBefore: redoStack,
+    };
     cursor = { c: hit.c, r: hit.r };
     if (t === 'paint') {
       selection = null;
@@ -593,13 +692,68 @@ function createSession(ctx, target, mode, saved, returnFocus) {
       selection = lineThrough(t, hit.c, hit.r);
     }
     render();
+  }
+
+  /** A second finger came down: what the first one did was the start of a pinch, so it is taken back. */
+  function startPinch() {
+    if (drag) {
+      const d = drag;
+      drag = null;
+      if (d.recorded) {
+        undoStack.pop();
+        redoStack = d.redoBefore;
+        grid = d.before.grid;
+        edges = d.before.edges;
+        push();
+      }
+      selection = d.selectionBefore;
+      cursor = d.cursorBefore;
+    }
+    const [a, b] = [...touches.values()];
+    pinch = { view, dist: Math.max(1, Math.hypot(b.x - a.x, b.y - a.y)), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+    update();
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    if (!view) return;
+    e.preventDefault();
+    canvas.focus({ preventScroll: true });
+    canvas.setPointerCapture?.(e.pointerId);
+    const p = local(e);
+    if (e.pointerType === 'touch') touches.set(e.pointerId, p);
+    if (e.button === 1) {
+      panDrag = { id: e.pointerId, x: p.x, y: p.y };
+      return;
+    }
+    if (e.button > 0) return;
+    if (touches.size >= 2) {
+      startPinch();
+      return;
+    }
+    if (pinch || drag) return;   // a finger left over from a pinch
+    startDrag(e, p);
   });
   canvas.addEventListener('pointermove', (e) => {
+    const p = local(e);
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, p);
+    if (pinch) {
+      if (touches.size >= 2) {
+        const [a, b] = [...touches.values()];
+        moveView(pinchTo(pinch.view, pinch.dist, pinch.mid, Math.hypot(b.x - a.x, b.y - a.y), { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }));
+      }
+      return;
+    }
+    if (panDrag?.id === e.pointerId) {
+      moveView(panBy(view, p.x - panDrag.x, p.y - panDrag.y));
+      panDrag.x = p.x;
+      panDrag.y = p.y;
+      return;
+    }
     if (!drag || drag.id !== e.pointerId) return;
-    const hit = pointAt(e);
+    const hit = hitCell(view, p.x, p.y);
     if (hit.vc === drag.last.vc && hit.vr === drag.last.vr) return;
     if (drag.tool === 'paint') {
-      paintCells(lineCells({ c: drag.last.vc, r: drag.last.vr }, { c: hit.vc, r: hit.vr }).map((p) => ({ vc: p.c, vr: p.r })));
+      paintCells(lineCells({ c: drag.last.vc, r: drag.last.vr }, { c: hit.vc, r: hit.vr }).map((q) => ({ vc: q.c, vr: q.r })));
     } else if (drag.tool === 'rect') {
       selection = { kind: 'rect', c0: drag.start.vc, r0: drag.start.vr, c1: hit.vc, r1: hit.vr };
     } else if (drag.tool !== 'cursor') {
@@ -621,8 +775,35 @@ function createSession(ctx, target, mode, saved, returnFocus) {
     }
     update();
   };
-  canvas.addEventListener('pointerup', endDrag);
-  canvas.addEventListener('pointercancel', endDrag);
+  const endPointer = (e) => {
+    touches.delete(e.pointerId);
+    if (panDrag?.id === e.pointerId) {
+      panDrag = null;
+      return;
+    }
+    if (pinch) {
+      // The pinch lasts until the last finger is up.
+      if (!touches.size) pinch = null;
+      return;
+    }
+    endDrag(e);
+  };
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('wheel', (e) => {
+    if (!view) return;
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? view.height : 1;
+    if (e.ctrlKey || e.metaKey) {
+      const p = local(e);
+      moveView(zoomAt(view, 2 ** (-e.deltaY * unit / 240), p.x, p.y));
+    } else if (e.shiftKey) {
+      moveView(panBy(view, -e.deltaY * unit, 0));
+    } else {
+      moveView(panBy(view, -e.deltaX * unit, -e.deltaY * unit));
+    }
+  }, { passive: false });
+  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
   canvas.addEventListener('keydown', (e) => {
     const moves = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
@@ -638,6 +819,7 @@ function createSession(ctx, target, mode, saved, returnFocus) {
       }
       say(`Row ${cursor.r + 1}, column ${cursor.c + 1}: ${STATE_NAME[grid.cells[cellIndex(grid, cursor.c, cursor.r)]].toLowerCase()}`);
       render();
+      showCell(cursor.c, cursor.r);
       return;
     }
     if (e.key === ' ' || e.key === 'Enter') {
@@ -658,6 +840,12 @@ function createSession(ctx, target, mode, saved, returnFocus) {
     const state = { 1: 1, 2: 0, 3: -1 }[k];
     if (state !== undefined) { e.preventDefault(); setPaintState(state); return; }
     if (k === 'i') { e.preventDefault(); act('invert'); return; }
+    if (view && (k === '+' || k === '=' || k === '-')) {
+      e.preventDefault();
+      moveView(zoomAt(view, k === '-' ? 1 / 1.25 : 1.25, view.width / 2, view.height / 2));
+      return;
+    }
+    if (k === '0') { e.preventDefault(); moveView({ zoom: 1, panX: 0, panY: 0 }); return; }
     if (k === 's') { e.preventDefault(); act('set'); return; }
     const kind = { p: 'paint', r: 'row', c: 'column' }[k];
     if (kind && !phone()) { e.preventDefault(); setKind(kind); return; }
@@ -679,12 +867,28 @@ function createSession(ctx, target, mode, saved, returnFocus) {
 
   // ---- Rendering ----
 
+  // Before the first edit the pot still shows the drawing it had: the node
+  // spacing is the one the design will have once this drawing is on it, so
+  // the grid doesn't change scale on the first stroke.
+  let coming = { design: null, key: '', readout: null };
+  function comingReadout(d) {
+    const key = `${grid.columns}x${grid.rows}`;
+    if (coming.design !== d || coming.key !== key) {
+      const draft = structuredClone(d);
+      writeEditorDrawing(draft, start, recipeOf(grid));
+      let readout = null;
+      try { readout = patternReadout(draft, library); } catch { readout = null; }
+      coming = { design: d, key, readout };
+    }
+    return coming.readout;
+  }
+
   /** One cell's size on the wall, in mm: true proportions (§6). */
   function cellMm() {
     const d = store.state.design;
     const lh = d.layers.layerHeightMm;
     if (!isDetail) {
-      const r = d.pattern ? readoutOf(d, library) : null;
+      const r = targetDrawingId(d, target) === start.id ? readoutOf(d, library) : comingReadout(d);
       return { w: r ? r.spacingMinMm : drawingDefaults(d, OWN_PATTERN_DEFAULTS).density.spacingMm, h: lh };
     }
     const t = detailTileFor(start.base, grid.columns, grid.rows, lh);
@@ -741,7 +945,10 @@ function createSession(ctx, target, mode, saved, returnFocus) {
     canvas.style.width = `${W}px`;
     canvas.style.height = `${H}px`;
     const mm = cellMm();
-    view = gridView(W, H, grid.columns, grid.rows, mm.h / mm.w);
+    view = gridView(W, H, grid.columns, grid.rows, mm.h / mm.w, { minCell: minCell(), zoom, panX, panY });
+    panX = view.panX;
+    panY = view.panY;
+    resetBtn.hidden = zoom === 1 && Math.abs(panX) < 0.5 && Math.abs(panY) < 0.5;
     const g = canvas.getContext('2d');
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const snap = (v) => Math.round(v * dpr) / dpr;
@@ -919,6 +1126,7 @@ function createSession(ctx, target, mode, saved, returnFocus) {
   ro.observe(stage);
   const onMedia = () => update();
   phoneMedia.addEventListener('change', onMedia);
+  coarse.addEventListener('change', onMedia);
   canvas.addEventListener('focus', () => render());
   canvas.addEventListener('blur', () => render());
 
@@ -949,6 +1157,7 @@ function createSession(ctx, target, mode, saved, returnFocus) {
     unsubscribe();
     ro.disconnect();
     phoneMedia.removeEventListener('change', onMedia);
+    coarse.removeEventListener('change', onMedia);
     removeEventListener('keydown', onWindowKey, true);
     host.removeEventListener('keydown', onHostKey);
     for (const off of detachers) off();
@@ -967,6 +1176,7 @@ function createSession(ctx, target, mode, saved, returnFocus) {
     get id() { return start.id; },
     get grid() { return grid; },
     get selection() { return selection; },
+    get cursor() { return cursor; },
     /** The grid's geometry as last drawn (gridView), for scripted checks. */
     get view() { return view; },
     undo,

@@ -46,7 +46,11 @@ html.is-editing #panel { display: none !important; }
 /* The grid: the tile in full colour, its repeats dimmed round it. */
 .ed-stage { position: relative; flex: 1 1 auto; min-height: 140px; overflow: hidden; }
 .ed-canvas { position: absolute; inset: 0; display: block; touch-action: none; cursor: crosshair; }
-.ed-canvas:focus-visible { outline: 2px solid var(--c-primary-dark); outline-offset: -3px; box-shadow: none; }
+/* Green, so it never reads as the tile's dark outline when the tile runs past the stage. */
+.ed-canvas:focus-visible { outline: 2px solid var(--c-accent); outline-offset: -2px; box-shadow: none; }
+/* Back to the starting zoom, once the grid is pinched, scrolled or zoomed (D57). */
+.ed-btn.ed-reset { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; background: rgba(255,255,255,.92); box-shadow: var(--shadow-2); }
+@media (pointer: coarse) { .ed-btn.ed-reset { width: 40px; height: 40px; } }
 
 /* The tools: every group on desktop, one tab's groups on a phone. */
 .ed-tools {

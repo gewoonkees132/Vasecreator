@@ -430,10 +430,18 @@ export function drawLayerEntry(target, entry, design, size, spacingMm) {
 
 // ---------- The 2D editor (D45, D46) ----------
 
-/** The most cells a side: a Pattern up to 64 (D48), a Detailed morph's coarse grid up to 16 (D45). */
-export const EDITOR_MAX = Object.freeze({ pattern: 64, detail: 16 });
-/** The grid *Make your own* starts with. */
-export const NEW_GRID = Object.freeze({ pattern: { columns: 8, rows: 8 }, detail: { columns: 6, rows: 4 } });
+/**
+ * The most cells a side the editor draws (D57): 24 for a Pattern, 16 for a
+ * Detailed morph's coarse grid (D45), so every cell stays one you can hit.
+ * The bitmap format itself holds up to 64 (D48): a larger drawing from a
+ * file still opens, it just can't grow.
+ */
+export const EDITOR_MAX = Object.freeze({ pattern: 24, detail: 16 });
+/**
+ * The grid *Make your own* starts with: small enough that a Pattern's whole
+ * tile fits a 360 px phone at the clickable cell size (D56).
+ */
+export const NEW_GRID = Object.freeze({ pattern: { columns: 6, rows: 6 }, detail: { columns: 6, rows: 4 } });
 /**
  * A first Pattern drawn in the editor starts as deep and as dense as the
  * starters (§11.2): 0.14 bead passes bead support on every preset.
