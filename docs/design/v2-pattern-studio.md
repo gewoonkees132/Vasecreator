@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Owner decisions D35–D57. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`) and 5 (the *Next* and icon sweep) are built on `t3/pattern-studio` (pushed up to slice 4, `afd281d`, for the owner's review; slice 5 is local); slice 6 is next (§11, notes in §11.1–§11.5).
+- **Status:** Owner decisions D35–D57. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`), 5 (the *Next* and icon sweep, `2391041`) and 6 (saved patterns) are built on `t3/pattern-studio` (pushed up to slice 4, `afd281d`, for the owner's review; slices 5 and 6 are local). All six slices are built (§11, notes in §11.1–§11.6).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -356,8 +356,10 @@ These go on the branch `t3/pattern-studio`, cut from `t3/guided-journey`. Each s
    - **Built** (§11.5).
 6. **Saved patterns** (§3.9, D48).
    - Build: *Save pattern* for Pattern and Detailed morph; apply to any design, presets included; the design keeps its own copy.
+   - Accept when (the builder's reading; §3.9 lists none): *Save pattern* from the editor and from the Pattern step makes a named My patterns entry that shows in the Pattern's carousel and grid; one tap applies it to another design, a preset included, as one history step, with its depth, density, Fade and Soften and that design's own From / To; the same for a Detailed morph swatch with depth, repeats and tile height; after the entry is deleted and the page reloaded, a design that used it opens and prints the same and its file carries the drawing; the two kinds never show among each other's swatches; every new single-task button is an icon named three ways; nothing covers the pot at 1280 × 800 or 360 × 660.
+   - **Built** (§11.6).
 
-When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) and the design's §9.2 and §9.6.
+When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) and the design's §9.2 and §9.6. (Done with slice 6.)
 
 ### 11.1 Slice 1 as built (notes for the next slices)
 
@@ -417,7 +419,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
   - **Controls:** segmented controls with five options (Blend, Fade) wrap onto two rows.
 - **Left for later slices:**
   - *Make your own* and *Edit* in the carousel wait for the 2D editor (slice 3).
-  - The Pattern's *My patterns* lists only a drawing the design carries, until *Save pattern* (slice 6).
+  - The Pattern's *My patterns* lists only a drawing the design carries, until *Save pattern* (slice 6). (Slice 6 added the saved Patterns, §11.6.)
   - The stopgap editor still opens from the Detailed morph's *Edit swatch…*. (Slice 3 replaced it, §11.3.)
 - **Browser check:** as in §11.1, on port 8041, with scratch scripts.
   - **Desktop, 1280 × 800:**
@@ -475,7 +477,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
   - A diagonal runs on through the repeats, so in the tile it covers lcm(columns, rows) cells: every cell when the sides share no factor, every other cell on a 6 × 4 tile. This is what makes it unbroken across the dimmed repeats.
   - Rows count from the bottom, so row 1 is the first layer printed, and columns count from the left.
   - There is no *Cancel* (D55). The design's undo takes a whole session back in one step, and the editor's own undo goes back edit by edit.
-  - There is no name field yet. Your own drawings are "My pattern", "My swatch" or "… (mine)"; naming comes with *Save pattern* (slice 6).
+  - There is no name field yet. Your own drawings are "My pattern", "My swatch" or "… (mine)"; naming comes with *Save pattern* (slice 6). (Slice 6: names are given when saving, and every edit now goes in under a content id instead of a new random one, §11.6.)
   - In the Detailed morph's grid (sheet and dock), *Edit swatch…* became two tiles beside *+ Image*: *Make* and *Edit*. The Pattern's carousel and grid end with the same two tiles after *None* and My patterns (§3.8). *Edit* shows only when the target holds a bitmap (`editableEntry`): analytic shapes, images and Plain stay library-only (D45).
   - `setLayerPattern` now drops a drawing of your own that it replaces when nothing else draws with it. Before this, a Pattern drawing you switched away from stayed in `assets` and showed among the Detailed morph's own swatches, which mixed the two.
 - **Tests:** `test/bitmap.test.js` (the operations, including a column and a diagonal picked in a repeat), `test/editor.test.js` (the geometry, the clickable size, zoom, pinch and pan, the cap, and what a session starts from and writes, on the presets), and two store tests for the groups. That makes 334 in all.
@@ -496,7 +498,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
     - **Phone:** an empty Pattern opens whole at 48 × 23 px cells, and keeps that scale after the first stroke. A pinch zooms 3×, and a finger that had drawn before the pinch is taken back. After zooming, a tap still draws the cell under it, and the reset button brings back the starting view. At 24 × 24 the buttons that would grow the tile are off, and two fingers move the grid.
     - **Desktop:** Ctrl+wheel zooms 2× with the same cell under the pointer, the wheel moves the grid, and 0 resets. A 24 × 24 tile has cells 42 × 16 px, and the arrow keys bring column 24 into view.
 - **Left for later:**
-  - *Save pattern* and names (slice 6).
+  - *Save pattern* and names (slice 6). (Built, §11.6.)
   - The *Next* and icon sweep (slice 5) can reuse `ui/press-label.js`.
 
 ### 11.4 Slice 4 as built (notes for the next slices)
@@ -598,6 +600,102 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
   - **For the owner:** should the phone sheet drop its header row (⌄ and the step's name) and put ⌄ at the start of the part row? The step bar right below already shows the step. It would give each part's controls about 44 px more on a 660 px phone.
   - **Pre-existing, seen in the check:** the desktop card (`#panel`) can be scrolled by a script's `scrollIntoView`, which hides the step row. A hidden file input, placed absolutely, overflows the card. Real focus and the wheel don't scroll it, so it was left alone.
 
+### 11.6 Slice 6 as built (saved patterns)
+
+- **Where it lives.**
+  - `store/assets.js` holds My patterns: the entry format, `normaliseSavedPattern`, `listPatterns(kind?)`, `savePattern`, `deletePattern` and `onPatternsChanged`.
+  - `core/bitmap.js` `drawingId` gives a drawing's content id, from `core/raster.js` `hashText`.
+  - `ui/pattern-actions.js` says what Save writes, the name it offers and what applying does.
+  - `ui/my-patterns.js` is the name form and the delete confirmation, which the Pattern step, the Detailed morph, the dock and the editor share.
+  - `ui/icons.js` gained `keep`, Save's icon. The contracts are in `v2/ARCHITECTURE.md`.
+- **Data.**
+  - **An entry** is `{ id: 'saved:…', kind: 'pattern' | 'detail', name, drawing, settings, created, updated }`. `drawing` is a `bitmap` recipe: crisp for a Pattern, with its edges for a Detailed morph grid.
+    - A Pattern's `settings` are `{ depthMm, density: { by, spacingMm, points }, fade: { shape, amount }, softenCells }`, never From / To.
+    - A Detailed morph's are `{ depthMm, repeats, tileHeightMm }`.
+    - Whatever comes back from storage is checked and clamped. The old `{ id, name, recipe }` records are ignored and stay where they are (D50).
+  - **Content ids (§9).** A drawing of your own goes by `user:` and 16 hex characters: an FNV-1a 64 hash of its size, edges and cells (`drawingId`). Until now these ids were random.
+    - The editor writes every edit under its content id, and applying a saved entry writes the design's copy the same way.
+    - So one drawing has one id in every design and in My patterns, and an id never comes to stand for another drawing.
+    - A Pattern's identity ignores edges; a grid's includes them (`drawingKey`).
+    - Design files with the old 8-hex ids still open, and are compared by content.
+- **Where Save sits.** Its button is an icon (a bookmark with a plus, so it never reads as *Save design*'s disk), named three ways with `labelIcon`: "Save the pattern to My patterns", "Save the swatch of A to My patterns".
+  - **The Pattern step** (desktop panel and phone sheet): a *Save* tile after *Make* and *Edit* under My patterns. It shows while there is a Pattern.
+  - **The Detailed morph:** the same tile after *Image*, *Make* and *Edit*. It shows while the slot holds a bitmap; shapes, images and Plain stay library-only (D45).
+  - **The dock:** a *Save* tile at the end of the Pattern's carousel and of each slot's carousel.
+  - **The 2D editor:** an icon beside ✓ in the header.
+- **Naming.** Save opens a name form in place, never a dialog over the pot (D22). It has a field, *Cancel* and *Save*, which confirm and keep their words (§11.5), and a note.
+  - **Where it opens:**
+    - Under the swatches in the panel and the sheet. It scrolls into view in its own area, never the whole panel.
+    - In the dock's 76 px adjuster, as one row.
+    - Under the editor's header. On a phone the editor's tools and tabs step aside while it is open, so the grid keeps its room.
+    - On the phone sheet it is one row too, since the sheet has about 120 px to scroll in.
+  - **The name it offers:**
+    - The name the same drawing is saved under, so Save updates it.
+    - Else the drawing's own name: "Knit", "Knit (mine)", "My pattern", or "Zigzag" for a drawing applied from Zigzag or saved as it and drawn on since.
+    - A name an entry of the kind already has (matched without case) turns *Save* into *Replace*, and the note says "Replaces “Zigzag” in My patterns."
+    - Only the default names are numbered when taken ("My pattern 2"), so the offer never replaces another drawing by itself.
+  - **Keys:** Enter saves and Esc closes. If the browser doesn't store it, the form stays open and says so.
+- **What saving does to the design.** The design's own copy of the drawing takes the name, so the pot, the chips, the swatches and a design file all say the same.
+  - Outside the editor that is one history step, "Saved pattern: Zigzag" or "Saved swatch: Grid", and none when the copy already has that name.
+  - In the editor the name goes into the session's own step ("Edited pattern").
+  - A starter on the pot keeps its own name. Saving a starter with your own depth stores it as a drawing of your own, while the pot keeps the starter.
+- **Applying.** A saved tile applies its entry in one tap, as one history step ("Pattern: Zigzag", "Detailed morph A: Grid"), and adds no step when the design already has all of it.
+  - **A Pattern** brings its drawing, depth, density, Fade and Soften.
+    - From / To stay the design's, or are the default range when it has no Pattern yet, as a preset opens (D52).
+    - Depth and spacing are held to this design's bead: at most half a bead deep, ½ to 3 beads apart.
+    - A drawing of your own that it replaces goes when nothing else uses it.
+  - **A Detailed morph swatch** brings its drawing, depth, repeats and tile height (in whole layers) to the selected slot. The range and the blend stay the design's, and a new B blends in with *Fades up*.
+  - **Which tile is picked.** A saved tile shows as picked while the pot draws the same drawing, by content. So a saved Knit and the Knit starter can both show as picked.
+- **The lists.**
+  - **The Pattern's:** the starters, *None*, the saved Patterns, then the drawing of your own on the pot unless it is saved, then *Make*, *Edit* and *Save*.
+  - **The Detailed morph's:** the library, *Plain*, the saved swatches, then the design's own; a copy of a saved swatch shows as its saved tile.
+  - **The two kinds never mix.** A saved Pattern never shows among the Detailed morph's swatches, nor a saved swatch among the Patterns.
+  - **Deleting.** In the panel and the sheet a saved tile has × on its corner, with the confirmation. It says when the design keeps its own copy, so the pot doesn't change. The dock has no ×, as before.
+  - **Unused copies.** A Detailed morph copy that nothing draws with goes with its entry (one step, as before); the Pattern never leaves one.
+- **The dock's confirmation** is the new tile shown as picked, and the words go to screen readers. The dock's floating message sits over the stage's edge, where it could cover the pot (D22).
+- **A stale tile, fixed during the check.** A replaced entry keeps its id and name, so its tile was not rebuilt and a tap applied the old settings. The tiles now rebuild when an entry's `updated` time changes.
+- **Builder's calls made:**
+  - Content ids for drawings (§9), and `saved:` ids for entries, kept apart from drawing ids.
+  - The bookmark icon, the inline name form, *Replace* by name and the rules for the offered name, all above.
+  - Depth and spacing are stored in mm, as §3.9 has it, and clamped to the target's bead when applied. A saved Pattern's swatch shows at its own spacing, or a bead apart when it is set in points.
+  - The editor drops the drawings a session wrote on the way and a drawing it edits in place. A Detailed morph swatch the design had before the session stays among its own swatches, as it did.
+  - A Morph is part of the shape and is not saved.
+- **Tests:** `test/saved-patterns.test.js` covers:
+  - content ids;
+  - what Save writes for both kinds;
+  - normalising what comes back from storage, old records included;
+  - listing and saving against a stand-in database;
+  - applying to every preset, with the default range;
+  - keeping From / To, and holding to another bead;
+  - the Detailed morph on every preset;
+  - a deleted entry's design reopening and printing the same, with its file carrying the drawing;
+  - the two kinds apart;
+  - the offered names and the copy's name;
+  - deleting.
+
+  `test/editor.test.js` now checks the content ids and that a Detailed morph session leaves nothing behind. That makes 366 in all.
+- **Browser check:** as in §11.1, on port 8041, with scratch scripts and the slice 5 button audit.
+  - **Desktop, 1280 × 800:**
+    - *Make*, a diagonal, then Save in the editor: the form opens under the header with "My pattern", and saving as "Zigzag" names the drawing on the pot. ✓ adds one step, "Edited pattern".
+    - Depth 0.6, Fade *Middle*, Soften 0.5 and 120 points, then Save in the Pattern step: the form offers "Zigzag" with *Replace*, and the entry is updated.
+    - On the Square planter preset, one tap on Zigzag adds one step, "Pattern: Zigzag", with all four settings and the default range (11–99 mm). A second tap adds nothing, and on a Pattern at 30–60 mm the range stays.
+    - In Shape, *Make* on slot A, then repeats 12, depth 2.5 mm, tile 24 mm and Save as "Grid". On the Classic vase one tap gives "Detailed morph A: Grid" with all three.
+    - Zigzag shows only among the Patterns, and Grid only among the Detailed morph's swatches.
+    - Both entries deleted and the page reloaded: the design prints the same (the same points and positions), and its design file holds both drawings by name.
+    - The audit finds no icon button without its three names, and the pot is clear of the forms, the panel and the editor. The step row stays put when a form opens.
+  - **Phone, 360 × 660 with touch:**
+    - Knit, then *Save* at the end of the carousel. A long press shows "Save the pattern to My patterns". The form takes the adjuster (464–540) in one row: a 44 px field, *Cancel* and *Save*.
+    - Saving as "My knit" adds no step (a starter keeps its name), and the carousel comes back with My knit picked.
+    - On the Twisted column, one tap applies it, as one step, with its depth and Fade.
+    - In the editor on slot A, the form opens under the header, the tools step aside, and the grid keeps 179 px. Saving as "Bars" names slot A's drawing inside the session's step.
+    - In the sheet's Pattern part the form is one row (y 506–588), in view, and *Cancel* closes it. The × has its long-press label.
+    - The pot is clear of the dock, the forms, the sheet and the editor throughout, and neither size logs a console error.
+- **Left for later:**
+  - A saved entry can't be renamed in place: save it under a new name and delete the old one.
+  - My patterns live in this browser, as saved designs do. A design file carries the drawings it uses, but My patterns has no file of its own.
+  - The dock deletes nothing; deleting is in the sheet, as it was for the Detailed morph.
+  - Design §9.3 still lists the overhang limit under *Layers & seam*. Slice 4 moved it to the warnings card, and only §9.2 and §9.6 were rewritten here.
+
 ---
 
 ## 12. Later (parked; drafted in [`v2-later-issues.md`](v2-later-issues.md), issues 17–19)
@@ -612,7 +710,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 
 **Settled by the owner (2026-11-25):** presets keep their relief (D52), coarse grids keep *Sharp, Soft, Round* (D53), and the A/B blend gains *Diagonal* (D54). After slice 3: no *Cancel* in the editor (D55), cells that stay easy to hit (D56), and pinch to zoom with a clickable cap (D57). After slice 4: the warnings and size cards keep opening over the history column on desktop, for now (§11.4).
 
-**Open for the owner after slice 5:** whether the phone sheet's header row (⌄ and the step's name) folds into the part row, for about 44 px more room for the controls (§11.5).
+**Open for the owner after slice 5:** whether the phone sheet's header row (⌄ and the step's name) folds into the part row, for about 44 px more room for the controls (§11.5). Slice 6 adds no new question; its calls are in §11.6.
 
 **Left to the builder:**
 - the exact *Diagonal* fade formula (slice 1: 1 − a·sin²(π(t + u)))
@@ -628,6 +726,8 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 - how the rules are reached with no warning (slice 4: a *Rules* group at the foot of the card, §11.4)
 - the warning text for bead support (slice 1: "Bead not supported" plus the heights)
 - which buttons become icons and which keep their text, and what fills *Next*'s room (slice 5: §11.5)
+- how a saved pattern is named, where *Save* sits on a phone and on desktop, and what the name it offers is (slice 6: an inline name form, *Replace* by name, §11.6)
+- how drawings are identified (slice 6: content ids, §9 and §11.6)
 
 ---
 

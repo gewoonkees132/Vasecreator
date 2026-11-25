@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normaliseDesign } from '../core/design.js';
 import { computePreview } from '../core/engine.js';
-import { emptyGrid, gridOf, paintCell, recipeOf, selectionMask, invertCells, insertColumn, doubleRows } from '../core/bitmap.js';
+import { emptyGrid, gridOf, paintCell, recipeOf, selectionMask, invertCells, insertColumn, doubleRows, drawingId } from '../core/bitmap.js';
 import {
   gridView, hitCell, cellBox, lineThrough, sameKind, describeSelection, zoomAt, pinchTo, panBy, MAX_ZOOM, MIN_CELL,
 } from '../ui/pattern-editor.js';
@@ -76,33 +76,46 @@ test('selection tools make the core selections, and say what they hold', () => {
 
 // ---------- Starting a session ----------
 
-test('Make your own starts an empty grid under a new id of your own', () => {
+test('Make your own starts an empty grid; a drawing goes in under its content id', () => {
   const d = classic();
   const s = editorStart(d, library, PATTERN, 'make');
-  assert.match(s.id, /^user:[0-9a-f]{8}$/);
   assert.deepEqual([s.recipe.columns, s.recipe.rows], [NEW_GRID.pattern.columns, NEW_GRID.pattern.rows]);
   assert.equal(s.recipe.cells, '0'.repeat(36));
   assert.equal(s.recipe.edges, undefined);
   assert.equal(s.label, 'Edited pattern');
+  assert.equal(s.name, 'My pattern');
+  assert.equal(s.replaces, null);
   const t = editorStart(d, library, slotA, 'make');
   assert.deepEqual([t.recipe.columns, t.recipe.rows, t.recipe.edges], [6, 4, 'soft']);
   assert.equal(t.label, 'Edited Detailed morph A');
-  assert.notEqual(s.id, t.id);
+  assert.equal(t.name, 'My swatch');
+  // The same drawing has the same id in every design; an edit gives a new one (D48, §9).
+  const g = paintCell(gridOf(s.recipe), 0, 0, 1);
+  const one = written(d, s, g);
+  assert.equal(one.pattern.drawing, drawingId(recipeOf(g)));
+  assert.match(one.pattern.drawing, /^user:[0-9a-f]{16}$/);
+  assert.equal(written(classic(), s, g).pattern.drawing, one.pattern.drawing);
+  assert.notEqual(written(d, s, paintCell(g, 1, 0, -1)).pattern.drawing, one.pattern.drawing);
 });
 
 test('Edit opens a starter as a copy and your own drawing in place', () => {
   const d = classic();
   setLayerPattern(d, findLayerEntry(library, 'lib:knit@1'));
   const copy = editorStart(d, library, PATTERN, 'edit');
-  assert.notEqual(copy.id, 'lib:knit@1');
+  assert.equal(copy.replaces, null);
   assert.equal(copy.name, 'Knit (mine)');
   assert.equal(copy.recipe.cells, findLayerEntry(library, 'lib:knit@1').recipe.cells);
   assert.deepEqual(copy.opened, { drawing: 'lib:knit@1', cells: copy.recipe.cells });
 
   const mine = written(d, copy, gridOf(copy.recipe));
   const again = editorStart(mine, library, PATTERN, 'edit');
-  assert.equal(again.id, copy.id);
+  assert.equal(again.replaces, mine.pattern.drawing);
   assert.equal(again.name, 'Knit (mine)');
+  // Edited in place: the drawing it was goes, the new one takes its name.
+  const edited = written(mine, again, paintCell(gridOf(again.recipe), 0, 0, -1));
+  assert.notEqual(edited.pattern.drawing, mine.pattern.drawing);
+  assert.equal(edited.assets[mine.pattern.drawing], undefined);
+  assert.equal(edited.assets[edited.pattern.drawing].name, 'Knit (mine)');
 });
 
 test('Edit shows only for a drawing the editor can open', () => {
@@ -118,9 +131,36 @@ test('a drawing of your own that two places use is edited as a copy', () => {
   const d = classic();
   const s = editorStart(d, library, slotA, 'make');
   const one = written(d, s, paintCell(gridOf(s.recipe), 0, 0, 1));
+  const id = one.form.detail.a.pattern;
   one.form.detail.b = { ...one.form.detail.a };
-  assert.equal(assetUses(one, s.id), 2);
-  assert.notEqual(editorStart(one, library, slotA, 'edit').id, s.id);
+  assert.equal(assetUses(one, id), 2);
+  const copy = editorStart(one, library, slotA, 'edit');
+  assert.equal(copy.replaces, null);
+  // Editing A leaves B drawing what it drew.
+  const two = written(one, copy, paintCell(gridOf(copy.recipe), 1, 0, -1));
+  assert.notEqual(two.form.detail.a.pattern, id);
+  assert.equal(two.form.detail.b.pattern, id);
+  assert.ok(two.assets[id]);
+});
+
+test('a Detailed morph session leaves no drawing behind but the last, and keeps the swatches the design had', () => {
+  const d = classic();
+  const own = written(d, editorStart(d, library, slotB, 'make'), paintCell(gridOf(editorStart(d, library, slotB, 'make').recipe), 0, 0, 1), 'soft');
+  const ownId = own.form.detail.b.pattern;
+  // Make on A: every stroke is a new drawing; only the one on the pot stays, B's own swatch too.
+  const s = editorStart(own, library, slotA, 'make');
+  let g = paintCell(gridOf(s.recipe), 2, 1, 1);
+  const first = written(own, s, g, 'soft');
+  g = paintCell(g, 3, 1, -1);
+  const second = written(first, s, g, 'soft');
+  assert.equal(second.assets[first.form.detail.a.pattern], undefined);
+  assert.ok(second.assets[second.form.detail.a.pattern]);
+  assert.ok(second.assets[ownId]);
+  // Make on B over your own swatch: the swatch stays among the design's own.
+  second.form.detail.b = { ...own.form.detail.b };
+  const overB = written(second, editorStart(second, library, slotB, 'make'), paintCell(emptyGrid(6, 4), 0, 0, -1), 'soft');
+  assert.ok(overB.assets[ownId]);
+  assert.ok(mineEntries(library, overB, []).some((e) => e.id === ownId));
 });
 
 // ---------- Writing the drawing ----------
@@ -132,12 +172,13 @@ test('a first drawn Pattern starts as deep and dense as the starters, and prints
   g = paintCell(g, 0, 0, 1);
   g = paintCell(g, 1, 0, -1);
   const out = written(d, s, g);
+  const id = drawingId(recipeOf(g));
   const want = drawingDefaults(out, OWN_PATTERN_DEFAULTS);
-  assert.equal(out.pattern.drawing, s.id);
+  assert.equal(out.pattern.drawing, id);
   assert.equal(out.pattern.depthMm, want.depthMm);
   assert.deepEqual(out.pattern.density, want.density);
-  assert.equal(out.assets[s.id].recipe.cells, recipeOf(g).cells);
-  assert.equal(targetDrawingId(out, PATTERN), s.id);
+  assert.equal(out.assets[id].recipe.cells, recipeOf(g).cells);
+  assert.equal(targetDrawingId(out, PATTERN), id);
   // It previews, with a readout, and without warnings on the default pot.
   const preview = computePreview(out, { library });
   assert.equal(preview.pattern.columns, 6);
@@ -151,26 +192,28 @@ test('drawing over a Pattern keeps its depth, density, range, Fade and Soften', 
   d.pattern.softenCells = 0.5;
   const before = structuredClone(d.pattern);
   const s = editorStart(d, library, PATTERN, 'edit');
-  const out = written(d, s, invertCells(gridOf(s.recipe), selectionMask(gridOf(s.recipe), { kind: 'row', r: 0 })));
+  const g = invertCells(gridOf(s.recipe), selectionMask(gridOf(s.recipe), { kind: 'row', r: 0 }));
+  const out = written(d, s, g);
   assert.deepEqual({ ...out.pattern, drawing: before.drawing }, before);
-  assert.equal(out.pattern.drawing, s.id);
+  assert.equal(out.pattern.drawing, drawingId(recipeOf(g)));
 });
 
 test('a Pattern drawing you replace goes, so it never shows among the Detailed morph\'s swatches', () => {
   const d = classic();
   const s = editorStart(d, library, PATTERN, 'make');
   const mine = written(d, s, paintCell(gridOf(s.recipe), 0, 0, 1));
-  assert.deepEqual(layerMineEntries(library, mine).map((e) => e.id), [s.id]);
-  assert.ok(!mineEntries(library, mine, []).some((e) => e.id === s.id));
+  const id = mine.pattern.drawing;
+  assert.deepEqual(layerMineEntries(library, mine).map((e) => e.id), [id]);
+  assert.ok(!mineEntries(library, mine, []).some((e) => e.id === id));
   // Picking a starter takes it off, and nothing else draws with it, so it goes.
   setLayerPattern(mine, findLayerEntry(library, 'lib:knit@1'));
-  assert.equal(mine.assets?.[s.id], undefined);
-  assert.ok(!mineEntries(library, mine, []).some((e) => e.id === s.id));
+  assert.equal(mine.assets?.[id], undefined);
+  assert.ok(!mineEntries(library, mine, []).some((e) => e.id === id));
   // A drawing of your own the Detailed morph also uses stays.
   const both = written(d, s, paintCell(gridOf(s.recipe), 0, 0, 1));
-  both.form.detail.a.pattern = s.id;
+  both.form.detail.a.pattern = id;
   setLayerPattern(both, null);
-  assert.ok(both.assets[s.id]);
+  assert.ok(both.assets[id]);
 });
 
 test('a Detailed morph grid on a textured slot keeps its repeats, tile height and depth', () => {
@@ -178,13 +221,14 @@ test('a Detailed morph grid on a textured slot keeps its repeats, tile height an
   const slot = d.form.detail.a;
   const s = editorStart(d, library, slotA, 'make');
   assert.deepEqual(s.base, { columns: 6, rows: 4, repeats: slot.repeats, tileHeightMm: slot.tileHeightMm });
-  const out = written(d, s, paintCell(gridOf(s.recipe), 2, 1, 1), 'round');
+  const g = paintCell(gridOf(s.recipe), 2, 1, 1);
+  const out = written(d, s, g, 'round');
   const a = out.form.detail.a;
-  assert.deepEqual([a.pattern, a.repeats, a.tileHeightMm, a.depthMm], [s.id, slot.repeats, slot.tileHeightMm, slot.depthMm]);
-  assert.equal(out.assets[s.id].recipe.edges, 'round');
-  assert.equal(out.assets[s.id].recipe.cells.length, 24);
+  const id = drawingId(recipeOf(g, 'round'));
+  assert.deepEqual([a.pattern, a.repeats, a.tileHeightMm, a.depthMm], [id, slot.repeats, slot.tileHeightMm, slot.depthMm]);
+  assert.equal(out.assets[id].recipe.edges, 'round');
+  assert.equal(out.assets[id].recipe.cells.length, 24);
 });
-
 test('a Detailed morph grid keeps its cells their size when the tile grows', () => {
   const base = { columns: 6, rows: 4, repeats: 20, tileHeightMm: 19.5 };
   assert.deepEqual(detailTileFor(base, 6, 4, 1.5), { repeats: 20, tileHeightMm: 19.5 });
@@ -201,12 +245,14 @@ test('a grid on an empty slot B brings in B with your own defaults and a blend',
   d.form.detail.b = null;
   const s = editorStart(d, library, slotB, 'make');
   assert.deepEqual([s.base.repeats, s.base.tileHeightMm], [8, 19.5]);
-  const out = written(d, s, paintCell(gridOf(s.recipe), 0, 0, -1), 'soft');
-  assert.equal(out.form.detail.b.pattern, s.id);
+  const g = paintCell(gridOf(s.recipe), 0, 0, -1);
+  const out = written(d, s, g, 'soft');
+  const id = drawingId(recipeOf(g, 'soft'));
+  assert.equal(out.form.detail.b.pattern, id);
   assert.equal(out.form.detail.b.depthMm, 1.5);
   assert.equal(out.form.detail.blend.shape, 'fadesUp');
   // The Detailed morph's own swatches list it; the Pattern's don't.
-  assert.ok(mineEntries(library, out, []).some((e) => e.id === s.id));
+  assert.ok(mineEntries(library, out, []).some((e) => e.id === id));
   assert.deepEqual(layerMineEntries(library, out), []);
 });
 

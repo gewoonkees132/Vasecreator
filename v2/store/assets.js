@@ -1,6 +1,7 @@
 // Browser storage for phase 2 assets (ARCHITECTURE.md, "Phase 2 contracts"):
 // greyscale image rasters by hash (IndexedDB store 'images') and "My
-// patterns", the user's own recipe swatches across designs ('patterns').
+// patterns", the Patterns and Detailed morph swatches saved apart from any
+// design, each with its settings (pattern studio D48; store 'patterns').
 // Designs only carry references (`img:<hash>`); the pixels live here, and in
 // design files (ui/design-file.js).
 //
@@ -9,6 +10,9 @@
 
 import { openDb } from './db.js';
 import { hashRaster } from '../core/raster.js';
+import { validateRecipe } from '../core/patterns.js';
+import { LIMITS } from '../core/design.js';
+import { DEFAULT_POINTS, DENSITY_FACES, FADE_SHAPES } from '../core/layer-pattern.js';
 
 let dbPromise = null;
 const getDb = () => (dbPromise ??= openDb());
@@ -97,7 +101,84 @@ export function imageHashes(design) {
   return [...out];
 }
 
-// ---------- My patterns ----------
+/// ---------- My patterns (pattern studio D48, §3.9, §9) ----------
+//
+// One entry is one saved setup, apart from any design:
+//   { id: 'saved:…', kind: 'pattern' | 'detail', name, drawing, settings, created, updated }
+// `drawing` is a `bitmap` recipe (crisp for a Pattern, with edges for a
+// Detailed morph grid). `settings` is what applying it sets besides the
+// drawing: for a Pattern { depthMm, density: { by, spacingMm, points },
+// fade: { shape, amount }, softenCells } (never From / To, which depend on
+// the pot's height), for a Detailed morph { depthMm, repeats, tileHeightMm }.
+// A design that uses one keeps its own copy of the drawing in design.assets.
+// Records of any other shape (the old { id, name, recipe }) are ignored (D50).
+
+/** The two kinds of saved entry: the Pattern's, and the Detailed morph's. */
+export const SAVED_KINDS = Object.freeze(['pattern', 'detail']);
+/** The name an entry without one gets. */
+export const SAVED_NAMES = Object.freeze({ pattern: 'My pattern', detail: 'My swatch' });
+// What fills a missing setting: a starter's depth and density on the default
+// bead (core/layer-pattern.js), and a swatch of your own (USER_SLOT).
+const FALLBACK = Object.freeze({
+  pattern: { depthMm: 0.42, spacingMm: 3, points: DEFAULT_POINTS },
+  detail: { depthMm: 1.5, repeats: 8, tileHeightMm: 20 },
+});
+
+const isObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+function num(v, fallback, { min, max }, whole = false) {
+  let x = typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+  if (whole) x = Math.round(x);
+  return Math.min(Math.max(x, min), max);
+}
+const oneOf = (v, list, fallback) => (list.includes(v) ? v : fallback);
+
+/**
+ * One of My patterns as it comes back from storage, checked and clamped, or
+ * null when it isn't one (another shape, an unknown kind, a drawing that
+ * isn't a valid bitmap). A Pattern's drawing loses `edges` (it is always
+ * crisp, D53); a Detailed morph grid's gets 'soft' when it has none.
+ * @param {unknown} raw
+ * @returns {null | { id: string, kind: 'pattern' | 'detail', name: string, drawing: object, settings: object, created: number, updated: number }}
+ */
+export function normaliseSavedPattern(raw) {
+  if (!isObject(raw) || typeof raw.id !== 'string' || !raw.id || raw.id.length > 80) return null;
+  const kind = raw.kind;
+  if (!SAVED_KINDS.includes(kind) || !isObject(raw.drawing) || raw.drawing.kind !== 'bitmap') return null;
+  const { columns, rows, cells, edges } = raw.drawing;
+  const drawing = { kind: 'bitmap', columns, rows, cells };
+  if (kind === 'detail') drawing.edges = edges ?? 'soft';
+  try {
+    validateRecipe(drawing);
+  } catch {
+    return null;
+  }
+  const s = isObject(raw.settings) ? raw.settings : {};
+  const F = FALLBACK[kind];
+  let settings;
+  if (kind === 'pattern') {
+    const density = isObject(s.density) ? s.density : {};
+    const fade = isObject(s.fade) ? s.fade : {};
+    settings = {
+      depthMm: num(s.depthMm, F.depthMm, LIMITS.patternDepthMm),
+      density: {
+        by: oneOf(density.by, DENSITY_FACES, 'spacing'),
+        spacingMm: num(density.spacingMm, F.spacingMm, LIMITS.spacingMm),
+        points: num(density.points, F.points, LIMITS.points, true),
+      },
+      fade: { shape: oneOf(fade.shape, FADE_SHAPES, 'even'), amount: num(fade.amount, 1, LIMITS.amount) },
+      softenCells: num(s.softenCells, 0, LIMITS.softenCells),
+    };
+  } else {
+    settings = {
+      depthMm: num(s.depthMm, F.depthMm, LIMITS.depthMm),
+      repeats: num(s.repeats, F.repeats, LIMITS.repeats, true),
+      tileHeightMm: num(s.tileHeightMm, F.tileHeightMm, LIMITS.tileHeightMm),
+    };
+  }
+  const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 80) : SAVED_NAMES[kind];
+  const time = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  return { id: raw.id, kind, name, drawing, settings, created: time(raw.created), updated: time(raw.updated) };
+}
 
 // Other tabs hear about pattern edits, so their swatch grids refresh too.
 let channel = null;
@@ -115,32 +196,40 @@ function changed() {
   try { channel?.postMessage({ type: 'patterns' }); } catch { /* closed */ }
 }
 
-const newPatternId = () => `user:${Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('')}`;
+const newSavedId = () => `saved:${Array.from(crypto.getRandomValues(new Uint8Array(4)), (b) => b.toString(16).padStart(2, '0')).join('')}`;
 
-/** @returns {Promise<{ id: string, name: string, recipe: object }[]>} oldest first */
-export async function listPatterns() {
+/**
+ * My patterns, oldest first: every kind, or one.
+ * @param {'pattern' | 'detail'} [kind]
+ * @returns {Promise<NonNullable<ReturnType<typeof normaliseSavedPattern>>[]>}
+ */
+export async function listPatterns(kind) {
   const db = await getDb();
   const all = await db.all('patterns');
   return (Array.isArray(all) ? all : [])
-    .filter((p) => p && typeof p.id === 'string' && p.recipe && typeof p.recipe === 'object')
-    .sort((a, b) => (a.created ?? 0) - (b.created ?? 0))
-    .map(({ id, name, recipe }) => ({ id, name: String(name || 'My pattern'), recipe }));
+    .map(normaliseSavedPattern)
+    .filter((p) => p && (!kind || p.kind === kind))
+    .sort((a, b) => a.created - b.created);
 }
 
 /**
- * Adds or replaces one of "My patterns". A missing id gets a new `user:` id.
- * @returns {Promise<{ id: string, name: string, recipe: object } | null>} null when it couldn't be stored
+ * Adds one of My patterns, or replaces the one with this id (keeping when it
+ * was first saved). A missing id gets a new 'saved:' id.
+ * @param {{ id?: string, kind: 'pattern' | 'detail', name: string, drawing: object, settings: object }} entry
+ * @returns {Promise<ReturnType<typeof normaliseSavedPattern>>} the entry as stored; null when the browser didn't store it
  */
-export async function savePattern({ id, name, recipe } = {}) {
-  if (!recipe || typeof recipe !== 'object') throw new TypeError('A pattern needs a recipe');
+export async function savePattern({ id, kind, name, drawing, settings } = {}) {
+  const key = typeof id === 'string' && id ? id : newSavedId();
+  const now = Date.now();
+  const check = normaliseSavedPattern({ id: key, kind, name, drawing, settings, created: now, updated: now });
+  if (!check) throw new TypeError('Not a pattern to save');
   const db = await getDb();
-  const key = typeof id === 'string' && id ? id : newPatternId();
-  const prior = await db.get('patterns', key);
-  const record = { id: key, name: String(name || 'My pattern').slice(0, 80), recipe: structuredClone(recipe), created: prior?.created ?? Date.now(), updated: Date.now() };
-  const ok = await db.put('patterns', key, record);
-  if (!ok) return null;
+  const prior = normaliseSavedPattern(await db.get('patterns', key));
+  const entry = { ...check, created: prior?.created || now };
+  const ok = await db.put('patterns', key, entry);
+  if (ok === false) return null;
   changed();
-  return { id: record.id, name: record.name, recipe: record.recipe };
+  return entry;
 }
 
 /** Removes one of "My patterns". Designs that use it keep their own copy (design.assets). */

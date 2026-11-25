@@ -2,7 +2,8 @@
 // replaces the controls area, so the pot gets the stage. From the top down:
 //   the grabber (tap or swipe up: all settings, ui/steps.js's sheet),
 //   the adjuster, one control for the chosen tool: the ruler dial
-//     (ui/dial.js), option buttons, a swatch carousel or a short hint,
+//     (ui/dial.js), option buttons, a swatch carousel or a short hint; Save
+//     in a carousel puts the name form here instead, in one row (D48),
 //   the tool row (ui/dock-tools.js), chips with their values, the whole
 //     width of the screen: there is no Next, the step emblems below move
 //     between steps (pattern studio D49).
@@ -24,7 +25,9 @@ import { listPatterns, onPatternsChanged } from '../store/assets.js';
 import {
   IMAGE_ACCEPT, pickPattern, importImageFile, openEditor, drawEntry, mineEntries, loadImages,
   pickLayerPattern, layerMineEntries, drawLayerEntry, readoutOf, setDensityFace, editableEntry,
+  pickSavedPattern, pickSavedDetail, targetKey, savedSpacingMm, savableEntry, saveEntry,
 } from './pattern-actions.js';
+import { createSaveForm } from './my-patterns.js';
 
 const SWATCH = 52;
 const CHIP_SWATCH = 26;
@@ -62,9 +65,11 @@ export function mountDock(el, ctx, frame) {
   const tabs = h('div', { class: 'dock-tablist', role: 'tablist' });
   const toolRow = h('div', { class: 'dock-tools' }, [lead, tabs]);
   const msg = h('div', { class: 'dock-msg', role: 'status', 'aria-live': 'polite', hidden: true });
+  // Said, not shown: the message floats over the stage's edge, where the pot may be (D22).
+  const live = h('div', { class: 'visually-hidden', role: 'status', 'aria-live': 'polite' });
   el.classList.add('dock');
   el.setAttribute('aria-label', 'Tools');
-  el.replaceChildren(tipSlot, grabber, adjust, h('div', { class: 'dock-row' }, [back, toolRow]), msg);
+  el.replaceChildren(tipSlot, grabber, adjust, h('div', { class: 'dock-row' }, [back, toolRow]), msg, live);
 
   // Tap the grabber, or swipe it up, for all settings.
   let swipe = null;
@@ -166,7 +171,7 @@ export function mountDock(el, ctx, frame) {
   let tilesKey = '';
   let carouselSlot = null;
 
-  const swatchTile = (id, name, extraClass = '', onPick = () => pickPattern(ctx, carouselSlot, id, saved)) => {
+  const swatchTile = (id, name, extraClass = '', onPick = () => pickPattern(ctx, carouselSlot, id)) => {
     const canvas = h('canvas', { class: 'dock-swatch-canvas', width: 1, height: 1, 'aria-hidden': 'true' });
     const btn = h('button', { type: 'button', class: `dock-swatch ${extraClass}`, title: name, 'aria-pressed': 'false' }, [
       canvas, h('span', { class: 'dock-swatch-name', text: name }),
@@ -198,7 +203,7 @@ export function mountDock(el, ctx, frame) {
   });
   // The 2D editor (D45, D46): Make starts an empty grid, Edit the drawing in use.
   const edit = (target, mode, from) => {
-    openEditor(ctx, target, { mode, saved, returnFocus: from }).catch((err) => {
+    openEditor(ctx, target, { mode, returnFocus: from }).catch((err) => {
       console.warn('Editor not loaded', err);
       say('The editor didn’t load. Reload the page to try again.');
     });
@@ -207,9 +212,12 @@ export function mountDock(el, ctx, frame) {
   const editTile = actionTile('dock-swatch--edit', 'edit', 'Edit', 'Edit the swatch', () => edit({ kind: 'detail', slot: carouselSlot }, 'edit', editTile));
   const makeDrawingTile = actionTile('dock-swatch--make', 'make', 'Make', 'Make your own pattern', () => edit({ kind: 'pattern' }, 'make', makeDrawingTile));
   const editDrawingTile = actionTile('dock-swatch--edit', 'edit', 'Edit', 'Edit the pattern', () => edit({ kind: 'pattern' }, 'edit', editDrawingTile));
+  // Save to My patterns (D48): the name form takes the adjuster's place.
+  const saveTile = actionTile('dock-swatch--keep', 'keep', 'Save', 'Save the swatch to My patterns', () => startNaming({ kind: 'detail', slot: carouselSlot }, saveTile));
+  const saveDrawingTile = actionTile('dock-swatch--keep', 'keep', 'Save', 'Save the pattern to My patterns', () => startNaming({ kind: 'pattern' }, saveDrawingTile));
   /** Shows an Edit tile only when the target holds a drawing, named for what it edits. */
   function syncEditTile(tileEl, target, d) {
-    const e = editableEntry(d, library, target, saved);
+    const e = editableEntry(d, library, target);
     tileEl.hidden = !e;
     if (!e) return;
     labelIcon(tileEl, e.own || String(e.id).startsWith('user:') ? `Edit ${e.name}` : `Edit a copy of ${e.name}`);
@@ -234,24 +242,32 @@ export function mountDock(el, ctx, frame) {
   function renderCarousel(state, s) {
     const d = state.design;
     const mine = mineEntries(library, d, saved);
-    const key = `${s}|${mine.map((e) => `${e.id}|${e.name}`).join(';')}`;
+    // A replaced entry keeps its id and name; its time rebuilds the tile, so a tap applies what was saved last.
+    const key = `${s}|${mine.map((e) => `${e.id}|${e.name}|${e.saved?.updated ?? 0}`).join(';')}`;
     if (key !== tilesKey) {
       tilesKey = key;
       tiles = [];
-      if (s === 'b') tiles.push(noneTile(() => pickPattern(ctx, carouselSlot, null, saved)));
+      if (s === 'b') tiles.push(noneTile(() => pickPattern(ctx, carouselSlot, null)));
       for (const p of library.patterns) tiles.push({ ...swatchTile(p.id, p.name), entry: p });
       tiles.push({ ...swatchTile(PLAIN.id, PLAIN.name), entry: PLAIN });
-      const mineTiles = mine.map((e) => ({ ...swatchTile(e.id, e.name, 'dock-swatch--mine'), entry: e }));
+      // A saved swatch brings its depth, repeats and tile height (D48).
+      const mineTiles = mine.map((e) => ({
+        ...swatchTile(e.id, e.name, 'dock-swatch--mine', e.saved ? () => pickSavedDetail(ctx, carouselSlot, e.saved) : undefined),
+        entry: e,
+      }));
       if (mineTiles.length) mineTiles[0].btn.classList.add('is-first-mine');
       tiles.push(...mineTiles);
-      carousel.replaceChildren(...tiles.map((t) => t.btn), imageTile, makeTile, editTile, fileInput);
+      carousel.replaceChildren(...tiles.map((t) => t.btn), imageTile, makeTile, editTile, saveTile, fileInput);
       carousel.setAttribute('aria-label', `Detailed morph swatches for ${s.toUpperCase()}`);
     }
     const slot = d.form.detail[s];
     syncEditTile(editTile, { kind: 'detail', slot: s }, d);
+    saveTile.hidden = editTile.hidden;
+    if (!saveTile.hidden) labelIcon(saveTile, `Save the swatch of ${s.toUpperCase()} to My patterns`);
+    const onKey = slot ? targetKey(d, library, { kind: 'detail', slot: s }) : null;
     let selected = null;
     for (const t of tiles) {
-      const on = slot ? t.id === slot.pattern : t.id === null;
+      const on = t.entry?.saved ? !!slot && t.entry.key === onKey : slot ? t.id === slot.pattern : t.id === null;
       t.btn.setAttribute('aria-pressed', String(on));
       if (on) selected = t.btn;
       if (t.canvas && t.entry) drawEntry(t, t.entry, on && t.entry.own ? slot : null, d, SWATCH, () => update(store.state));
@@ -267,8 +283,9 @@ export function mountDock(el, ctx, frame) {
 
   function renderDrawings(state) {
     const d = state.design;
-    const mine = layerMineEntries(library, d);
-    const key = mine.map((e) => `${e.id}|${e.name}`).join(';');
+    const mine = layerMineEntries(library, d, saved);
+    // A replaced entry keeps its id and name; its time rebuilds the tile, so a tap applies what was saved last.
+    const key = mine.map((e) => `${e.id}|${e.name}|${e.saved?.updated ?? 0}`).join(';');
     if (key !== drawingsKey || !drawingTiles.length) {
       drawingsKey = key;
       drawingTiles = [];
@@ -276,21 +293,27 @@ export function mountDock(el, ctx, frame) {
         drawingTiles.push({ ...swatchTile(p.id, p.name, '', () => pickLayerPattern(ctx, p.id)), entry: p });
       }
       drawingTiles.push(noneTile(() => pickLayerPattern(ctx, null)));
-      const mineTiles = mine.map((e) => ({ ...swatchTile(e.id, e.name, 'dock-swatch--mine', () => pickLayerPattern(ctx, e.id)), entry: e }));
+      // A saved Pattern brings its depth, density, Fade and Soften (D48).
+      const mineTiles = mine.map((e) => ({
+        ...swatchTile(e.id, e.name, 'dock-swatch--mine', () => (e.saved ? pickSavedPattern(ctx, e.saved) : pickLayerPattern(ctx, e.id))),
+        entry: e,
+      }));
       if (mineTiles.length) mineTiles[0].btn.classList.add('is-first-mine');
       drawingTiles.push(...mineTiles);
-      drawings.replaceChildren(...drawingTiles.map((t) => t.btn), makeDrawingTile, editDrawingTile);
+      drawings.replaceChildren(...drawingTiles.map((t) => t.btn), makeDrawingTile, editDrawingTile, saveDrawingTile);
     }
     syncEditTile(editDrawingTile, { kind: 'pattern' }, d);
+    saveDrawingTile.hidden = editDrawingTile.hidden;
     const current = d.pattern?.drawing ?? null;
+    const onKey = targetKey(d, library, { kind: 'pattern' });
     const r = readoutOf(d, library);
     let selected = null;
     for (const t of drawingTiles) {
-      const on = t.id === current;
+      const on = t.entry?.saved ? t.entry.key === onKey : t.id === current;
       t.btn.setAttribute('aria-pressed', String(on));
       if (on) selected = t.btn;
-      // The one on the pot at its own spacing, the others at their defaults.
-      if (t.canvas && t.entry) drawLayerEntry(t, t.entry, d, SWATCH, on && r ? r.spacingMinMm : undefined);
+      // The one on the pot at its own spacing, the others at their defaults (a saved one at its own).
+      if (t.canvas && t.entry) drawLayerEntry(t, t.entry, d, SWATCH, on && r ? r.spacingMinMm : t.entry.saved ? savedSpacingMm(d, t.entry.saved) : undefined);
     }
     return selected;
   }
@@ -312,6 +335,43 @@ export function mountDock(el, ctx, frame) {
       .catch((err) => console.warn('My patterns not loaded', err));
   refreshSaved();
   const offPatterns = onPatternsChanged(refreshSaved);
+
+  // ---------- Save to My patterns (D48): the name form in the adjuster ----------
+
+  let naming = null;          // { target, form, from } while a name is asked
+  const saveForm = (kind) => createSaveForm({
+    kind,
+    compact: true,
+    build: () => (naming ? savableEntry(store.state.design, library, naming.target) : null),
+    save: (entry, name, list) => saveEntry(ctx, naming.target, entry, name, list),
+    onClose: (result) => endNaming(result),
+  });
+  const forms = { pattern: saveForm('pattern'), detail: saveForm('detail') };
+  function startNaming(target, from) {
+    if (!target?.kind) return;
+    const form = forms[target.kind];
+    naming = { target, form, from };
+    adjust.replaceChildren(form.el);
+    form.open().then((ok) => { if (!ok && naming?.form === form) endNaming(null); });
+  }
+  function endNaming(result) {
+    const n = naming;
+    naming = null;
+    if (!n) return;
+    if (active) {
+      tool = null;            // shows the carousel again
+      update(store.state);
+    }
+    // The new tile shows picked in the carousel; the words go to screen readers.
+    if (result) live.textContent = result.replaced ? `Updated “${result.entry.name}” in My patterns.` : `Saved “${result.entry.name}” to My patterns.`;
+    if (n.from?.isConnected) n.from.focus({ preventScroll: true });
+  }
+  /** Lets go of the name form without saving, when the dock moves on. */
+  function dropNaming() {
+    const n = naming;
+    naming = null;
+    n?.form.close();
+  }
 
   // ---------- The tool row ----------
 
@@ -413,7 +473,7 @@ export function mountDock(el, ctx, frame) {
       c.btn.setAttribute('aria-selected', String(on));
       c.btn.tabIndex = on ? 0 : -1;
       if (t.kind === 'patterns') {
-        const info = slotInfo(state, library, t.slot, saved);
+        const info = slotInfo(state, library, t.slot);
         setText(c.name, t.slot.toUpperCase());
         setText(c.value, info.name);
         c.btn.setAttribute('aria-label', `Detailed morph ${t.slot.toUpperCase()}: ${info.name}`);
@@ -440,6 +500,7 @@ export function mountDock(el, ctx, frame) {
     // The adjuster: switch only when the tool (or its slot) changed.
     const fresh = cur !== tool || step !== shownStep || (cur?.kind === 'patterns' && cur.slot !== carouselSlot);
     tool = cur;
+    if (fresh && naming) dropNaming();
     if (fresh) {
       shownStep = step;
       showAdjuster(state);
@@ -484,7 +545,7 @@ export function mountDock(el, ctx, frame) {
 
   function refreshAdjuster(state) {
     const t = tool;
-    if (!t) return;
+    if (!t || naming) return;
     if (t.kind === 'dial') {
       const spec = safeSpec(t, state);
       // The density's face changes the dial's whole scale, not just its value.
@@ -555,6 +616,7 @@ export function mountDock(el, ctx, frame) {
     setActive(on) {
       if (active === !!on) return;
       active = !!on;
+      if (!active) dropNaming();
       if (active) {
         tool = null;
         update(store.state);

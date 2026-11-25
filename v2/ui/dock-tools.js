@@ -507,10 +507,10 @@ export function currentTool(stepId, state) {
  * The chip text of a slot tool: the pattern's name, or "None".
  * @returns {{ name: string, entry: object | null, slot: object | null }}
  */
-export function slotInfo(state, library, s, saved) {
+export function slotInfo(state, library, s) {
   const slot = state.design.form.detail[s];
   if (!slot) return { name: 'None', entry: null, slot: null };
-  const entry = findEntry(library, slot.pattern, state.design.assets, saved);
+  const entry = findEntry(library, slot.pattern, state.design.assets);
   return { name: entry?.name ?? (slot.pattern === PLAIN.id ? 'Plain' : slot.pattern), entry, slot };
 }
 

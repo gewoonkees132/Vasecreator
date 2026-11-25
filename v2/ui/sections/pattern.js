@@ -1,8 +1,10 @@
 // Pattern section (D35–D48, docs/design/v2-pattern-studio.md §3): the
 // bead-scale Pattern, design.pattern, as the parts of the Pattern step:
-//   Pattern   the starter drawings at the pot's own bead scale, None, your
-//             own, Make (the 2D editor on an empty grid) and Edit (on the
-//             drawing on the pot: a starter as a copy, your own in place)
+//   Pattern   the starter drawings at the pot's own bead scale, None, My
+//             patterns (saved with their settings, D48; × deletes one) and
+//             the drawing of your own on the pot, Make (the 2D editor on an
+//             empty grid), Edit (on the drawing on the pot: a starter as a
+//             copy, your own in place) and Save (to My patterns, named)
 //   Depth     out = +depth, in = −depth, up to half a bead (D38)
 //   Density   the node spacing around, as mm or as points per layer, with the
 //             readout "96 points per layer · 3.8–6.1 mm" (D40)
@@ -17,12 +19,15 @@ import { DEPTH_BEADS, SPACING_BEADS } from '../../core/layer-pattern.js';
 import { BLEND_OPTIONS } from '../dock-tools.js';
 import {
   findLayerEntry, layerMineEntries, pickLayerPattern, drawLayerEntry, readoutOf, densityText, densityLimits, setDensityFace,
-  openEditor, editableEntry,
+  openEditor, editableEntry, savableEntry, saveEntry, pickSavedPattern, targetKey, savedSpacingMm, drawsWith,
 } from '../pattern-actions.js';
+import { listPatterns, deletePattern, onPatternsChanged } from '../../store/assets.js';
+import { createSaveForm, createDeleteConfirm } from '../my-patterns.js';
 import { labelIcon } from '../press-label.js';
 import { ICONS } from '../icons.js';
 
 const SWATCH = 52;
+const TARGET = { kind: 'pattern' };
 const PARTS = ['drawing', 'depth', 'density', 'range', 'fade', 'soften'];
 const FADE_WHERE = { fadesUp: 'At the top: ', fadesDown: 'At the bottom: ', middle: 'Halfway up: ', diagonal: 'In the band: ' };
 const halfBead = (d) => Math.floor(DEPTH_BEADS.max * d.layers.beadWidthMm * 100) / 100;
@@ -55,13 +60,16 @@ const section = {
     const mineGrid = h('div', { class: 'swatch-grid mine-grid', role: 'group', 'aria-labelledby': mineLabel.id });
     const strip = h('div', { class: 'swatch-strip' }, [grid, mineLabel, mineGrid]);
     const about = h('p', { class: 'panel-note pattern-about' });
-    const tile = (id, name, entry) => {
+    const tile = (id, name, entry, onPick = () => pickLayerPattern(ctx, id)) => {
       const canvas = entry
         ? h('canvas', { class: 'swatch-canvas', width: 1, height: 1, 'aria-hidden': 'true' })
         : h('span', { class: 'swatch-none', 'aria-hidden': 'true' });
       const btn = h('button', { type: 'button', class: 'swatch', title: name, 'aria-pressed': 'false' }, [canvas, h('span', { class: 'swatch-name', text: name })]);
-      btn.addEventListener('click', () => pickLayerPattern(ctx, id));
-      return { id, btn, canvas, entry, drawn: '' };
+      btn.addEventListener('click', () => {
+        say('');
+        onPick();
+      });
+      return { id, btn, el: btn, canvas, entry, drawn: '' };
     };
     const tiles = (library.layerPatterns ?? []).map((p) => tile(p.id, p.name, p));
     tiles.push(tile(null, 'None', null));
@@ -87,6 +95,59 @@ const section = {
     };
     const makeBtn = actionTile('make', 'Make', 'Make your own pattern', 'make');
     const editBtn = actionTile('edit', 'Edit', 'Edit the pattern', 'edit');
+
+    // ---- My patterns (D48): Save with a name, apply in one tap, × deletes ----
+    let saved = [];
+    const refreshSaved = () =>
+      Promise.resolve(listPatterns('pattern'))
+        .then((list) => {
+          saved = Array.isArray(list) ? list : [];
+          update(store.state);
+        })
+        .catch((err) => console.warn('My patterns not loaded', err));
+    const mineMsg = h('p', { class: 'panel-note image-msg', role: 'status', hidden: true });
+    const say = (text) => {
+      mineMsg.textContent = text;
+      mineMsg.hidden = !text;
+    };
+    const saveMark = h('span', { class: 'swatch-add', 'aria-hidden': 'true' });
+    saveMark.innerHTML = ICONS.keep;
+    const saveBtn = labelIcon(h('button', { type: 'button', class: 'swatch swatch-action' }, [saveMark, h('span', { class: 'swatch-name', text: 'Save' })]), 'Save the pattern to My patterns');
+    const saveForm = createSaveForm({
+      kind: 'pattern',
+      build: () => savableEntry(store.state.design, library, TARGET),
+      save: (entry, name, list) => saveEntry(ctx, TARGET, entry, name, list),
+      onClose: (result) => {
+        if (result) say(result.replaced ? `Updated “${result.entry.name}” in My patterns.` : `Saved “${result.entry.name}” to My patterns.`);
+        if (saveBtn.isConnected && !saveBtn.hidden) saveBtn.focus({ preventScroll: true });
+      },
+    });
+    saveBtn.addEventListener('click', () => {
+      confirm.close();
+      say('');
+      saveForm.open();
+    });
+    const confirm = createDeleteConfirm({
+      onDelete: async ({ entry }) => {
+        try {
+          await deletePattern(entry.id);
+        } catch (err) {
+          console.warn('Pattern not deleted', err);
+          say('That pattern couldn’t be deleted. Try again.');
+          return;
+        }
+        const used = drawsWith(store.state.design, library, entry);
+        await refreshSaved();
+        say(used ? `“${entry.name}” is no longer in My patterns. This design keeps its own copy.` : `Deleted “${entry.name}” from My patterns.`);
+        makeBtn.focus({ preventScroll: true });
+      },
+    });
+    const askDelete = (entry, from) => {
+      saveForm.close();
+      say('');
+      const used = drawsWith(store.state.design, library, entry);
+      confirm.ask(entry, from, `Delete “${entry.name}” from My patterns?${used ? ' This design keeps its own copy, so the pot doesn’t change.' : ''}`);
+    };
 
     // ---- Depth ----
     const depth = slider({
@@ -160,30 +221,47 @@ const section = {
     });
 
     // The Pattern step's parts (ui/steps.js).
-    for (const e of [strip, editorMsg, about]) e.dataset.part = 'drawing';
+    for (const e of [strip, saveForm.el, confirm.el, mineMsg, editorMsg, about]) e.dataset.part = 'drawing';
     depth.el.dataset.part = 'depth';
     densityBox.dataset.part = 'density';
     rangeBox.dataset.part = 'range';
     fadeBox.dataset.part = 'fade';
     soften.el.dataset.part = 'soften';
-    el.append(strip, editorMsg, about, depth.el, densityBox, rangeBox, fadeBox, soften.el);
+    el.append(strip, saveForm.el, confirm.el, mineMsg, editorMsg, about, depth.el, densityBox, rangeBox, fadeBox, soften.el);
+
+    // A saved Pattern: its tile applies it in one tap (D48), and × on its corner deletes it.
+    function mineTile(e) {
+      if (!e.saved) return tile(e.id, e.name, e);
+      const t = tile(e.id, e.name, e, () => pickSavedPattern(ctx, e.saved));
+      const del = labelIcon(h('button', { type: 'button', class: 'swatch-del' }, [
+        h('span', { class: 'swatch-del-dot', 'aria-hidden': 'true', text: '×' }),
+      ]), `Delete ${e.name} from My patterns`);
+      del.addEventListener('click', () => askDelete(e.saved, del));
+      t.el = h('div', { class: 'swatch-item' }, [t.btn, del]);
+      return t;
+    }
 
     function renderMine(d, current, r) {
-      const list = layerMineEntries(library, d);
-      const key = list.map((e) => `${e.id}|${e.name}`).join(';');
+      const list = layerMineEntries(library, d, saved);
+      // A replaced entry keeps its id and name; its time rebuilds the tile, so a tap applies what was saved last.
+      const key = list.map((e) => `${e.id}|${e.name}|${e.saved?.updated ?? 0}`).join(';');
       if (key !== mineKey) {
         mineKey = key;
-        mineTiles = list.map((e) => tile(e.id, e.name, e));
-        mineGrid.replaceChildren(...mineTiles.map((t) => t.btn), makeBtn, editBtn);
+        mineTiles = list.map(mineTile);
+        mineGrid.replaceChildren(...mineTiles.map((t) => t.el), makeBtn, editBtn, saveBtn);
+        if (confirm.pending && !saved.some((e) => e.id === confirm.pending.entry.id)) confirm.close();
       }
-      const editable = editableEntry(d, library, { kind: 'pattern' });
+      const editable = editableEntry(d, library, TARGET);
       editBtn.hidden = !editable;
+      saveBtn.hidden = !editable;
       if (editable) {
         labelIcon(editBtn, editable.own ? `Edit ${editable.name}` : `Edit a copy of ${editable.name}`);
       }
+      const onKey = targetKey(d, library, TARGET);
       for (const t of mineTiles) {
-        t.btn.setAttribute('aria-pressed', String(t.id === current));
-        drawLayerEntry(t, t.entry, d, SWATCH, t.id === current ? r?.spacingMinMm : undefined);
+        const on = t.entry.saved ? t.entry.key === onKey : t.id === current;
+        t.btn.setAttribute('aria-pressed', String(on));
+        drawLayerEntry(t, t.entry, d, SWATCH, on ? r?.spacingMinMm : t.entry.saved ? savedSpacingMm(d, t.entry.saved) : undefined);
       }
     }
 
@@ -244,10 +322,13 @@ const section = {
       soften.setInfo(p.softenCells > 0 ? 'Blurs each point into its neighbours; the drawing stays in, flat or out' : 'Crisp: what you draw is what prints');
     };
     update(store.state);
+    refreshSaved();
+    const offPatterns = onPatternsChanged(refreshSaved);
 
     return {
       update,
       destroy() {
+        offPatterns?.();
         for (const c of [depth, spacing, points, from, to, amount, soften]) c.destroy?.();
         el.replaceChildren();
       },

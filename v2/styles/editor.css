@@ -106,6 +106,10 @@ html.is-editing #panel { display: none !important; }
 }
 .ed-btn.ed-done { width: 40px; height: 40px; border-color: var(--c-primary-dark); background: var(--c-primary-dark); color: #fff; }
 .ed-btn.ed-done:hover { background: var(--c-primary-dark-hover); }
+/* Save to My patterns (D48), beside Done; its name form opens under the head. */
+.ed-btn.ed-keep { width: 40px; height: 40px; }
+.ed-btn.ed-keep svg { width: 22px; height: 22px; }
+.editor .save-form { flex: none; margin: var(--space-2) var(--space-3) 0; }
 
 .ed-tabs { display: none; }
 .ed-status { flex: none; min-height: 28px; padding: 6px var(--space-4); font-size: 12px; color: var(--c-text-2); border-top: 1px solid var(--c-border); }
@@ -137,7 +141,11 @@ html.is-editing #panel { display: none !important; }
   .ed-head { align-items: center; padding: 6px 6px 2px var(--space-4); background: none; border: 0; }
   .ed-sub { display: none; }
   .ed-btn.ed-done { width: 48px; height: 40px; border-radius: 12px; }
+  .ed-btn.ed-keep { width: 44px; height: 40px; border-radius: 12px; }
   .ed-stage { min-height: 110px; }
+  /* While a name is asked the tools step aside, so the grid keeps its room. */
+  .editor .save-form { margin: 2px var(--space-2) 0; padding: var(--space-2) var(--space-3); }
+  .editor.is-naming .ed-tools, .editor.is-naming .ed-tabs { display: none; }
   .ed-tools { flex-wrap: nowrap; justify-content: center; align-items: center; gap: 10px; padding: 6px var(--space-2); border-top: 0; background: none; }
   .ed-group-title { display: none; }
   .ed-group.is-tab { flex-direction: row; }

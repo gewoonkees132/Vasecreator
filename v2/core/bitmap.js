@@ -10,6 +10,19 @@
 // lcm(columns, rows) cells of the tile before it closes).
 
 import { MAX_BITMAP_CELLS, bitmapValues, fillBitmap, makeBitmap } from './patterns.js';
+import { hashText } from './raster.js';
+
+/**
+ * The id a drawing of your own goes by in design.assets (D48, §9): 'user:'
+ * and a hash of what it draws (its size, edges and cells). The same drawing
+ * has the same id in every design and in My patterns, and an edit gives a
+ * new id, so an id never stands for two drawings.
+ * @param {{ columns: number, rows: number, cells: string, edges?: string }} recipe a bitmap
+ * @returns {string} 'user:' + 16 hex characters
+ */
+export function drawingId(recipe) {
+  return `user:${hashText(`bitmap:${recipe.columns}x${recipe.rows}:${recipe.edges ?? ''}:${recipe.cells}`)}`;
+}
 
 /** The three states a cell can be in: out, flat, in (D38). */
 export const CELL_STATES = [1, 0, -1];

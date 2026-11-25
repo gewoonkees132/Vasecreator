@@ -15,4 +15,6 @@ export const ICONS = Object.freeze({
   make: svg('<rect x="3.5" y="3.5" width="12.5" height="12.5" rx="1.6"/><path d="M7.7 3.5v12.5M11.8 3.5v12.5M3.5 7.7h12.5M3.5 11.8h12.5" stroke-width="1.1" opacity=".55"/><path d="M19 15.5v6M16 18.5h6" stroke-width="2"/>'),
   // Edit: a pencil.
   edit: svg('<path d="M15.2 4.8l4 4L8.5 19.5H4.5v-4z"/><path d="M13 7l4 4"/>'),
+  // Save to My patterns (D48): a bookmark with a plus, so it never reads as Save design's disk.
+  keep: svg('<path d="M6.5 3.5h11a1 1 0 0 1 1 1v16l-6.5-4.2-6.5 4.2v-16a1 1 0 0 1 1-1z"/><path d="M12 7.2v6M9 10.2h6" stroke-width="2"/>'),
 });

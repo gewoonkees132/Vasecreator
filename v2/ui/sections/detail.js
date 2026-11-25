@@ -2,10 +2,12 @@
 // Pattern step's "Surface"): the mm-scale relief, design.form.detail, as one
 // part of Shape beside Morph. Two slots, the swatch grid that fills the
 // selected slot, per-slot settings, and the shared range and blend (Even,
-// Fades up, Fades down, Middle, Diagonal). Phase 2 (D24): "My patterns"
-// (your own recipes and images) after the library, then + Image, Make (the
-// 2D editor on an empty coarse grid, D45) and Edit (on the slot's grid: a
-// library one as a copy, your own in place).
+// Fades up, Fades down, Middle, Diagonal). "My patterns" after the library:
+// the swatches saved with their depth, repeats and tile height (D48; a tap
+// applies one, × deletes it), then the recipes and images the design
+// carries, then Image, Make (the 2D editor on an empty coarse grid, D45),
+// Edit (on the slot's grid: a library one as a copy, your own in place) and
+// Save (the slot's grid to My patterns, named).
 
 import { numberField, slider, segmented, h } from '../controls.js';
 import { drawSwatch, beadGrid } from '../swatch.js';
@@ -18,9 +20,11 @@ import { printableResolution } from '../../core/raster.js';
 import { labelIcon } from '../press-label.js';
 import { ICONS } from '../icons.js';
 import {
-  IMAGE_ACCEPT, findEntry, usesAsset, snapToLayers, pickPattern, loadImages,
+  IMAGE_ACCEPT, findEntry, snapToLayers, pickPattern, loadImages,
   importImageFile, openEditor, drawEntry, mineEntries, editableEntry,
+  savableEntry, saveEntry, pickSavedDetail, targetKey, drawsWith, unusedCopies,
 } from '../pattern-actions.js';
+import { createSaveForm, createDeleteConfirm } from '../my-patterns.js';
 
 const SLOT_SUB = { a: 'main swatch', b: 'blends in' };
 const BLEND_LABELS = { even: 'even', fadesUp: 'fades up', fadesDown: 'fades down', middle: 'middle', diagonal: 'diagonal' };
@@ -103,14 +107,14 @@ const section = {
     for (const p of library.patterns) addTile(p.id, p.name, p.recipe);
     addTile(PLAIN.id, PLAIN.name, PLAIN.recipe);
 
-    const pick = (id) => pickPattern(ctx, slotOf(), id, saved);
+    const pick = (id) => pickPattern(ctx, slotOf(), id);
     // An image swatch draws once its pixels are in.
     const redraw = () => update(store.state);
 
     // My patterns: saved in this browser, plus your own assets in this design.
     let saved = [];
     const refreshSaved = () =>
-      Promise.resolve(listPatterns())
+      Promise.resolve(listPatterns('detail'))
         .then((list) => {
           saved = Array.isArray(list) ? list : [];
           update(store.state);
@@ -132,7 +136,7 @@ const section = {
       const btn = actionTile(icon, name, label);
       btn.addEventListener('click', () => {
         showImageMsg('');
-        openEditor(ctx, { kind: 'detail', slot: slotOf() }, { mode, saved, returnFocus: btn }).catch((err) => {
+        openEditor(ctx, { kind: 'detail', slot: slotOf() }, { mode, returnFocus: btn }).catch((err) => {
           console.warn('Editor not loaded', err);
           showImageMsg('The editor didn’t load. Reload the page to try again.');
         });
@@ -143,57 +147,53 @@ const section = {
     const editBtn = editorTile('edit', 'Edit', 'Edit the swatch', 'edit');
     const imageMsg = h('p', { class: 'panel-note image-msg', role: 'alert', hidden: true });
 
-    // Deleting one of My patterns, after a confirmation under the grid. The
-    // design keeps its own copy when it uses the pattern, so the pot never
-    // changes; an unused copy goes too, so the swatch leaves the grid.
-    const confirmText = h('p', { class: 'mine-confirm-text', id: `mine-confirm-${Math.random().toString(36).slice(2, 8)}` });
-    const confirmCancel = h('button', { type: 'button', class: 'btn', text: 'Cancel' });
-    const confirmDelete = h('button', { type: 'button', class: 'btn btn-danger', text: 'Delete' });
-    const confirmBox = h('div', { class: 'mine-confirm', role: 'group', 'aria-labelledby': confirmText.id, hidden: true }, [
-      confirmText,
-      h('div', { class: 'mine-confirm-actions' }, [confirmCancel, confirmDelete]),
-    ]);
-    let pendingDelete = null;
-    const closeConfirm = (refocus) => {
-      const p = pendingDelete;
-      pendingDelete = null;
-      confirmBox.hidden = true;
-      if (refocus && p?.from?.isConnected) p.from.focus();
-    };
-    const askDelete = (entry, from) => {
+    // Save: the slot's grid with its depth, repeats and tile height, named (D48).
+    const target = () => ({ kind: 'detail', slot: slotOf() });
+    const saveBtn = actionTile('keep', 'Save', 'Save the swatch to My patterns');
+    let saveTarget = target();
+    const saveForm = createSaveForm({
+      kind: 'detail',
+      build: () => savableEntry(store.state.design, library, saveTarget),
+      save: (entry, name, list) => saveEntry(ctx, saveTarget, entry, name, list),
+      onClose: (result) => {
+        if (result) showImageMsg(result.replaced ? `Updated “${result.entry.name}” in My patterns.` : `Saved “${result.entry.name}” to My patterns.`);
+        if (saveBtn.isConnected && !saveBtn.hidden) saveBtn.focus({ preventScroll: true });
+      },
+    });
+    saveBtn.addEventListener('click', () => {
+      confirm.close();
       showImageMsg('');
-      pendingDelete = { id: entry.id, name: entry.name, from };
-      const used = usesAsset(store.state.design, entry.id);
-      confirmText.textContent = `Delete “${entry.name}” from My patterns?${used ? ' This design keeps its own copy, so the pot doesn’t change.' : ''}`;
-      confirmBox.hidden = false;
-      confirmCancel.focus();
+      saveTarget = target();
+      saveForm.open();
+    });
+
+    // Deleting one of My patterns, after a confirmation under the grid. The
+    // design keeps its own copy when it uses the swatch, so the pot never
+    // changes; an unused copy goes too, so the swatch leaves the grid.
+    const confirm = createDeleteConfirm({
+      onDelete: async ({ entry }) => {
+        try {
+          await deletePattern(entry.id);
+        } catch (err) {
+          console.warn('Pattern not deleted', err);
+          showImageMsg('That pattern couldn’t be deleted. Try again.');
+          return;
+        }
+        const d = store.state.design;
+        const used = drawsWith(d, library, entry);
+        const unused = unusedCopies(d, entry);
+        if (unused.length) store.apply(`Delete pattern ${entry.name}`, (dd) => { for (const id of unused) delete dd.assets[id]; });
+        await refreshSaved();
+        showImageMsg(used ? `“${entry.name}” is no longer in My patterns. This design keeps its own copy.` : `Deleted “${entry.name}” from My patterns.`);
+        imageBtn.focus();
+      },
+    });
+    const askDelete = (entry, from) => {
+      saveForm.close();
+      showImageMsg('');
+      const used = drawsWith(store.state.design, library, entry);
+      confirm.ask(entry, from, `Delete “${entry.name}” from My patterns?${used ? ' This design keeps its own copy, so the pot doesn’t change.' : ''}`);
     };
-    confirmCancel.addEventListener('click', () => closeConfirm(true));
-    confirmBox.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        closeConfirm(true);
-      }
-    });
-    confirmDelete.addEventListener('click', async () => {
-      const p = pendingDelete;
-      if (!p) return;
-      closeConfirm(false);
-      try {
-        await deletePattern(p.id);
-      } catch (err) {
-        console.warn('Pattern not deleted', err);
-        showImageMsg('That pattern couldn’t be deleted. Try again.');
-        return;
-      }
-      const d = store.state.design;
-      const used = usesAsset(d, p.id);
-      if (!used && d.assets?.[p.id]) store.apply(`Delete pattern ${p.name}`, (dd) => { delete dd.assets[p.id]; });
-      await refreshSaved();
-      showImageMsg(used ? `“${p.name}” is no longer in My patterns. This design keeps its own copy.` : '');
-      imageBtn.focus();
-    });
 
     const showImageMsg = (text) => {
       imageMsg.textContent = text;
@@ -225,30 +225,36 @@ const section = {
         imageBtn.removeAttribute('aria-busy');
       }
     });
-    const renderMine = (d, fp, layers, slot) => {
+    const renderMine = (d, fp, layers, slot, s) => {
       const list = mineEntries(library, d, saved);
-      const savedIds = new Set(saved.map((p) => p.id));
-      const key = list.map((e) => `${e.id}|${e.name}|${savedIds.has(e.id) ? 1 : 0}`).join(';');
+      // A replaced entry keeps its id and name; its time rebuilds the tile, so a tap applies what was saved last.
+      const key = list.map((e) => `${e.id}|${e.name}|${e.saved?.updated ?? 0}`).join(';');
       if (key !== mineKey) {
         mineKey = key;
         mineTiles = list.map((e) => {
           const canvas = h('canvas', { class: 'swatch-canvas', width: 1, height: 1, 'aria-hidden': 'true' });
           const btn = h('button', { type: 'button', class: 'swatch', title: e.name }, [canvas, h('span', { class: 'swatch-name', text: e.name })]);
-          btn.addEventListener('click', () => pick(e.id));
+          // A saved swatch brings its depth, repeats and tile height (D48).
+          btn.addEventListener('click', () => {
+            showImageMsg('');
+            if (e.saved) pickSavedDetail(ctx, slotOf(), e.saved);
+            else pick(e.id);
+          });
           // Saved in this browser: a corner button deletes it (after a confirmation).
-          if (!savedIds.has(e.id)) return { id: e.id, el: btn, btn, canvas, drawn: '' };
+          if (!e.saved) return { id: e.id, el: btn, btn, canvas, drawn: '' };
           const del = labelIcon(h('button', { type: 'button', class: 'swatch-del' }, [
             h('span', { class: 'swatch-del-dot', 'aria-hidden': 'true', text: '×' }),
           ]), `Delete ${e.name} from My patterns`);
-          del.addEventListener('click', () => askDelete(e, del));
+          del.addEventListener('click', () => askDelete(e.saved, del));
           return { id: e.id, el: h('div', { class: 'swatch-item' }, [btn, del]), btn, canvas, drawn: '' };
         });
-        mineGrid.replaceChildren(...mineTiles.map((t) => t.el), imageBtn, makeBtn, editBtn);
-        if (pendingDelete && !savedIds.has(pendingDelete.id)) closeConfirm(false);
+        mineGrid.replaceChildren(...mineTiles.map((t) => t.el), imageBtn, makeBtn, editBtn, saveBtn);
+        if (confirm.pending && !saved.some((p) => p.id === confirm.pending.entry.id)) confirm.close();
       }
+      const onKey = slot ? targetKey(d, library, { kind: 'detail', slot: s }) : null;
       for (const t of mineTiles) {
         const e = list.find((x) => x.id === t.id);
-        const on = !!slot && slot.pattern === t.id;
+        const on = !!slot && (e.saved ? e.key === onKey : slot.pattern === t.id);
         t.btn.setAttribute('aria-pressed', String(on));
         drawEntry(t, e, on ? slot : null, d, GRID_SWATCH, redraw);
       }
@@ -327,7 +333,7 @@ const section = {
     // grids, on a phone it is one row that scrolls sideways (C35).
     const strip = h('div', { class: 'swatch-strip' }, [grid, mineLabel, mineGrid]);
 
-    el.append(slots, gridLabel, strip, confirmBox, fileInput, imageMsg, emptyNote, plainNote, slotBox, rangeRow, blendBox);
+    el.append(slots, gridLabel, strip, saveForm.el, confirm.el, fileInput, imageMsg, emptyNote, plainNote, slotBox, rangeRow, blendBox);
 
     const update = (state) => {
       const d = state.design;
@@ -340,7 +346,7 @@ const section = {
       for (const k of ['a', 'b']) {
         const card = slotCards[k];
         const sl = surf[k];
-        const entry = sl && findEntry(library, sl.pattern, d.assets, saved);
+        const entry = sl && findEntry(library, sl.pattern, d.assets);
         card.name.textContent = sl ? entry?.name ?? sl.pattern : 'None';
         card.btn.setAttribute('aria-pressed', String(k === s));
         card.btn.setAttribute('aria-label', `Slot ${k.toUpperCase()}, ${SLOT_SUB[k]}: ${sl ? entry?.name ?? sl.pattern : 'none'}`);
@@ -367,11 +373,13 @@ const section = {
         }
       }
 
-      renderMine(d, fp, layers, slot);
-      const editable = editableEntry(d, library, { kind: 'detail', slot: s }, saved);
+      renderMine(d, fp, layers, slot, s);
+      const editable = editableEntry(d, library, { kind: 'detail', slot: s });
       editBtn.hidden = !editable;
+      saveBtn.hidden = !editable;
       if (editable) {
         labelIcon(editBtn, editable.own || String(editable.id).startsWith('user:') ? `Edit ${editable.name}` : `Edit a copy of ${editable.name}`);
+        labelIcon(saveBtn, `Save the swatch of ${s.toUpperCase()} to My patterns`);
       }
       labelIcon(makeBtn, `Make your own swatch for ${s.toUpperCase()}`);
 

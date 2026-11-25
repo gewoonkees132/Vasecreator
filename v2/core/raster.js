@@ -101,24 +101,48 @@ export function rasterFromRGBA(rgba, width, height, maxSide = MAX_RASTER_SIDE) {
  * @returns {string}
  */
 export function hashRaster(raster) {
-  let h0 = 0x2325, h1 = 0x8422, h2 = 0x9ce4, h3 = 0xcbf2;
-  const step = (byte) => {
-    h0 ^= byte;
-    const t0 = h0 * 0x1b3;
-    const t1 = h1 * 0x1b3 + (t0 >>> 16);
-    const t2 = h2 * 0x1b3 + (h0 << 8) + (t1 >>> 16);
-    const t3 = h3 * 0x1b3 + (h1 << 8) + (t2 >>> 16);
-    h0 = t0 & 0xffff;
-    h1 = t1 & 0xffff;
-    h2 = t2 & 0xffff;
-    h3 = t3 & 0xffff;
-  };
+  const h = fnv64();
   for (const v of [raster.width, raster.height]) {
-    for (let k = 0; k < 4; k++) step((v >>> (8 * k)) & 0xff);
+    for (let k = 0; k < 4; k++) h.step((v >>> (8 * k)) & 0xff);
   }
   const { data } = raster;
-  for (let i = 0; i < data.length; i++) step(data[i]);
-  return [h3, h2, h1, h0].map((x) => x.toString(16).padStart(4, '0')).join('');
+  for (let i = 0; i < data.length; i++) h.step(data[i]);
+  return h.hex();
+}
+
+/**
+ * FNV-1a 64 over the UTF-16 code units of a text (low byte, then high), as
+ * 16 hex characters: the content ids of drawings (core/bitmap.js drawingId).
+ * @param {string} text
+ * @returns {string}
+ */
+export function hashText(text) {
+  const h = fnv64();
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h.step(c & 0xff);
+    h.step(c >>> 8);
+  }
+  return h.hex();
+}
+
+// One FNV-1a 64 hash, fed a byte at a time.
+function fnv64() {
+  let h0 = 0x2325, h1 = 0x8422, h2 = 0x9ce4, h3 = 0xcbf2;
+  return {
+    step(byte) {
+      h0 ^= byte;
+      const t0 = h0 * 0x1b3;
+      const t1 = h1 * 0x1b3 + (t0 >>> 16);
+      const t2 = h2 * 0x1b3 + (h0 << 8) + (t1 >>> 16);
+      const t3 = h3 * 0x1b3 + (h1 << 8) + (t2 >>> 16);
+      h0 = t0 & 0xffff;
+      h1 = t1 & 0xffff;
+      h2 = t2 & 0xffff;
+      h3 = t3 & 0xffff;
+    },
+    hex: () => [h3, h2, h1, h0].map((x) => x.toString(16).padStart(4, '0')).join(''),
+  };
 }
 
 /**

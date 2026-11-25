@@ -14,13 +14,19 @@
 // The 2D editor (D45, D46, ui/pattern-editor.js): what a session starts from
 // (an empty grid, a copy of a library drawing, or your own drawing edited in
 // place) and how its drawing goes into the design, for both kinds.
+//
+// My patterns (D48, §3.9): what Save writes for the Pattern or a Detailed
+// morph slot, the name it offers, and what applying a saved entry does to a
+// design. Your own drawings go by content ids (core/bitmap.js drawingId), so
+// a design's copy and its saved entry are the same drawing by id.
 
 import { PLAIN, makeBitmap } from '../core/patterns.js';
 import { LIMITS } from '../core/design.js';
-import { MAX_NODES, SPACING_BEADS, drawingDefaults, newPattern, patternReadout } from '../core/layer-pattern.js';
+import { DEPTH_BEADS, MAX_NODES, SPACING_BEADS, defaultPatternRange, drawingDefaults, newPattern, patternReadout } from '../core/layer-pattern.js';
+import { drawingId } from '../core/bitmap.js';
 import { footprintAt } from './sections/shape.js';
 import { drawSwatch, drawRasterSwatch, drawBitmapSwatch, beadGrid } from './swatch.js';
-import { loadImage, cachedImage } from '../store/assets.js';
+import { loadImage, cachedImage, savePattern, SAVED_NAMES } from '../store/assets.js';
 
 // The editor and the image decoder load on first use.
 const lazy = (path) => {
@@ -40,16 +46,17 @@ export const PLAIN_SLOT = Object.freeze({ depthMm: 0, repeats: 1 });
 const SWATCH_FALLBACK = { repeats: 12, tileHeightMm: 18 };
 
 /**
- * A pattern by id: Plain, the design's own assets (`user:` recipes and
- * `img:` images), the library, then "My patterns" saved in this browser.
+ * A Detailed morph swatch by id: Plain, the design's own assets (`user:`
+ * recipes and `img:` images), then the library. A saved one is applied from
+ * its entry (applyDetailEntry), which puts a copy in the design's assets.
  * @returns {{ id: string, name: string, recipe?: object, image?: object, own?: boolean, defaults?: object } | null}
  */
-export function findEntry(library, id, assets, saved) {
+export function findEntry(library, id, assets) {
   if (id === PLAIN.id) return PLAIN;
   const a = assets?.[id];
   if (a?.kind === 'recipe' && a.recipe) return { id, name: a.name || 'My pattern', recipe: a.recipe, own: true };
   if (a?.kind === 'image') return { id, name: a.name || 'Image', image: a, own: true };
-  return library.patterns.find((p) => p.id === id) ?? saved?.find((p) => p.id === id) ?? null;
+  return library.patterns.find((p) => p.id === id) ?? null;
 }
 
 /** Whether the design draws with an asset (a slot, the morph map or the Pattern uses it). */
@@ -63,15 +70,9 @@ export function assetUses(d, id) {
   return [detail?.a?.pattern, detail?.b?.pattern, d.form?.morph?.map, d.pattern?.drawing].filter((x) => x === id).length;
 }
 
-/** A new id for a drawing of your own: 'user:' + 8 hex characters. */
-export function newOwnId() {
-  const b = crypto.getRandomValues(new Uint8Array(4));
-  return `user:${Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')}`;
-}
-
-// A Pattern drawing of your own that nothing draws with any more goes, so it
-// can't turn up among the Detailed morph's own swatches. Until Save pattern
-// keeps drawings across designs (D48), nothing lists it anyway. Mutates d.
+// A drawing of your own that nothing draws with any more goes. For the
+// Pattern that keeps it from turning up among the Detailed morph's own
+// swatches; one worth keeping is saved in My patterns (D48). Mutates d.
 function dropUnusedDrawing(d, id) {
   if (typeof id === 'string' && id.startsWith('user:') && d.assets?.[id] && !usesAsset(d, id)) delete d.assets[id];
 }
@@ -166,12 +167,11 @@ export function ensureImage(ctx, hash) {
  * @param {object} ctx  main.js's ctx
  * @param {'a' | 'b'} s
  * @param {string | null} id  null = None (slot B only)
- * @param {object[]} [saved]  My patterns, as listPatterns() gave them
  * @returns {boolean} false when the id isn't known
  */
-export function pickPattern(ctx, s, id, saved) {
+export function pickPattern(ctx, s, id) {
   const { store, library } = ctx;
-  const entry = id ? findEntry(library, id, store.state.design.assets, saved) : null;
+  const entry = id ? findEntry(library, id, store.state.design.assets) : null;
   if (id && !entry) return false;
   if (entry?.image) ensureImage(ctx, entry.image.hash);
   store.apply(`Detailed morph ${s.toUpperCase()}: ${id ? entry.name : 'None'}`, (d) => setSlotPattern(d, s, id, entry));
@@ -202,7 +202,7 @@ export async function importImageFile(ctx, file, s) {
  * starts an empty grid; 'edit' the drawing the target holds (editableEntry).
  * @param {object} ctx  main.js's ctx
  * @param {{ kind: 'pattern' } | { kind: 'detail', slot: 'a' | 'b' }} target
- * @param {{ mode?: 'make' | 'edit', saved?: object[], returnFocus?: HTMLElement | null }} [opts]
+ * @param {{ mode?: 'make' | 'edit', returnFocus?: HTMLElement | null }} [opts]
  */
 export function openEditor(ctx, target, opts = {}) {
   return loadEditor().then((m) => m.openPatternEditor(ctx, target, opts));
@@ -250,18 +250,23 @@ export function drawEntry(target, entry, slot, design, size, onLoaded) {
 }
 
 /**
- * Your own patterns for the Detailed morph: My patterns saved in this
- * browser, plus the recipes and images the design carries, except a drawing
- * only the Pattern uses (it shows among the Pattern's own, layerMineEntries).
+ * Your own swatches for the Detailed morph: the Detailed morph's entries in
+ * My patterns (`saved`, with the entry and its settings as `defaults`), then
+ * the recipes and images the design carries. A copy of a saved drawing shows
+ * as its saved tile, and a drawing only the Pattern uses stays out (it shows
+ * among the Pattern's own, layerMineEntries); so do the Pattern's saved entries.
  */
 export function mineEntries(library, d, saved) {
   const out = new Map();
-  for (const p of saved || []) out.set(p.id, { id: p.id, name: p.name, recipe: p.recipe });
+  const tiles = savedOfKind(saved, 'detail').map((e) => ({ ...savedTile(e), defaults: { ...e.settings } }));
+  for (const t of tiles) out.set(t.id, t);
+  const keys = new Set(tiles.map((t) => t.key));
   const detail = d.form?.detail;
   for (const id of Object.keys(d.assets ?? {})) {
     if (d.pattern?.drawing === id && detail?.a?.pattern !== id && detail?.b?.pattern !== id) continue;
     const e = findEntry(library, id, d.assets);
-    if (e?.own) out.set(id, e);
+    if (!e?.own || (e.recipe && keys.has(drawingKey('detail', e.recipe)))) continue;
+    out.set(id, e);
   }
   return [...out.values()];
 }
@@ -328,11 +333,17 @@ export function pickLayerPattern(ctx, id) {
   return true;
 }
 
-/** Your own Pattern drawings for this design (saving them across designs comes with D48). */
-export function layerMineEntries(library, d) {
+/**
+ * Your own Patterns: the Pattern's entries in My patterns (`saved`), then
+ * the drawing of your own on the pot unless it is one of them. The Detailed
+ * morph's entries never show here.
+ */
+export function layerMineEntries(library, d, saved) {
+  const tiles = savedOfKind(saved, 'pattern').map(savedTile);
   const id = d.pattern?.drawing;
   const e = typeof id === 'string' && id.startsWith('user:') ? findLayerEntry(library, id, d.assets) : null;
-  return e ? [e] : [];
+  if (e && !tiles.some((t) => t.key === drawingKey('pattern', e.recipe))) tiles.push(e);
+  return tiles;
 }
 
 const readouts = new WeakMap();
@@ -458,15 +469,14 @@ const sessionLabel = (target) => (target.kind === 'pattern' ? 'Edited pattern' :
  * @param {object} design
  * @param {object} library
  * @param {{ kind: 'pattern' } | { kind: 'detail', slot: 'a' | 'b' }} target
- * @param {object[]} [saved]  My patterns
  */
-export function editableEntry(design, library, target, saved) {
+export function editableEntry(design, library, target) {
   if (target.kind === 'pattern') {
     const id = design.pattern?.drawing;
     return id ? findLayerEntry(library, id, design.assets) : null;
   }
   const slot = design.form.detail[target.slot];
-  const entry = slot ? findEntry(library, slot.pattern, design.assets, saved) : null;
+  const entry = slot ? findEntry(library, slot.pattern, design.assets) : null;
   return entry?.recipe?.kind === 'bitmap' ? entry : null;
 }
 
@@ -479,8 +489,10 @@ export function targetDrawingId(design, target) {
 /**
  * What an editor session starts from. *Make your own* is an empty grid
  * (NEW_GRID). *Edit* opens the target's drawing: a library one as a copy
- * ("Knit (mine)"), your own in place, unless something else draws with it
- * too, which then keeps its own.
+ * ("Knit (mine)"), your own in place (`replaces`: it goes once the edit
+ * replaces it), unless something else draws with it too, which then keeps
+ * its own. Each edit goes in under its own content id (writeEditorDrawing).
+ * `kept` lists the design's assets that stay when the session replaces them.
  *
  * A Detailed morph grid keeps its cells their size when the tile grows or
  * shrinks (`base`, writeEditorDrawing). On a slot with a texture it starts
@@ -490,31 +502,30 @@ export function targetDrawingId(design, target) {
  * @param {object} library
  * @param {{ kind: 'pattern' } | { kind: 'detail', slot: 'a' | 'b' }} target
  * @param {'make' | 'edit'} mode
- * @param {object[]} [saved]
- * @returns {{ target: object, mode: string, id: string, name: string, recipe: object, label: string,
- *   opened: { drawing: string | null, cells: string | null },
+ * @returns {{ target: object, mode: string, name: string, recipe: object, label: string,
+ *   opened: { drawing: string | null, cells: string | null }, replaces: string | null, kept: string[],
  *   base: null | { columns: number, rows: number, repeats: number, tileHeightMm: number } }}
  */
-export function editorStart(design, library, target, mode, saved) {
-  const entry = editableEntry(design, library, target, saved);
+export function editorStart(design, library, target, mode) {
+  const entry = editableEntry(design, library, target);
   const opened = { drawing: targetDrawingId(design, target), cells: entry?.recipe?.cells ?? null };
   const label = sessionLabel(target);
-  let id;
   let name;
   let recipe;
+  let replaces = null;
   if (mode === 'edit' && entry) {
     const inPlace = (entry.own || String(entry.id).startsWith('user:')) && assetUses(design, entry.id) <= 1;
-    id = inPlace ? entry.id : newOwnId();
+    if (inPlace) replaces = entry.id;
     name = inPlace ? entry.name : copyName(entry.name);
     recipe = structuredClone(entry.recipe);
     if (target.kind === 'pattern') delete recipe.edges;          // a Pattern is always crisp (D53)
     else recipe.edges ??= 'soft';
   } else {
     const size = NEW_GRID[target.kind];
-    id = newOwnId();
-    name = target.kind === 'pattern' ? 'My pattern' : 'My swatch';
+    name = SAVED_NAMES[target.kind];
     recipe = makeBitmap(size.columns, size.rows, new Int8Array(size.columns * size.rows), target.kind === 'detail' ? 'soft' : undefined);
   }
+  const kept = Object.keys(design.assets ?? {}).filter((id) => id !== replaces);
   let base = null;
   if (target.kind === 'detail') {
     const slot = design.form.detail[target.slot];
@@ -526,7 +537,7 @@ export function editorStart(design, library, target, mode, saved) {
       tileHeightMm: kept ? slot.tileHeightMm : snapToLayers(USER_SLOT.tileHeightMm, design.layers.layerHeightMm),
     };
   }
-  return { target, mode, id, name, recipe, label, opened, base };
+  return { target, mode, name, recipe, label, opened, replaces, kept, base };
 }
 
 /**
@@ -547,39 +558,298 @@ export function detailTileFor(base, columns, rows, layerHeightMm) {
 
 /**
  * Puts the editor's drawing on the draft design (inside store.change): the
- * recipe goes into design.assets under the session's id and the target
- * draws with it. A first Pattern starts from newPattern with
- * OWN_PATTERN_DEFAULTS; an existing one keeps its depth, density, range,
- * Fade and Soften. A Detailed morph slot gets the grid at its cells' size
- * (detailTileFor) and, when it was flat or empty, USER_SLOT's depth.
- * Mutates d.
+ * recipe goes into design.assets under its content id (drawingId), named as
+ * the session names it, and the target draws with it. A first Pattern starts
+ * from newPattern with OWN_PATTERN_DEFAULTS; an existing one keeps its depth,
+ * density, range, Fade and Soften. A Detailed morph slot gets the grid at its
+ * cells' size (detailTileFor) and, when it was flat or empty, USER_SLOT's
+ * depth. The drawing it replaces goes when nothing draws with it: for the
+ * Pattern always, for a slot when the session wrote it or edits it in place
+ * (a swatch of your own the design had stays among its swatches). Mutates d.
  * @param {object} d
  * @param {ReturnType<typeof editorStart>} start
  * @param {object} recipe  the bitmap the editor holds
+ * @returns {string} the drawing's id
  */
 export function writeEditorDrawing(d, start, recipe) {
+  const id = drawingId(recipe);
+  const prev = targetDrawingId(d, start.target);
   d.assets ??= {};
-  d.assets[start.id] = { kind: 'recipe', name: start.name, recipe: structuredClone(recipe) };
+  d.assets[id] = { kind: 'recipe', name: start.name, recipe: structuredClone(recipe) };
   if (start.target.kind === 'pattern') {
-    if (!d.pattern) {
-      d.pattern = newPattern(d, start.id, OWN_PATTERN_DEFAULTS);
-      return;
-    }
-    const old = d.pattern.drawing;
-    d.pattern.drawing = start.id;
-    dropUnusedDrawing(d, old);
-    return;
+    if (!d.pattern) d.pattern = newPattern(d, id, OWN_PATTERN_DEFAULTS);
+    else d.pattern.drawing = id;
+    if (prev !== id) dropUnusedDrawing(d, prev);
+    return id;
   }
   const s = start.target.slot;
   const surf = d.form.detail;
   const { repeats, tileHeightMm } = detailTileFor(start.base, recipe.columns, recipe.rows, d.layers.layerHeightMm);
   let slot = surf[s];
   if (!slot) {
-    slot = surf[s] = { pattern: start.id, depthMm: USER_SLOT.depthMm, repeats, tileHeightMm };
+    slot = surf[s] = { pattern: id, depthMm: USER_SLOT.depthMm, repeats, tileHeightMm };
     if (s === 'b') surf.blend = { ...surf.blend, shape: 'fadesUp', amount: 1 };
   }
   if (slot.pattern === PLAIN.id || !(slot.depthMm > 0)) slot.depthMm = USER_SLOT.depthMm;
-  slot.pattern = start.id;
+  slot.pattern = id;
   slot.repeats = repeats;
   slot.tileHeightMm = tileHeightMm;
+  if (prev !== id && !(start.kept ?? []).includes(prev)) dropUnusedDrawing(d, prev);
+  return id;
+}
+
+// ---------- My patterns (D48, §3.9): saving a setup, applying it ----------
+
+/**
+ * A drawing's identity in My patterns: its content id (drawingId), crisp for
+ * a Pattern (a Pattern has no edges, D53), with its edges ('soft' when it has
+ * none) for a Detailed morph grid. Null for anything that isn't a bitmap.
+ * @param {'pattern' | 'detail'} kind
+ * @param {object | null | undefined} recipe
+ */
+export function drawingKey(kind, recipe) {
+  if (recipe?.kind !== 'bitmap') return null;
+  const { columns, rows, cells } = recipe;
+  return drawingId(kind === 'pattern' ? { columns, rows, cells } : { columns, rows, cells, edges: recipe.edges ?? 'soft' });
+}
+
+/** The entries of one kind in My patterns. */
+export function savedOfKind(saved, kind) {
+  return (saved ?? []).filter((e) => e?.kind === kind);
+}
+
+// A tile in a swatch grid or carousel for one of My patterns: `saved` is the
+// entry, `key` its drawing's identity, so the tile shows as picked while the
+// pot draws the same drawing (targetKey), whatever id the design gives it.
+function savedTile(e) {
+  return { id: e.id, name: e.name, recipe: e.drawing, own: true, saved: e, key: drawingKey(e.kind, e.drawing) };
+}
+
+/** The identity (drawingKey) of the drawing a target shows now, or null. */
+export function targetKey(design, library, target) {
+  const e = editableEntry(design, library, target);
+  return e ? drawingKey(target.kind, e.recipe) : null;
+}
+
+/** The settings a saved Pattern carries: all but its drawing and its From / To (§3.9). */
+export function patternSettings(p) {
+  return {
+    depthMm: p.depthMm,
+    density: { by: p.density.by, spacingMm: p.density.spacingMm, points: p.density.points },
+    fade: { shape: p.fade.shape, amount: p.fade.amount },
+    softenCells: p.softenCells,
+  };
+}
+
+/**
+ * What Save writes for a target (§3.9, D48), and the name it offers: the
+ * drawing the target shows, as a bitmap, with the settings that go with it.
+ * A Pattern brings its depth, density (its face and value), Fade and Soften,
+ * never From / To, which depend on the pot's height; a Detailed morph slot
+ * brings its depth, repeats and tile height. Null when the target shows no
+ * drawing: no Pattern, or a slot with a shape, an image or Plain, which stay
+ * library-only (D45).
+ * @returns {null | { kind: 'pattern' | 'detail', name: string, drawing: object, settings: object }}
+ */
+export function savableEntry(design, library, target) {
+  const e = editableEntry(design, library, target);
+  if (!e?.recipe) return null;
+  const { columns, rows, cells, edges } = e.recipe;
+  if (target.kind === 'pattern') {
+    return { kind: 'pattern', name: e.name, drawing: { kind: 'bitmap', columns, rows, cells }, settings: patternSettings(design.pattern) };
+  }
+  const slot = design.form.detail[target.slot];
+  return {
+    kind: 'detail',
+    name: e.name,
+    drawing: { kind: 'bitmap', columns, rows, cells, edges: edges ?? 'soft' },
+    settings: { depthMm: slot.depthMm, repeats: slot.repeats, tileHeightMm: slot.tileHeightMm },
+  };
+}
+
+const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+
+/**
+ * Applies a saved Pattern to a draft design (D48): its drawing, depth,
+ * density, Fade and Soften. The design keeps its own From / To, or takes the
+ * default range when it has no Pattern yet (a preset opens without one,
+ * D52). Its own copy of the drawing goes into design.assets under the
+ * drawing's content id, so it opens without My patterns and a design file
+ * carries it. Depth and spacing hold to this design's bead (at most half a
+ * bead deep, ½ to 3 beads apart), as normaliseDesign would. A drawing of
+ * your own it replaces goes when nothing else draws with it. Mutates d.
+ * @param {object} d  a draft design (inside store.apply)
+ * @param {{ name: string, drawing: object, settings: object }} entry  a Pattern entry of My patterns
+ */
+export function applyPatternEntry(d, entry) {
+  const id = drawingKey('pattern', entry.drawing);
+  const old = d.pattern?.drawing ?? null;
+  const range = d.pattern ? { fromMm: d.pattern.fromMm, toMm: d.pattern.toMm } : defaultPatternRange(d);
+  const w = d.layers.beadWidthMm;
+  const s = entry.settings;
+  const { columns, rows, cells } = entry.drawing;
+  d.assets ??= {};
+  d.assets[id] = { kind: 'recipe', name: entry.name, recipe: { kind: 'bitmap', columns, rows, cells } };
+  d.pattern = {
+    drawing: id,
+    depthMm: clamp(s.depthMm, 0, DEPTH_BEADS.max * w),
+    density: {
+      by: s.density.by,
+      spacingMm: clamp(s.density.spacingMm, SPACING_BEADS.min * w, SPACING_BEADS.max * w),
+      points: s.density.points,
+    },
+    fromMm: range.fromMm,
+    toMm: range.toMm,
+    fade: { shape: s.fade.shape, amount: s.fade.amount },
+    softenCells: s.softenCells,
+  };
+  if (old !== id) dropUnusedDrawing(d, old);
+}
+
+/**
+ * Applies a saved Detailed morph swatch to slot `s` of a draft design (D48):
+ * its drawing, depth, repeats and tile height (in whole layers of this
+ * design). A new slot B blends in as a first pick of B does. The range and
+ * the blend stay the design's. The design keeps its own copy of the drawing,
+ * as applyPatternEntry. Mutates d.
+ * @param {object} d
+ * @param {'a' | 'b'} s
+ * @param {{ name: string, drawing: object, settings: object }} entry  a Detailed morph entry of My patterns
+ */
+export function applyDetailEntry(d, s, entry) {
+  const id = drawingKey('detail', entry.drawing);
+  const { columns, rows, cells, edges } = entry.drawing;
+  d.assets ??= {};
+  d.assets[id] = { kind: 'recipe', name: entry.name, recipe: { kind: 'bitmap', columns, rows, cells, edges: edges ?? 'soft' } };
+  const surf = d.form.detail;
+  const set = {
+    pattern: id,
+    depthMm: clamp(entry.settings.depthMm, LIMITS.depthMm?.min ?? 0, LIMITS.depthMm?.max ?? Infinity),
+    repeats: clamp(Math.round(entry.settings.repeats), LIMITS.repeats?.min ?? 1, LIMITS.repeats?.max ?? Infinity),
+    tileHeightMm: snapToLayers(entry.settings.tileHeightMm, d.layers.layerHeightMm),
+  };
+  if (surf[s]) {
+    Object.assign(surf[s], set);
+    return;
+  }
+  surf[s] = set;
+  if (s === 'b') surf.blend = { ...surf.blend, shape: 'fadesUp', amount: 1 };
+}
+
+/**
+ * Applies one of My patterns' Patterns as one history step ("Pattern:
+ * Zigzag"); nothing when the design already has all of it.
+ * @returns {boolean} whether the design changed
+ */
+export function pickSavedPattern(ctx, entry) {
+  return ctx.store.apply(`Pattern: ${entry.name}`, (d) => applyPatternEntry(d, entry));
+}
+
+/** Applies one of My patterns' swatches to slot `s` as one history step ("Detailed morph A: Zigzag"). */
+export function pickSavedDetail(ctx, s, entry) {
+  return ctx.store.apply(`Detailed morph ${s.toUpperCase()}: ${entry.name}`, (d) => applyDetailEntry(d, s, entry));
+}
+
+/**
+ * The node spacing a saved Pattern's swatch shows at on this pot: its own
+ * spacing, held to this bead, or a bead apart when it is set in points.
+ */
+export function savedSpacingMm(design, entry) {
+  const w = design.layers.beadWidthMm;
+  const density = entry.settings.density;
+  const mm = density.by === 'spacing' ? density.spacingMm : SPACING_BEADS.default * w;
+  return clamp(mm, SPACING_BEADS.min * w, SPACING_BEADS.max * w);
+}
+
+const sameName = (a, b) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
+
+/** The entry of this kind a name would replace (names match without case), or null. */
+export function entryNamed(saved, kind, name) {
+  if (typeof name !== 'string' || !name.trim()) return null;
+  return savedOfKind(saved, kind).find((e) => sameName(e.name, name)) ?? null;
+}
+
+/**
+ * The name Save offers for an entry (savableEntry): the name the same
+ * drawing is saved under, so Save updates it; else the drawing's own name.
+ * A drawing named as one of My patterns (applied from it, or saved and drawn
+ * on since) offers that name too, so Save updates it, and the form says it
+ * replaces it. Only the default names ("My pattern", "My swatch") are
+ * numbered when taken ("My pattern 2"), so they never replace anything.
+ */
+export function suggestName(saved, entry) {
+  const key = drawingKey(entry.kind, entry.drawing);
+  const same = savedOfKind(saved, entry.kind).find((e) => drawingKey(e.kind, e.drawing) === key);
+  if (same) return same.name;
+  const fallback = SAVED_NAMES[entry.kind];
+  const base = String(entry.name ?? '').trim().slice(0, 76) || fallback;
+  const taken = entryNamed(saved, entry.kind, base);
+  if (!taken) return base;
+  if (!sameName(base, fallback)) return taken.name;
+  let n = 2;
+  while (entryNamed(saved, entry.kind, `${base} ${n}`)) n += 1;
+  return `${base} ${n}`;
+}
+
+// The design's own copy of a drawing that Save names: the target's drawing,
+// when it is one of your own (a starter keeps its name) that draws `key`
+// under another name.
+function copyToName(d, target, key, name) {
+  const id = targetDrawingId(d, target);
+  const a = typeof id === 'string' && id.startsWith('user:') ? d.assets?.[id] : null;
+  return a?.kind === 'recipe' && a.name !== name && drawingKey(target.kind, a.recipe) === key ? a : null;
+}
+
+/**
+ * Names the design's own copy of a saved drawing as the entry is named, so
+ * the pot, the swatches and a design file all say the same. Mutates d.
+ * @returns {boolean} false when there is nothing to rename
+ */
+export function nameDrawing(d, target, key, name) {
+  const a = copyToName(d, target, key, name);
+  if (a) a.name = name;
+  return !!a;
+}
+
+/**
+ * Save (D48): writes the entry to My patterns under `name`, replacing the
+ * entry of that name and kind (entryNamed), then names the design's own copy
+ * the same, as one history step ("Saved pattern: Zigzag"), when its name
+ * changes. A starter on the pot keeps its own name.
+ * @param {object} ctx  main.js's ctx
+ * @param {{ kind: 'pattern' } | { kind: 'detail', slot: 'a' | 'b' }} target
+ * @param {NonNullable<ReturnType<typeof savableEntry>>} entry
+ * @param {string} name
+ * @param {object[]} saved  My patterns as listed when the name was asked
+ * @returns {Promise<null | { entry: object, replaced: boolean }>} null when the browser didn't store it
+ */
+export async function saveEntry(ctx, target, entry, name, saved) {
+  const existing = entryNamed(saved, entry.kind, name);
+  const stored = await savePattern({ id: existing?.id, kind: entry.kind, name, drawing: entry.drawing, settings: entry.settings });
+  if (!stored) return null;
+  const key = drawingKey(entry.kind, stored.drawing);
+  const { store } = ctx;
+  if (copyToName(store.state.design, target, key, stored.name)) {
+    store.apply(`${entry.kind === 'pattern' ? 'Saved pattern' : 'Saved swatch'}: ${stored.name}`, (d) => { nameDrawing(d, target, key, stored.name); });
+  }
+  return { entry: stored, replaced: !!existing };
+}
+
+/** Whether the design draws with a saved entry's drawing (so it keeps its own copy once the entry goes). */
+export function drawsWith(design, library, entry) {
+  const key = drawingKey(entry.kind, entry.drawing);
+  const targets = entry.kind === 'pattern' ? [{ kind: 'pattern' }] : [{ kind: 'detail', slot: 'a' }, { kind: 'detail', slot: 'b' }];
+  return targets.some((t) => targetKey(design, library, t) === key);
+}
+
+/**
+ * The design's copies of a saved entry's drawing that nothing draws with.
+ * They go with the entry, or the drawing would come back as a swatch of the
+ * design's own the moment its saved tile leaves the grid.
+ */
+export function unusedCopies(design, entry) {
+  const key = drawingKey(entry.kind, entry.drawing);
+  return Object.entries(design.assets ?? {})
+    .filter(([id, a]) => a?.kind === 'recipe' && drawingKey(entry.kind, a.recipe) === key && !usesAsset(design, id))
+    .map(([id]) => id);
 }

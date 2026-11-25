@@ -306,50 +306,56 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 - **Footprint:** *Circle* or *Rectangle*. The rectangle has a **corner rounding** from 0 to 100 %, shown in mm at the widest point. Because it is a fraction, the corners stay valid where the pot narrows. My call.
 - **Twist** (degrees): the total rotation from bottom to top, spread evenly up the pot. The footprint, the patterns and the seam all follow the twist (research §6.3: twist only shifts u).
 
-### 9.2 Surface: patterns
+### 9.2 Detailed morph (was Surface: patterns)
 
-> **Being revised (D35–D51, 2026-11-25):** this section's slots, settings and blending become **Detailed morph**, which moves to Shape. A new bead-scale bitmap **Pattern** takes over the Pattern step. The motif recipe and the editor described below are replaced by one 2D editor. See [`v2-pattern-studio.md`](v2-pattern-studio.md).
+> **Revised by the pattern studio (D35–D57, built 2026-11-25):** this section's slots, settings and blending are now the **Detailed morph**, a part of **Shape** beside Morph (D36), stored as `form.detail`. The Pattern step holds a new bead-scale bitmap **Pattern** instead, one row per layer and one cell per toolpath point; it is described in [`v2-pattern-studio.md`](v2-pattern-studio.md) §3. The motif recipe and the D24 editor are replaced by one 2D editor for both (pattern studio §6). This section describes the Detailed morph only.
 
-**What the user sees:** two pattern slots, **A** (the main pattern) and **B** (the one that blends in), each showing a small swatch and a name. Below them is a grid of pattern swatches; clicking one applies it to the selected slot. Then come a few settings.
+**What the user sees:** in Shape, under *More shape options* on desktop and in the Morph tool's *Detailed* side on a phone: two slots, **A** (the main swatch) and **B** (the one that blends in), each showing a small swatch and a name. Below them is a grid of swatches; clicking one applies it to the selected slot. Then come a few settings. A bracket beside the pot sets From and To.
 
 ```
-┌A ▣ Diamonds ─┐ ┌B ▣ Flutes ──┐      ← tap a slot to choose what the grid sets
- main pattern     blends in
-[▦ Diamonds][▦ Out·In·Out][▦ Flutes][▦ Scales][▦ Weave]
-[▦ Checker ][▦ Zigzag    ][▦ Dots  ][▦ Ribs  ][ + Image ]   ← Image: phase 2
-Depth           ──●──   [2.5 mm]    ← per slot
-Repeats around  seamless [12 ×]     ← per slot, whole numbers only
-Tile height     ──●──   [22 mm]     ← per slot, snaps to whole layers
-From / to       [8.0 mm] [150.0 mm] ← shared by A and B
-Blend           [ Even | Fades up | Middle ]
+┌A ▣ Flutes ───┐ ⇅ ┌B ▣ None ────┐      ← tap a slot to choose what the grid sets; ⇅ swaps them
+ main swatch          blends in
+[▦ Flutes][▦ Pleats][▦ Ribs][▦ Ripple][▦ Spiral][▦ Chevron] …  [Plain]
+My patterns: [▦ Grid ×][▦ My swatch][ Image ][ Make ][ Edit ][ Save ]
+Depth           ──●──   [2.0 mm]    ← per slot
+Repeats around  seamless [20 ×]     ← per slot, whole numbers only
+Tile height     ──●──   [19.5 mm]   ← per slot, snaps to whole layers
+From / to       [10.0 mm] [150.0 mm] ← shared by A and B
+Blend           [ Even | Fades up | Fades down | Middle | Diagonal ]
 Amount          ──●──   [1.0 ×]
 ```
 
-- **The swatch library (D16).** About 12 small, seamless patterns. Each is a *recipe* for the pattern generator, not an image file:
-  - The twelve, confirmed by the owner on 2026-11-24 (§16): **Flutes, Pleats, Ribs, Ripple, Spiral, Chevron, Diamonds, Out·In·Out (brick), Scales, Dots, Honeycomb and Basket.** They are in `v2/library/patterns.json`, each with starting values that pass the 45° and bead checks on a 90 mm pot.
-  - Because the patterns are recipes made in-house, the library has no third-party image licences to track (research §8.6).
-  - Selecting a swatch keeps the slot's depth, repeats and tile height, so switching patterns feels like trying a new texture, not starting over.
-- **Slot B starts as *None*:** blending is off and only A shows, so a new design has one pattern. Picking any swatch for B turns blending on, with *Fades up* and amount 1.0 as defaults. *Plain* is a real choice for B, with no texture, so A fades into a smooth surface. *None* (blending off) is the first option in B's grid. My call (C18).
-- **Depth** (mm): how far the pattern pushes the bead out and pulls it in. It is real millimetres, as research §6.5 requires: 2.5 mm is 2.5 mm wherever the pattern is fully on.
-- **Repeats around:** a whole number, always (D16). The pattern therefore meets itself with no seam. The panel shows the resulting cell size at the widest point as information ("≈ 16 mm per repeat"), not as a control. My call.
-- **Tile height** (mm): the height of one repeat. It snaps to whole layers so pattern rows line up with beads. My call.
-- **From / to** (mm): where the surface pattern starts and stops. It applies to A and B together. Each end always gets a soft edge, so a pattern never starts with a hard step. The edge is at least two layers long, or 3 × the pattern depth in mm if that is longer, so the pattern grows by no more than half a layer height per layer (`v2/core/surface.js`). By default the pattern starts above the base (8 mm) and stops 10 mm below the rim.
-- **Blend (D17).** Let *t* run from 0 at *From* to 1 at *To*, and *a* be the amount (0–1). The amount is B's peak share. Next to the slider, the panel shows the resulting split, for example "A 50 % · B 50 %".
-  - **Even:** B's weight w = a everywhere. With a = 0.5 the surface is half A and half B, and with a = 1.0 it is all B. Switching to *Even* sets the amount to 0.5 if it was 1.0, so the first click shows a real mix.
-  - **Fades up:** w = a · smoothstep(0, 1, t). A at the bottom changes gradually into B at the top.
-  - **Middle:** w = a · sin²(π t). B is strongest halfway up and fades towards both ends.
-  - **The displacement is** d = (1 − w) · d_A + w · d_B, where d_A and d_B are each slot's pattern times its own depth.
-  - **A ⇅ swap button** swaps A and B, which turns *Fades up* into a fade downwards. My call.
+- **The swatch library (D16).** Twelve small, seamless swatches, each a *recipe* for the generator, not an image file:
+  - **Flutes, Pleats, Ribs, Ripple, Spiral, Chevron, Diamonds, Out·In·Out (brick), Scales, Dots, Honeycomb and Basket**, confirmed by the owner on 2026-11-24 (§16). They are in `v2/library/patterns.json`, each with starting values that pass the 45° and bead checks on a 90 mm pot.
+  - Because the recipes are made in-house, the library has no third-party image licences to track (research §8.6).
+  - Selecting a swatch keeps the slot's depth, repeats and tile height, so switching feels like trying a new texture, not starting over.
+- **Presets open with their Detailed morph** (D52): the Classic vase opens with its flutes.
+- **Slot B starts as *None*:** blending is off and only A shows. Picking any swatch for B turns blending on, with *Fades up* and amount 1.0 as defaults. *Plain* is a real choice for B, with no texture, so A fades into a smooth surface. *None* is the first option in B's grid (C18).
+- **Depth** (mm): how far the swatch pushes the bead out and pulls it in, in real millimetres (research §6.5).
+- **Repeats around:** a whole number, always (D16), so the relief meets itself with no seam. The panel shows the cell size at the widest point ("≈ 16 mm per repeat").
+- **Tile height** (mm): the height of one repeat, snapped to whole layers so the rows line up with beads.
+- **From / to** (mm): where the Detailed morph starts and stops, for A and B together. Each end gets a soft edge of at least two layers, or 3 × the depth in mm if that is longer, so it grows by no more than half a layer height per layer (`v2/core/surface.js`). By default it starts above the base (8 mm) and stops 10 mm below the rim.
+- **Blend (D17, D42, D54).** Let *t* run from 0 at *From* to 1 at *To*, *u* around the pot from 0 to 1, and *a* be the amount (0–1), B's peak share. The panel shows the split, for example "A 50 % · B 50 %".
+  - **Even:** B's weight w = a everywhere. Switching to *Even* sets the amount to 0.5 if it was 1.0, so the first click shows a real mix.
+  - **Fades up:** w = a · smoothstep(0, 1, t): A at the bottom changes into B at the top.
+  - **Fades down:** w = a · smoothstep(0, 1, 1 − t).
+  - **Middle:** w = a · sin²(π t): B is strongest halfway up.
+  - **Diagonal:** w = a · sin²(π (t + u)): a band of B that winds once round the pot over From–To.
+  - **The displacement is** d = (1 − w) · d_A + w · d_B, where d_A and d_B are each slot's value times its own depth. The ⇅ button swaps A and B.
 - **Live preview.** Clicking a swatch, or dragging any value, updates the pot immediately (D20).
+- **The fineness rule** (V5, "at least two layers per bump") and the 45° overhang rule apply to the Detailed morph. Both thresholds are set in the warnings card (D44).
 
-**How the generator works (behind the swatches).** A recipe describes one repeat tile as a function f(x, y) of position across the tile (x around, y up, each from 0 to 1). It returns a value from −1 (pull the bead in) to +1 (push it out). There are two kinds of recipe:
+**How the generator works.** A recipe describes one repeat tile as a function f(x, y) across the tile (x around, y up, each from 0 to 1), returning −1 (pull the bead in) to +1 (push it out). There are two kinds:
 
-1. **Motif recipes.** A row of cells, each *out*, *middle* or *in* (for example out-in-out), arranged in a **layout**: stripes, diagonal, brick or checker. Each one has an **edge** setting: sharp, soft or round.
-2. **Shape recipes.** Named analytic shapes with a few parameters, for diamonds, scales, dots and zigzag.
+1. **Shape recipes:** named analytic shapes with a few parameters (flutes, diamonds, scales, dots…). They stay library-only (D45).
+2. **Bitmap recipes** (D45, D48): a coarse grid of cells, each *out*, *flat* or *in*, up to 64 × 64 (the editor draws up to 16 × 16 for a Detailed morph, D57). A Detailed morph draws it **soft**: each cell blends into its neighbours across both borders, with **Edges** *Sharp*, *Soft* or *Round* (D53). Out·In·Out is a 6 × 4 bitmap with round edges. The motif recipe is gone.
 
-The core evaluates f exactly at every toolpath point (research §6.3 mapping, with whole repeats around and *u* computed on the unpatterned surface). It never rasterises an image, so the pattern is exact and seamless at any bead size. The swatch is simply f drawn as a small greyscale grid, one square per bead step around and one layer up. That is the "bitmap", and it shows what can actually print. Uploaded images (phase 2) feed the same pipeline as sampled rasters, with the prefiltering in research §6.3.
+The core evaluates f exactly at every toolpath point (research §6.3 mapping, with whole repeats around and *u* computed on the unpatterned surface). It never rasterises a recipe, so the relief is exact and seamless at any bead size. A swatch is f drawn as a small greyscale grid at this pot's bead scale. Uploaded images feed the same pipeline as sampled rasters, with the prefiltering in research §6.3.
 
-**Phase 2: the pattern editor (D24).** *Edit pattern…* opens the generator for the selected slot. You set the motif cells (out, middle or in; tap to cycle, + to add), the layout, cells per repeat, row height in layers, and edges. The tile preview updates live. The result can be saved as your own swatch. *+ Image* uploads an image as a swatch (research §6.2–§6.3: decoding in a worker, luminance, tiling, the printable-resolution readout).
+**Your own swatches.**
+- **Make and Edit** open the 2D editor (pattern studio §6, replacing D24's editor) on the selected slot: *Make* on an empty 6 × 4 grid, *Edit* on the slot's bitmap (a library one as a copy, your own in place). A grid's cells keep their size on the wall, so adding columns lowers the repeats (D56). The pot stays live, and a whole session is one history step.
+- ***Image*** uploads an image as a swatch (research §6.2–§6.3: decoding in a worker, luminance, tiling, the printable-resolution readout).
+- ***Save*** (D48) puts the slot's grid in **My patterns** with its depth, repeats and tile height, under a name you give. My patterns are kept in this browser, apart from any design. One tap on a saved swatch applies all of it to the selected slot, in any design (presets included), as one history step; the range and the blend stay the design's. The design keeps its own copy of the drawing, so it still opens, and a design file still carries it, after the swatch is deleted from My patterns (× on its corner). Saved Patterns (the Pattern step's) never show here, nor these there.
 
 ### 9.3 Layers & seam
 
@@ -385,13 +391,13 @@ Fixed behaviour, from research §5.4 stage 6: the infill alternates direction pe
 
 ### 9.6 Geometry morph (phase 2, D23)
 
-> **Note (D36, 2026-11-25):** Morph stays as described here. It gets a sibling in Shape, **Detailed morph** (the old §9.2 relief), and on a phone the two share one dock tool with a *Large · Detailed* toggle. See [`v2-pattern-studio.md`](v2-pattern-studio.md).
+> **Pattern studio (D36, built 2026-11-25):** Morph stays as described here, as the *Morph* part of Shape. Beside it sits the **Detailed morph** (§9.2, the old relief), and the bead-scale **Pattern** comes on top in the Pattern step ([`v2-pattern-studio.md`](v2-pattern-studio.md) §3). On a phone, Morph and the Detailed morph share one dock tool with a *Large · Detailed* toggle. In Shape the pot shows the Morph and the Detailed morph, without the Pattern.
 
-**What it is.** A soft greyscale map reshapes the *whole form* before patterns are applied. It makes lobes, a lean, a waist, a swirl or blobs, or follows your own image. Patterns then sit on top of the morphed form.
+**What it is.** A soft greyscale map reshapes the *whole form* before the Detailed morph and the Pattern are applied. It makes lobes, a lean, a waist, a swirl or blobs, or follows your own image. The Detailed morph and the Pattern then sit on top of the morphed form.
 
 ```
 Morph map — click to apply
-[▒ Lobes][▒ Lean][▒ Waist][▒ Swirl][▒ Blobs][ + Image ]
+[▒ Lobes][▒ Lean][▒ Waist][▒ Swirl][▒ Blobs][ Image ]
 Softness        ──●── [24.0 mm]   Gaussian blur radius
 Strength        ──●── [16.0 mm]   largest push, in or out
 Repeats around   seamless [4 ×]
@@ -400,9 +406,10 @@ Blend           ──●── [0.80]      how much of the morph to apply
 
 - **Map coordinates.** u runs around the pot, in whole repeats, and v runs over the **full height** (0 at the base, 1 at the rim), without repeating.
 - **Softness** is a Gaussian blur in mm, converted to texels per axis as in research §6.3. Built-in maps are smooth already. Softness matters most for uploaded images, turning sharp pictures into gentle form changes.
-- **Radial push:** morph = strength × blend × (map value from −1 to 1). It is added to the profile radius before patterns, so it changes the base surface that patterns are mapped on.
-- **Checks apply to the morphed form.** The 45° overhang check and the minimum-radius check use it (§11). The size chip includes it.
+- **Radial push:** morph = strength × blend × (map value from −1 to 1). It is added to the profile radius before the Detailed morph and the Pattern, so it changes the surface they are mapped on. The radius at a point is profile + Morph + Detailed morph + Pattern (pattern studio §1).
+- **Checks apply to the morphed form.** The 45° overhang check and the minimum-radius check use it (§11); the overhang limit is set in the warnings card (D44). The size chip includes it.
 - **In the data model,** morph is a form-level term in research §5.1. It goes inside B(z, θ), before D(z, θ). Forms stay single-valued per angle and height (research assumption A6).
+- **Saving:** a Morph is part of the shape and is not saved to My patterns; the Detailed morph's swatches and the Pattern are (D48, §9.2).
 
 ### 9.7 The preview: beads only
 

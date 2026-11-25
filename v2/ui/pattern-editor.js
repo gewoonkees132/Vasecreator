@@ -30,20 +30,27 @@
 // undo and redo, and Ctrl+Z, step through the editor's own history
 // (ctx.editorHistory). A drawing back where it started puts the design back
 // as it was, so a session that changed nothing adds no step.
+//
+// Save (D48), an icon beside Done, opens a name form under the header and
+// puts the drawing in My patterns with the settings it has on the pot; the
+// drawing on the pot takes the name, inside the session's one step.
 
 import { h, segmented } from './controls.js';
-import { attachPressLabel } from './press-label.js';
+import { attachPressLabel, labelIcon } from './press-label.js';
+import { ICONS } from './icons.js';
+import { createSaveForm } from './my-patterns.js';
+import { savePattern } from '../store/assets.js';
 import {
   CELL_STATES, gridOf, recipeOf, sameGrid, selectionMask, wholeTile, paintCell, setCells, invertCells,
   shiftRow, shiftColumn, shiftTile, mirrorTile, insertRow, removeRow, insertColumn, removeColumn,
-  doubleRows, quickFill, fillSize, lineCells, wrapCell, cellIndex,
+  doubleRows, quickFill, fillSize, lineCells, wrapCell, cellIndex, drawingId,
 } from '../core/bitmap.js';
 import { evaluatePattern } from '../core/patterns.js';
 import { drawingDefaults, patternReadout } from '../core/layer-pattern.js';
 import { footprintAt } from './sections/shape.js';
 import {
   EDITOR_MAX, OWN_PATTERN_DEFAULTS, editorStart, writeEditorDrawing, editableEntry, targetDrawingId,
-  detailTileFor, readoutOf,
+  detailTileFor, readoutOf, savableEntry, entryNamed,
 } from './pattern-actions.js';
 
 const PHONE_QUERY = '(max-width: 760px)';
@@ -262,21 +269,21 @@ export function editorSession() {
  * Opens the editor on a target (ui/pattern-actions.js openEditor).
  * @param {object} ctx  main.js's ctx
  * @param {{ kind: 'pattern' } | { kind: 'detail', slot: 'a' | 'b' }} target
- * @param {{ mode?: 'make' | 'edit', saved?: object[], returnFocus?: HTMLElement | null }} [opts]
+ * @param {{ mode?: 'make' | 'edit', returnFocus?: HTMLElement | null }} [opts]
  */
-export function openPatternEditor(ctx, target, { mode = 'edit', saved = [], returnFocus = document.activeElement } = {}) {
+export function openPatternEditor(ctx, target, { mode = 'edit', returnFocus = document.activeElement } = {}) {
   session?.close();
-  session = createSession(ctx, target, mode, saved, returnFocus);
+  session = createSession(ctx, target, mode, returnFocus);
   return session;
 }
 
-function createSession(ctx, target, mode, saved, returnFocus) {
+function createSession(ctx, target, mode, returnFocus) {
   const { store, library } = ctx;
   const host = document.getElementById('editor') ?? document.body.appendChild(h('aside', { id: 'editor' }));
   const phoneMedia = matchMedia(PHONE_QUERY);
   const isDetail = target.kind === 'detail';
   const max = EDITOR_MAX[target.kind];
-  const start = editorStart(store.state.design, library, target, mode, saved);
+  const start = editorStart(store.state.design, library, target, mode);
   const openedGrid = gridOf(start.recipe);
   const openedEdges = start.recipe.edges;
 
@@ -307,7 +314,7 @@ function createSession(ctx, target, mode, saved, returnFocus) {
   let original = store.state.design;
   let mine = original;           // the design object the editor last wrote or saw
   const keyOf = (d) => {
-    const r = editableEntry(d, library, target, saved)?.recipe;
+    const r = editableEntry(d, library, target)?.recipe;
     return `${targetDrawingId(d, target)}|${r ? `${r.columns}x${r.rows}:${r.cells}:${r.edges ?? ''}` : ''}`;
   };
   let basis = keyOf(original);   // what the target shows unless someone else changed it
@@ -316,6 +323,8 @@ function createSession(ctx, target, mode, saved, returnFocus) {
   let pushFrame = 0;
 
   const atStart = () => sameGrid(grid, openedGrid) && edges === openedEdges;
+  /** The id the drawing in the editor goes by on the pot (its content id). */
+  const currentId = () => drawingId(recipeOf(grid, edges));
 
   function push() {
     cancelAnimationFrame(pushFrame);
@@ -347,7 +356,10 @@ function createSession(ctx, target, mode, saved, returnFocus) {
   const sizeText = h('span', { class: 'ed-size' });
   const sub = h('p', { class: 'ed-sub' });
   const doneBtn = button('done', 'Done', () => close(), { cls: 'ed-done', title: 'Done (Esc)' });
-  const head = h('div', { class: 'ed-head' }, [h('div', { class: 'ed-titles' }, [h('div', { class: 'ed-title-row' }, [title, sizeText]), sub]), doneBtn]);
+  // Save to My patterns (D48): an icon (labelIcon, D49) that opens the name form under the header.
+  const saveBtn = labelIcon(h('button', { type: 'button', class: 'ed-btn ed-keep' }), isDetail ? 'Save the swatch to My patterns' : 'Save the pattern to My patterns');
+  saveBtn.innerHTML = ICONS.keep;
+  const head = h('div', { class: 'ed-head' }, [h('div', { class: 'ed-titles' }, [h('div', { class: 'ed-title-row' }, [title, sizeText]), sub]), saveBtn, doneBtn]);
 
   const canvas = h('canvas', { class: 'ed-canvas', tabIndex: 0, role: 'application', 'aria-roledescription': 'drawing grid', 'aria-describedby': 'ed-status' });
   const stage = h('div', { class: 'ed-stage' }, [canvas]);
@@ -463,9 +475,49 @@ function createSession(ctx, target, mode, saved, returnFocus) {
     to.click();
   });
 
+  // The drawing as it is now, with the settings it has (or will have) on the
+  // pot, saved under the name given. The drawing on the pot takes the name
+  // too, inside this session (the editor's own step), when the pot shows it.
+  const saveForm = createSaveForm({
+    kind: target.kind,
+    build: () => {
+      if (pushFrame) push();
+      const d = structuredClone(store.state.design);
+      writeEditorDrawing(d, start, recipeOf(grid, edges));
+      return savableEntry(d, library, target);
+    },
+    save: async (entry, name, list) => {
+      const existing = entryNamed(list, entry.kind, name);
+      const stored = await savePattern({ id: existing?.id, kind: entry.kind, name, drawing: entry.drawing, settings: entry.settings });
+      if (!stored || closed) return stored ? { entry: stored, replaced: !!existing } : null;
+      start.name = stored.name;
+      const d = store.state.design;
+      const id = targetDrawingId(d, target);
+      if (id === currentId() && d.assets?.[id] && d.assets[id].name !== stored.name) {
+        original = null;           // back at the start is no longer the design as it was: it has a name now
+        push();
+      }
+      return { entry: stored, replaced: !!existing };
+    },
+    onClose: (result) => {
+      host.classList.remove('is-naming');
+      if (closed) return;
+      if (result) say(result.replaced ? `Updated “${result.entry.name}” in My patterns` : `Saved “${result.entry.name}” to My patterns`);
+      update();
+      saveBtn.focus({ preventScroll: true });
+    },
+  });
+  saveBtn.addEventListener('click', () => {
+    if (saveForm.isOpen) {
+      saveForm.close();
+      return;
+    }
+    saveForm.open().then((ok) => { if (ok && !closed) host.classList.add('is-naming'); });
+  });
+
   host.className = `editor editor--${target.kind}`;
   host.setAttribute('aria-labelledby', title.id);
-  host.replaceChildren(head, stage, tools, tabRow, status);
+  host.replaceChildren(head, saveForm.el, stage, tools, tabRow, status);
   host.hidden = false;
   document.documentElement.classList.add('is-editing');
 
@@ -835,7 +887,7 @@ function createSession(ctx, target, mode, saved, returnFocus) {
   // The host outlives the session, so this comes off again on close.
   const onHostKey = (e) => {
     if (closed || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.target instanceof Element && e.target.closest('input, textarea, select')) return;
+    if (e.target instanceof Element && e.target.closest('input, textarea, select, .save-form')) return;
     const k = e.key.toLowerCase();
     const state = { 1: 1, 2: 0, 3: -1 }[k];
     if (state !== undefined) { e.preventDefault(); setPaintState(state); return; }
@@ -888,7 +940,7 @@ function createSession(ctx, target, mode, saved, returnFocus) {
     const d = store.state.design;
     const lh = d.layers.layerHeightMm;
     if (!isDetail) {
-      const r = targetDrawingId(d, target) === start.id ? readoutOf(d, library) : comingReadout(d);
+      const r = targetDrawingId(d, target) === currentId() ? readoutOf(d, library) : comingReadout(d);
       return { w: r ? r.spacingMinMm : drawingDefaults(d, OWN_PATTERN_DEFAULTS).density.spacingMm, h: lh };
     }
     const t = detailTileFor(start.base, grid.columns, grid.rows, lh);
@@ -1173,7 +1225,8 @@ function createSession(ctx, target, mode, saved, returnFocus) {
 
   const api = {
     target,
-    get id() { return start.id; },
+    /** The drawing's content id, as it goes on the pot. */
+    get id() { return currentId(); },
     get grid() { return grid; },
     get selection() { return selection; },
     get cursor() { return cursor; },
