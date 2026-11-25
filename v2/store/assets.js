@@ -105,6 +105,8 @@ try {
   if (typeof BroadcastChannel === 'function') {
     channel = new BroadcastChannel('vc2-patterns');
     channel.onmessage = () => emit(patternListeners);
+    // Node (the tests) would otherwise stay alive for the channel; browsers have no unref.
+    channel.unref?.();
   }
 } catch { channel = null; }
 

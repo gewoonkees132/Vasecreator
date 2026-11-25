@@ -11,6 +11,8 @@ import * as printerModule from './core/printer.js';
 import { createEngine } from './worker/client.js';
 import { BeadRenderer } from './render/beads.js';
 import { createProfileHandles } from './render/handles.js';
+import { createGizmos } from './render/gizmos.js';
+import { textured } from './ui/pattern-actions.js';
 import { mountSteps, shapeOnly } from './ui/steps.js';
 import { mountTopbar } from './ui/topbar.js';
 import { mountChips } from './ui/chips.js';
@@ -218,6 +220,27 @@ async function boot() {
     },
   });
 
+  // Handles on the pot after Shape (mobile stage M7, M8): where the pattern
+  // runs in Pattern, the seam grip in Layers & seam. One history step per drag.
+  const gizmos = createGizmos(renderer, $('#overlay'), {
+    onRange(which, z) {
+      dragging = true;
+      store.change(which === 'from' ? 'Pattern from' : 'Pattern to', (d) => {
+        const lh = d.layers.layerHeightMm;
+        if (which === 'from') d.surface.fromMm = Math.max(0, Math.min(z, d.surface.toMm - lh));
+        else d.surface.toMm = Math.min(d.form.height, Math.max(z, d.surface.fromMm + lh));
+      });
+    },
+    onSeam(angle) {
+      dragging = true;
+      store.change('Seam angle', (d) => { d.layers.seam.angleDeg = angle; });
+    },
+    onCommit() {
+      dragging = false;
+      store.commit();
+    },
+  });
+
   const ctx = {
     store,
     library,
@@ -378,10 +401,14 @@ async function boot() {
     const r = rightcol.getBoundingClientRect();
     const gap = 8;
     if (PHONE.matches) {
-      // D22, D31: the pot fits between the top bar and the controls area,
-      // clear of the chips and the history column.
-      const y = Math.max(0, c.bottom - v.top + 4);
-      return { x: gap, y, width: Math.max(40, r.left - v.left - gap * 2), height: Math.max(40, v.height - y - gap) };
+      // The stage (mobile stage M1): the canvas fills the window and the pot
+      // fits between the top bar (and the chips, wherever they sit) and the
+      // dock or sheet, clear of the history column. Nothing covers it (D22).
+      const bar = $('header.topbar').getBoundingClientRect();
+      const p = panel.getBoundingClientRect();
+      const y = Math.max(0, Math.max(bar.bottom, c.bottom) - v.top + gap);
+      const bottom = Math.min(v.height, p.top - v.top) - gap;
+      return { x: gap, y, width: Math.max(40, r.left - v.left - gap * 2), height: Math.max(40, bottom - y) };
     }
     const p = panel.getBoundingClientRect();
     const x = p.right - v.left + gap;
@@ -391,6 +418,11 @@ async function boot() {
 
   /** @param {false | 'reset' | 'keep'} fit  refit the camera; 'keep' keeps the orbit angle */
   function layout(fit) {
+    // The warnings, size and history lists open over the dock or sheet on a
+    // phone, never over the pot (D22): they get the height below the stage.
+    if (PHONE.matches) {
+      document.documentElement.style.setProperty('--bottom-chrome', `${Math.round(Math.max(120, innerHeight - panel.getBoundingClientRect().top))}px`);
+    }
     renderer.resize();
     renderer.setViewport(viewportRect());
     if (fit) renderer.fitCamera({ keepDirection: fit === 'keep' });
@@ -409,7 +441,11 @@ async function boot() {
   }
   addEventListener('resize', onResize);
   PHONE.addEventListener('change', onResize);
-  new ResizeObserver(onResize).observe(view);
+  // On a phone the dock and the sheet change height (a sheet opened, the tip
+  // closed): the pot refits into the stage that is left.
+  const resizeObserver = new ResizeObserver(onResize);
+  resizeObserver.observe(view);
+  resizeObserver.observe(panel);
 
   // ---------- Store wiring ----------
 
@@ -436,6 +472,7 @@ async function boot() {
     const was = shownStep;
     shownStep = step;
     handles.setVisible(step === 'shape');
+    applyGizmos();
     renderer.setSeamMarker(step === 'layers');
     renderer.setBed(step === 'print' ? bedOf(store.state.printer) : null);
     if (was == null) return;
@@ -449,6 +486,17 @@ async function boot() {
     }
     // Delete must not remove a point you can't see.
     if (was === 'shape' && step !== 'shape' && selectedKnot != null) store.setView({ selectedKnot: null });
+  }
+
+  // The handles on the pot for this step (M7, M8): the pattern's range once
+  // there is a pattern, the seam grip in Layers & seam; none in Print.
+  function applyGizmos() {
+    const { view: v, design } = store.state;
+    let mode = null;
+    if (v.mode === 'design' && v.step === 'layers') mode = 'seam';
+    else if (v.mode === 'design' && v.step === 'pattern' && (textured(design.surface.a) || textured(design.surface.b))) mode = 'range';
+    gizmos.setMode(mode);
+    if (mode) gizmos.update(design, store.state.result);
   }
 
   let printerTimer = 0;
@@ -465,6 +513,7 @@ async function boot() {
   // first preset, a later one on the last design. A one-time tip points at
   // Designs in the top bar (ui/designs-tip.js); the screen never opens by itself.
   store.subscribe((state, what) => {
+    if (what.has('design')) applyGizmos();
     if (what.has('design') || what.has('printer')) {
       clearTimeout(thumbTimer);
       requestPreview();
@@ -482,6 +531,7 @@ async function boot() {
       // In Print the print panel owns what the renderer shows.
       if (state.view.mode === 'design') {
         renderer.setToolpath(state.result);
+        gizmos.update(state.design, state.result);
         handles.update(state.design, state.result.profileLine);
         applyHighlight();
         if (fitPending) {

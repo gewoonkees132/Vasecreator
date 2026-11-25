@@ -8,6 +8,12 @@
 // bottom bar, and above it a controls area of one fixed height with the
 // step's name and Next, a row of part buttons, and only that part's controls.
 //
+// Mobile stage (docs/design/v2-mobile-stage.md): on a phone the controls area
+// is an optional sheet. By default the phone shows the dock (ui/dock.js), a
+// tool row with one big control, so the pot gets the stage; the grabber, or a
+// tool that needs room, opens the sheet, and its ⌄ or a swipe down closes it
+// (remembered as vc2.sheet). Print always shows the sheet.
+//
 // Every section mounts once, the first time it shows, into a host element
 // that never moves. Steps, parts and layouts only show and hide things, so a
 // drag or a field being typed in survives all of them. Sections tag their
@@ -26,9 +32,12 @@ import layers from './sections/layers.js';
 import base from './sections/base.js';
 import { mountPrintPanel } from './print.js';
 import { PLAIN } from '../core/patterns.js';
+import { mountDock } from './dock.js';
 
 const PHONE_QUERY = '(max-width: 760px)';
 const LS_MORE = 'vc2.moreShape';
+const LS_SHEET = 'vc2.sheet';
+const SWIPE_PX = 24;
 
 // Inline emblems, drawn in-house (C33): 24 × 24, round 1.8 px strokes.
 const svg = (body) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
@@ -44,6 +53,7 @@ const EMBLEMS = {
   // A nozzle above two lines of beads.
   print: svg('<path d="M9 3.5h6v3.4l-2 2.9h-2L9 6.9z"/><path d="M5 15h14"/><path d="M5 19.2h14"/>'),
 };
+const CHEVRON_DOWN = '<svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true" focusable="false"><path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const CHEVRON = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="M5 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 // Prepare print as the Print step's one section; its four cards are the parts.
@@ -142,6 +152,7 @@ export function mountSteps(panel, ctx) {
   const { store } = ctx;
   const phoneMedia = globalThis.matchMedia ? matchMedia(PHONE_QUERY) : { matches: false, addEventListener() {}, removeEventListener() {} };
   let moreOpen = lsGet(LS_MORE) === '1';
+  let sheetOpen = lsGet(LS_SHEET) === 'open';
 
   // ---- Step tabs: the desktop row and the phone bar are the same element ----
   const tabRow = h('div', { class: 'step-tabs', role: 'tablist', 'aria-label': 'Design steps' });
@@ -186,7 +197,23 @@ export function mountSteps(panel, ctx) {
     return { btn, label };
   };
   const headNext = nextButton('step-next--head');
-  const head = h('div', { class: 'step-head' }, [headTitle, headNext.btn]);
+  const collapse = h('button', { type: 'button', class: 'icon-btn sheet-collapse', 'aria-label': 'Hide all settings', title: 'Back to the pot', 'aria-expanded': 'true' });
+  collapse.insertAdjacentHTML('beforeend', CHEVRON_DOWN);
+  collapse.addEventListener('click', (e) => setSheet(false, { focus: e.detail === 0 }));
+  const head = h('div', { class: 'step-head' }, [collapse, headTitle, headNext.btn]);
+  let headSwipe = null;
+  head.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    headSwipe = { id: e.pointerId, y: e.clientY };
+  });
+  head.addEventListener('pointermove', (e) => {
+    if (!headSwipe || headSwipe.id !== e.pointerId) return;
+    if (e.clientY - headSwipe.y > SWIPE_PX) {
+      headSwipe = null;
+      if (canCollapse()) setSheet(false);
+    }
+  });
+  head.addEventListener('pointerup', () => { headSwipe = null; });
 
   // ---- Phone part row: one group of buttons per step ----
   const partRow = h('div', { class: 'part-tabs', role: 'tablist' });
@@ -275,14 +302,44 @@ export function mountSteps(panel, ctx) {
   const tipHost = h('div', { class: 'step-tip' });
   const scroll = h('div', { class: 'step-scroll' }, [tipHost, ...pages.values()]);
 
+  // ---- The dock (phone, sheet closed) ----
+  const dockEl = h('div', { class: 'dock-host' });
+  const dock = mountDock(dockEl, ctx, {
+    openSheet: (part, { focus = false } = {}) => setSheet(true, { part, focus }),
+    next: () => {
+      const i = STEP_LIST.findIndex((s) => s.id === store.state.view.step);
+      if (i >= 0 && i < STEP_LIST.length - 1) go(STEP_LIST[i + 1].id, { focus: false });
+    },
+    nextName: (stepId) => {
+      const i = STEP_LIST.findIndex((s) => s.id === stepId);
+      return i >= 0 && i < STEP_LIST.length - 1 ? STEP_LIST[i + 1].short : null;
+    },
+  });
+
   panel.classList.add('steps');
-  panel.replaceChildren(tabRow, head, partRow, scroll, foot, descBox);
+  panel.replaceChildren(tabRow, head, partRow, scroll, foot, dockEl, descBox);
 
   // ---- Behaviour ----
 
   function go(stepId, { focus = false } = {}) {
     if (store.state.view.step !== stepId) store.setView({ step: stepId });
     if (focus) pages.get(stepId)?.focus({ preventScroll: true });
+  }
+
+  // Print is a checklist and downloads: its sheet stays open.
+  const canCollapse = () => store.state.view.step !== 'print';
+
+  /** Opens or closes the phone sheet; opening at a part shows that part. */
+  function setSheet(open, { part = null, focus = false } = {}) {
+    if (part) pickPart(store.state.view.step, part);
+    if (sheetOpen !== open) {
+      sheetOpen = open;
+      lsSet(LS_SHEET, open ? 'open' : 'closed');
+      render(store.state);
+    }
+    if (!focus || layout !== 'phone') return;
+    if (open) (part ? partButtons.get(`${store.state.view.step}/${part}`) : collapse)?.focus({ preventScroll: true });
+    else dock.grabber.focus({ preventScroll: true });
   }
 
   function pickPart(stepId, partId) {
@@ -422,6 +479,15 @@ export function mountSteps(panel, ctx) {
     }
     shownStep = step.id;
     shownPart.set(step.id, part);
+
+    // Phone: the sheet or the dock above the bar (mobile stage M3, M5).
+    const sheet = phone && (sheetOpen || step.id === 'print');
+    panel.classList.toggle('steps--sheet', sheet);
+    panel.classList.toggle('steps--dock', phone && !sheet);
+    panel.classList.toggle('steps--print', step.id === 'print');
+    collapse.hidden = !canCollapse();
+    dock.grabber.setAttribute('aria-expanded', String(sheet));
+    dock.setActive(phone && !sheet);
   }
 
   // The part row scrolls sideways; keep the chosen part in sight.
@@ -458,6 +524,9 @@ export function mountSteps(panel, ctx) {
     if (nextLayout === layout) return;
     layout = nextLayout;
     panel.classList.toggle('steps--phone', layout === 'phone');
+    // The first-visit tip sits at the top of the dock on a phone, of the controls on desktop.
+    if (layout === 'phone') dock.tipSlot.append(tipHost);
+    else scroll.prepend(tipHost);
     for (const t of tabs.values()) t.text = null;
     renderSummaries(store.state);
     render(store.state);
@@ -478,8 +547,9 @@ export function mountSteps(panel, ctx) {
       clearTimeout(summaryTimer);
       phoneMedia.removeEventListener('change', onMedia);
       for (const entry of entries) entry.instance?.destroy();
+      dock.destroy();
       panel.replaceChildren();
-      panel.classList.remove('steps', 'steps--phone');
+      panel.classList.remove('steps', 'steps--phone', 'steps--sheet', 'steps--dock');
     },
   };
 }

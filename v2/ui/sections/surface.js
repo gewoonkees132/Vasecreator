@@ -6,46 +6,21 @@
 // after the library, + Image, and Edit pattern… for the motif generator.
 
 import { numberField, slider, segmented, h } from '../controls.js';
-import { drawSwatch, drawRasterSwatch, beadGrid } from '../swatch.js';
+import { drawSwatch, beadGrid } from '../swatch.js';
 import { PLAIN } from '../../core/patterns.js';
-import { LIMITS, snapTileHeight } from '../../core/design.js';
+import { snapTileHeight } from '../../core/design.js';
 import { footprintAt, limit } from './shape.js';
-import { listPatterns, deletePattern, onPatternsChanged, loadImage, cachedImage } from '../../store/assets.js';
+import { listPatterns, deletePattern, onPatternsChanged } from '../../store/assets.js';
 import { printableResolution } from '../../core/raster.js';
-
-// The editor and the image decoder load on first use.
-const lazy = (path) => {
-  let p = null;
-  return () => (p ??= import(path).catch((err) => { p = null; throw err; }));
-};
-const loadEditor = lazy('../pattern-editor.js');
-const loadImages = lazy('../image-swatch.js');
-const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp';
-// Starting values for your own recipe on a flat slot.
-const USER_SLOT = { depthMm: 1.5, repeats: 8, tileHeightMm: 20 };
-const IMAGE_REPEATS = 4;
+import {
+  IMAGE_ACCEPT, findEntry, usesAsset, textured, snapToLayers, pickPattern, loadImages,
+  importImageFile, openEditor, drawEntry, mineEntries,
+} from '../pattern-actions.js';
 
 const SLOT_SUB = { a: 'main pattern', b: 'blends in' };
 const BLEND_LABELS = { even: 'even', fadesUp: 'fades up', middle: 'middle' };
 const GRID_SWATCH = 52;
 const SLOT_SWATCH = 34;
-// Neutral values for a slot made from Plain, where there is nothing to keep.
-const PLAIN_SLOT = { depthMm: 0, repeats: 1 };
-
-// A pattern by id: Plain, the design's own assets (`user:` recipes and
-// `img:` images), the library, then "My patterns" saved in this browser.
-function findEntry(library, id, assets, saved) {
-  if (id === PLAIN.id) return PLAIN;
-  const a = assets?.[id];
-  if (a?.kind === 'recipe' && a.recipe) return { id, name: a.name || 'My pattern', recipe: a.recipe, own: true };
-  if (a?.kind === 'image') return { id, name: a.name || 'Image', image: a, own: true };
-  return library.patterns.find((p) => p.id === id) ?? saved?.find((p) => p.id === id) ?? null;
-}
-
-// Whether the design draws with an asset (a slot or the morph map uses it).
-function usesAsset(d, id) {
-  return d.surface?.a?.pattern === id || d.surface?.b?.pattern === id || d.form?.morph?.map === id;
-}
 
 // "Prints at ≈ 39 × 100 beads per tile".
 function resolutionText(slot, perimeterMm, layers) {
@@ -63,19 +38,6 @@ function prettyId(id) {
   const s = String(id).replace(/^lib:/, '').replace(/@\d+$/, '').replace(/-/g, ' ');
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-
-// Whole layers, and never under the core's minimum tile height (the core
-// would clamp it on the next load and the design would quietly change).
-const TILE_MIN = LIMITS.tileHeightMm?.min ?? 0;
-const TILE_MAX = LIMITS.tileHeightMm?.max ?? Infinity;
-function snapToLayers(mm, layerHeightMm) {
-  let n = Math.max(1, Math.ceil(TILE_MIN / layerHeightMm - 1e-9), Math.round(mm / layerHeightMm));
-  n = Math.min(n, Math.max(1, Math.floor(TILE_MAX / layerHeightMm + 1e-9)));
-  return Math.round(n * layerHeightMm * 1000) / 1000;
-}
-
-// A slot with a texture: set, and not Plain.
-const textured = (slot) => !!slot && slot.pattern !== PLAIN.id;
 
 const section = {
   id: 'surface',
@@ -151,70 +113,9 @@ const section = {
     addTile(PLAIN.id, PLAIN.name, PLAIN.recipe);
 
     const entryOf = (id, d = store.state.design) => findEntry(library, id, d.assets, saved);
-    const pick = (id) => {
-      const s = slotOf();
-      const entry = id && entryOf(id);
-      if (id && !entry) return;
-      // An image the engine may not have yet (main.js also sends referenced ones).
-      if (entry?.image) ensureImage(entry.image.hash);
-      store.apply(`Pattern ${S()}: ${id ? entry.name : 'None'}`, (d) => {
-        const surf = d.surface;
-        if (!id) {
-          surf.b = null;
-          return;
-        }
-        if (entry.own || String(id).startsWith('user:')) {
-          // Your own patterns travel inside the design (recipes are tiny; images are a reference).
-          d.assets ??= {};
-          d.assets[id] = entry.image ? { ...entry.image } : { kind: 'recipe', name: entry.name, recipe: structuredClone(entry.recipe) };
-        }
-        if (entry.image) {
-          placeImage(d, s, id, entry.image);
-          return;
-        }
-        const defaults = entry.defaults ?? (String(id).startsWith('user:') ? USER_SLOT : PLAIN_SLOT);
-        const lh = d.layers.layerHeightMm;
-        const cur = surf[s];
-        if (!cur) {
-          // Pattern rows line up with beads only at whole layers (C7).
-          const tile = snapToLayers(defaults.tileHeightMm ?? surf.a.tileHeightMm, lh);
-          surf[s] = { pattern: id, depthMm: defaults.depthMm ?? 0, repeats: defaults.repeats ?? 1, tileHeightMm: tile };
-          if (s === 'b') surf.blend = { ...surf.blend, shape: 'fadesUp', amount: 1 };
-          return;
-        }
-        // Switching texture keeps depth, repeats and tile height, except from
-        // Plain (or a flat slot), which has nothing worth keeping.
-        const flat = cur.pattern === PLAIN.id || !(cur.depthMm > 0);
-        cur.pattern = id;
-        if (flat && defaults !== PLAIN_SLOT) {
-          Object.assign(cur, defaults);
-          cur.tileHeightMm = snapToLayers(cur.tileHeightMm, lh);
-        }
-      });
-    };
-
-    // An image slot: keep the depth, 4 repeats around, and a tile as high as one
-    // repeat is wide times the image's aspect, in whole layers.
-    const placeImage = (d, s, id, asset) => {
-      const surf = d.surface;
-      const lh = d.layers.layerHeightMm;
-      let cur = surf[s];
-      if (!cur) {
-        cur = surf[s] = { pattern: id, depthMm: USER_SLOT.depthMm, repeats: IMAGE_REPEATS, tileHeightMm: 0 };
-        if (s === 'b') surf.blend = { ...surf.blend, shape: 'fadesUp', amount: 1 };
-      }
-      const wasImage = String(cur.pattern).startsWith('img:');
-      if (!(cur.depthMm > 0) || cur.pattern === PLAIN.id) cur.depthMm = USER_SLOT.depthMm;
-      if (!wasImage) cur.repeats = IMAGE_REPEATS;
-      cur.pattern = id;
-      const cellMm = footprintAt(d).perimeterMm / Math.max(1, cur.repeats);
-      cur.tileHeightMm = snapToLayers(cellMm * (asset.height / Math.max(1, asset.width)), lh);
-    };
-    const ensureImage = (hash) => {
-      Promise.resolve(loadImage(hash))
-        .then((r) => r && ctx.engine?.setImage?.(hash, r))
-        .catch((err) => console.warn('Image not sent to the preview', err));
-    };
+    const pick = (id) => pickPattern(ctx, slotOf(), id, saved);
+    // An image swatch draws once its pixels are in.
+    const redraw = () => update(store.state);
 
     // My patterns: saved in this browser, plus your own assets in this design.
     let saved = [];
@@ -308,16 +209,8 @@ const section = {
       imageBtn.setAttribute('aria-busy', 'true');
       showImageMsg('Reading the image…');
       try {
-        const m = await loadImages();
-        const problem = m.fileProblem(file);
-        if (problem) throw new Error(problem);
-        const { id, asset } = await m.importImage(ctx, file);
+        await importImageFile(ctx, file, s);
         showImageMsg('');
-        store.apply(`Pattern ${s.toUpperCase()}: ${asset.name}`, (d) => {
-          d.assets ??= {};
-          d.assets[id] = asset;
-          placeImage(d, s, id, asset);
-        });
       } catch (err) {
         // Plain Errors carry a message for the person; anything else is unexpected.
         const plain = err?.constructor === Error && err.message;
@@ -330,52 +223,15 @@ const section = {
     });
     editBtn.addEventListener('click', () => {
       showImageMsg('');
-      loadEditor()
-        .then((m) => m.openPatternEditor(ctx, { slot: slotOf(), findRecipe: (id) => entryOf(id), onSaved: refreshSaved }))
+      openEditor(ctx, slotOf(), { findRecipe: (id) => entryOf(id), onSaved: refreshSaved })
         .catch((err) => {
           console.warn('Pattern editor not loaded', err);
           showImageMsg('The pattern editor didn’t load. Reload the page to try again.');
         });
     });
 
-    const mineEntries = (d) => {
-      const out = new Map();
-      for (const p of saved) out.set(p.id, { id: p.id, name: p.name, recipe: p.recipe });
-      for (const id of Object.keys(d.assets ?? {})) {
-        const e = findEntry(library, id, d.assets);
-        if (e?.own) out.set(id, e);
-      }
-      return [...out.values()];
-    };
-    // Draws a recipe or image swatch on this pot's bead grid; redraws only when
-    // the pattern or the grid changed. Images draw once their pixels are in.
-    const drawEntry = (target, entry, slot, fp, layers, size) => {
-      if (!entry) return;
-      if (entry.image) {
-        const a = entry.image;
-        const sl = slot ?? { repeats: IMAGE_REPEATS, tileHeightMm: (fp.perimeterMm / IMAGE_REPEATS) * (a.height / Math.max(1, a.width)) };
-        const g = beadGrid(sl, fp.perimeterMm, layers);
-        const raster = cachedImage(a.hash);
-        const key = `${entry.id}|${Math.round(g.columns)}|${Math.round(g.rows)}|${raster ? 1 : 0}`;
-        if (key === target.drawn) return;
-        target.drawn = key;
-        if (raster) drawRasterSwatch(target.canvas, raster, { id: entry.id, size, columns: g.columns, rows: g.rows });
-        else {
-          drawSwatch(target.canvas, PLAIN.recipe, { id: PLAIN.id, size });
-          Promise.resolve(loadImage(a.hash)).then((r) => { if (r) update(store.state); }, () => {});
-        }
-        return;
-      }
-      const g = beadGrid(slot ?? entry.defaults ?? USER_SLOT, fp.perimeterMm, layers);
-      // Library recipes cache by id; your own can change under the same id.
-      const own = entry.own || String(entry.id).startsWith('user:');
-      const key = `${entry.id}|${own ? JSON.stringify(entry.recipe) : ''}|${Math.round(g.columns)}|${Math.round(g.rows)}`;
-      if (key === target.drawn) return;
-      target.drawn = key;
-      drawSwatch(target.canvas, entry.recipe, { id: own ? undefined : entry.id, size, columns: g.columns, rows: g.rows });
-    };
     const renderMine = (d, fp, layers, slot) => {
-      const list = mineEntries(d);
+      const list = mineEntries(library, d, saved);
       const savedIds = new Set(saved.map((p) => p.id));
       const key = list.map((e) => `${e.id}|${e.name}|${savedIds.has(e.id) ? 1 : 0}`).join(';');
       if (key !== mineKey) {
@@ -399,7 +255,7 @@ const section = {
         const e = list.find((x) => x.id === t.id);
         const on = !!slot && slot.pattern === t.id;
         t.btn.setAttribute('aria-pressed', String(on));
-        drawEntry(t, e, on ? slot : null, fp, layers, GRID_SWATCH);
+        drawEntry(t, e, on ? slot : null, d, GRID_SWATCH, redraw);
       }
     };
 
@@ -504,7 +360,7 @@ const section = {
         card.btn.setAttribute('aria-label', `Slot ${k.toUpperCase()}, ${SLOT_SUB[k]}: ${sl ? entry?.name ?? sl.pattern : 'none'}`);
         card.canvas.hidden = !sl;
         card.btn.classList.toggle('is-none', !sl);
-        if (sl && entry) drawEntry(card, { ...entry, id: sl.pattern }, sl, fp, layers, SLOT_SWATCH);
+        if (sl && entry) drawEntry(card, { ...entry, id: sl.pattern }, sl, d, SLOT_SWATCH, redraw);
       }
       swap.disabled = !surf.b;
 

@@ -72,13 +72,14 @@ function writeLocal(name, value) {
 }
 
 // A reload comes back to the step you were on; every step starts on its first
-// part (the part per step lasts the session only).
+// part, and on a phone its first dock tool (both last the session only).
 function defaultView() {
   const saved = readLocal(LS_STEP, null);
   const step = STEPS.includes(saved) ? saved : 'shape';
   return {
     step,
     parts: {},
+    tools: {},
     mode: modeOf(step),
     slot: 'a',
     selectedKnot: null,

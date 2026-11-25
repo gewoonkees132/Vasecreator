@@ -216,6 +216,8 @@ Inline SVG, 24 × 24 viewBox, 1.8 px round strokes in `currentColor`, drawn in-h
 
 ### 7.5 Phone layout numbers (revises D22's 40/60)
 
+> **Revised by the mobile stage** ([`v2-mobile-stage.md`](v2-mobile-stage.md), M1–M5, awaiting the owner's check): on a phone the controls area below is now an optional sheet (`clamp(220px, 34dvh, 300px)`), and by default a slim dock above the bar replaces it, so the pot gets about 370 px of a 360 × 660 viewport.
+
 - **The bottom bar** is 64 px plus `env(safe-area-inset-bottom)`.
 - **The controls area** is `clamp(200px, 30dvh, 260px)` tall, fixed per screen size, so the pot never jumps. On a 360 × 660 px Chrome viewport that leaves the pot about 320 px, against about 190 px today.
 - **The pot** gets everything between the top bar and the controls area, clear of the chips and the history column (`viewportRect` in `main.js` as today).

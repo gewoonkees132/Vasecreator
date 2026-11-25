@@ -303,6 +303,8 @@ export class BeadRenderer {
   get controls() { return this._controls; }
   /** @returns {THREE.Scene} */
   get scene() { return this._scene; }
+  /** @returns {{ x: number, y: number, width: number, height: number }} the free region the pot is fitted in (CSS px, canvas coordinates) */
+  get region() { return this._region(); }
 
   /**
    * Shows a new toolpath. Takes ownership of the typed arrays. Never moves

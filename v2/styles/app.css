@@ -488,7 +488,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .history-overlay {
   position: fixed;
   left: 0; right: 0; bottom: 0;
-  height: var(--panel-h, 60%);
+  height: var(--bottom-chrome, var(--panel-h, 60%));
   z-index: 60;
   display: flex;
   flex-direction: column;
@@ -678,7 +678,7 @@ dialog::backdrop {
 }
 .storage-note p { flex: 1; }
 
-/* ---------- Phone (design §8.2, D22, D31; journey §7.5) ---------- */
+/* ---------- Phone (design §8.2, D22, D31; journey §7.5; mobile stage) ---------- */
 
 @media (max-width: 760px) {
   :root {
@@ -686,17 +686,20 @@ dialog::backdrop {
     --topbar-h: 56px;
     --ctl-h: 44px;
     --content-top: calc(var(--gap) * 2 + var(--topbar-h));
-    /* C26: the controls area keeps one height per screen size, so the pot
-       never jumps; below it the 64 px step bar. The pot gets the rest:
-       about 320 px of a 360 × 660 screen. Nothing covers it (D22). */
+    /* The stage (mobile stage M1): the canvas fills the window and the pot is
+       fitted between the top bar and the dock (main.js viewportRect). The
+       settings sheet, when open, keeps the journey's one height per screen
+       (C26), over the 64 px step bar; the warnings and history lists open at
+       that height too. Nothing covers the pot (D22). */
     --bar-h: 64px;
-    --controls-h: clamp(200px, 30dvh, 260px);
+    --controls-h: clamp(220px, 34dvh, 300px);
     --panel-h: calc(var(--controls-h) + var(--bar-h) + env(safe-area-inset-bottom));
-    --view-h: calc(100dvh - var(--content-top) - var(--panel-h));
     --rightcol-w: 68px;
   }
 
-  .topbar { padding: 0 var(--space-2); gap: var(--space-2); }
+  /* Glass over the stage, without a backdrop blur: the canvas behind it
+     redraws on every orbit frame, and a blur would follow each one. */
+  .topbar { padding: 0 var(--space-2); gap: var(--space-2); background: rgba(248,248,248,.86); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 1px 6px rgba(0,0,0,.06); }
   .topbar-titles { display: none; }
   .topbar-actions { gap: 6px; }
   .label-desk { display: none; }
@@ -704,19 +707,16 @@ dialog::backdrop {
   .topbar-actions .btn:not(.btn-icon) { padding: 0 var(--space-3); }
   [data-desk-only] { display: none !important; }
 
-  #view {
-    inset: auto 0 auto 0;
-    top: var(--content-top);
-    height: var(--view-h);
-  }
+  #view { inset: 0; }
 
+  /* The dock or the sheet, over the step bar: as tall as what it holds. */
   #panel {
     top: auto;
     left: 0;
     right: 0;
     bottom: 0;
     width: auto;
-    height: var(--panel-h);
+    height: auto;
     border-radius: var(--radius-card) var(--radius-card) 0 0;
   }
 
@@ -733,7 +733,7 @@ dialog::backdrop {
     position: fixed;
     top: auto; left: 0; right: 0; bottom: 0;
     width: auto; max-width: none;
-    max-height: var(--panel-h);
+    max-height: var(--bottom-chrome, var(--panel-h));
     overflow-y: auto;
     overscroll-behavior: contain;
     padding: var(--space-3) var(--space-3) calc(var(--space-3) + env(safe-area-inset-bottom));
@@ -769,7 +769,7 @@ dialog::backdrop {
     top: calc(var(--content-top) + var(--space-2));
     bottom: auto;
     right: var(--space-2);
-    height: calc(var(--view-h) - var(--space-2) * 2);
+    height: auto;
     width: var(--rightcol-w);
     gap: 6px;
   }
@@ -790,6 +790,25 @@ dialog::backdrop {
   .designs-body { padding: 0 var(--space-4) var(--space-4); }
   .tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
   .tile-add { min-height: 130px; }
+}
+
+/* The chips in the phone top bar (mobile stage M2), between the logo and
+   undo, where the bar had room: ✓ or a count, and the size without "mm"
+   (their accessible names keep the full text). Narrower than 360 px they
+   stay under the bar. */
+.chip-short { display: none; }
+@media (max-width: 760px) and (min-width: 360px) {
+  #chips {
+    top: calc(var(--gap) + (var(--topbar-h) - 32px) / 2);
+    left: calc(var(--gap) + var(--space-2) + 44px + var(--space-2));
+    z-index: 55;
+  }
+  .chip { height: 32px; padding: 0 8px; font-size: 12.5px; }
+  .chip-warnings { min-width: 36px; }
+  .chip-warnings .chip-long, .chip-size .chip-unit { display: none; }
+  .chip-warnings .chip-short { display: inline; font-weight: 600; }
+  .chip-warnings.is-none .chip-short { color: color-mix(in srgb, var(--c-accent) 72%, #000); font-size: 15px; }
+  #rightcol { top: calc(var(--gap) * 2 + var(--topbar-h) + var(--space-1)); }
 }
 
 /* A short screen (a phone held sideways) keeps some room for the pot. */

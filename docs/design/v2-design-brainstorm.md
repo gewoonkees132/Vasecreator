@@ -642,6 +642,8 @@ These were not explicitly decided by the owner. A builder should treat them as t
 | C35 | **Issue #1: on a phone, swatches are one sideways row,** and taller parts scroll inside the controls area (details: [the journey design](v2-guided-journey.md)) | Keeps the pot large, as in the approved mockup |
 | C36 | **Issue #1: on a phone, the first-visit tip is one line with a close button** (details: [the journey design](v2-guided-journey.md)) | The old card would fill the controls area |
 
+**The mobile stage (2026-11-24), a design iteration awaiting the owner's check.** The owner asked for the 3D view to become primary on a phone, with the menu optional, and for the pattern design to be elevated. My calls M1–M12 are in [the mobile stage design](v2-mobile-stage.md) §8. In short: the canvas fills the phone screen and the chips move into the top bar (M1, M2); a slim dock (tool chips, one ruler dial or option row or swatch carousel, and *Next*) replaces the controls area, and the full settings become an optional sheet (M3–M6); handles on the pot set the pattern's From / To and turn the seam (M7, M8, desktop too); the swatch carousel leads the Pattern step (M9–M11). They revise C26 and the journey's §6.1 and §7.5 for phones.
+
 ---
 
 ## 18. Left to the builder

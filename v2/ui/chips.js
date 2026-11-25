@@ -66,7 +66,9 @@ export function mountChips(root, ctx) {
   const phone = matchMedia(PHONE);
 
   const icon = el('span', { class: 'chip-icon', 'aria-hidden': 'true', text: '⚠' });
-  const label = el('span');
+  const label = el('span', { class: 'chip-long' });
+  // The phone top bar has room for a short label only (mobile stage M2): ✓ or the count.
+  const short = el('span', { class: 'chip-short', 'aria-hidden': 'true' });
   const clear = el('span', { class: 'chip-clear', 'aria-hidden': 'true', text: '×', hidden: true });
   const chip = el('button', {
     type: 'button', class: 'chip chip-warnings is-none',
@@ -76,7 +78,7 @@ export function mountChips(root, ctx) {
       else if (store.state.view.highlight != null) store.setView({ highlight: null });
       else openCard();
     },
-  }, [icon, label, clear]);
+  }, [icon, label, short, clear]);
 
   const list = el('ul', { class: 'warn-list' });
   const closeBtn = el('button', {
@@ -99,11 +101,13 @@ export function mountChips(root, ctx) {
   // The size chip opens the size card. Not a live region: it changes on every
   // preview during a drag, which would flood a screen reader.
   const sizeText = el('span');
+  // The chip's flex gap spaces the unit.
+  const sizeUnit = el('span', { class: 'chip-unit', text: 'mm' });
   const sizeChip = el('button', {
     type: 'button', class: 'chip chip-size',
     'aria-expanded': 'false', 'aria-controls': 'size-card',
     onclick: () => (sizeCard.hidden ? openSize() : closeSize({ focusChip: true })),
-  }, [sizeText]);
+  }, [sizeText, sizeUnit]);
   const fields = {};
   for (const axis of Object.keys(SIZE_AXES)) {
     const lim = LIMITS[axis] ?? { min: 1, max: 600 };
@@ -288,7 +292,8 @@ export function mountChips(root, ctx) {
   function syncSize(state, { values = false } = {}) {
     const s = state.result?.size;
     const text = formatSize(s);
-    sizeText.textContent = text;
+    // Thin spaces around ×, so the chip fits the phone top bar (M2).
+    sizeText.textContent = text.replace(/ mm$/, '').replace(/ × /g, '\u2009×\u2009');
     const printing = state.view.mode !== 'design';
     const plain = !!ctx.resultIsPlain?.();
     const what = plain ? 'Size of the shape, without its pattern' : 'Size';
@@ -357,6 +362,7 @@ export function mountChips(root, ctx) {
       const n = warnings.length;
       const errors = warnings.some((w) => w.severity === 'error');
       label.textContent = n === 0 ? 'No warnings' : countLabel(warnings);
+      short.textContent = n === 0 ? '✓' : String(n);
       if (state.result && label.textContent !== lastCount) {
         // Not on the first preview: nothing has changed yet.
         if (lastCount != null) announce.textContent = label.textContent;

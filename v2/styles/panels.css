@@ -603,9 +603,11 @@
 
 /* steps.js sets .steps--phone from the same 760 px query app.css uses. The
    DOM order stays the desktop one (nothing moves between layouts); the bar
-   goes to the bottom with `order`. */
+   goes to the bottom with `order`, the dock just above it. On a phone the
+   frame shows either the dock (.steps--dock, the default) or the settings
+   sheet (.steps--sheet), mobile stage M3 and M5. */
 .steps--phone {
-  height: 100%;
+  height: auto;
   border: 0;
   border-radius: var(--radius-card) var(--radius-card) 0 0;
   background: rgb(250,250,250);
@@ -620,11 +622,17 @@
   border-top: 1px solid var(--c-border);
   border-bottom: 0;
 }
+/* #panel is the frame itself; its phone rule (app.css) sizes it to the dock. */
+#panel.steps--sheet { height: var(--panel-h); }
+.steps--dock .step-head,
+.steps--dock .part-tabs,
+.steps--dock .step-scroll { display: none !important; }
 .steps--phone .step-tab { justify-content: center; font-size: 12px; }
 .steps--phone .step-emblem { width: 56px; height: 30px; border-radius: 15px; }
 .steps--phone .step-emblem svg { width: 24px; height: 24px; }
 
 .steps--phone .step-head {
+  position: relative;
   display: flex;
   flex: none;
   align-items: center;
@@ -632,6 +640,21 @@
   min-height: 46px;
   padding: 2px var(--space-2) 0 var(--space-4);
 }
+/* The sheet's ⌄ closes it, back to the pot; a swipe down on its header does too. */
+.sheet-collapse { display: none; }
+.steps--sheet:not(.steps--print) .step-head { padding: 12px var(--space-2) 0 var(--space-1); touch-action: none; }
+.steps--sheet:not(.steps--print) .step-head::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 40px;
+  height: 4px;
+  margin-left: -20px;
+  border-radius: 2px;
+  background: rgba(18,47,45,.28);
+}
+.steps--sheet .sheet-collapse:not([hidden]) { display: inline-flex; width: 44px; height: 44px; color: var(--c-text); }
 .step-title { flex: 1; min-width: 0; margin: 0; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .steps--phone .step-next--head { display: inline-flex; min-height: 44px; padding: 0 var(--space-3); }
 
@@ -863,3 +886,280 @@
   .pattern-editor { width: min(600px, calc(100vw - 32px)); margin: calc(var(--topbar-h) + 32px) auto auto 16px; }
   .pattern-editor::backdrop { background: rgba(18,47,45,.12); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* ---------- The phone dock (mobile stage M3, M4, M9; ui/dock.js, ui/dial.js) ---------- */
+
+.dock-host { display: none; }
+.steps--dock .dock-host {
+  order: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 0 6px;
+}
+.dock-tip { padding: 4px var(--space-3) var(--space-2); }
+.dock-tip:empty, .dock-tip:has(> .step-tip:empty) { display: none; }
+.dock-tip .designs-tip { margin: 0; }
+
+/* The grabber: tap or swipe up for all settings. Its target reaches up into
+   the stage edge, which the pot never uses. */
+.dock-grabber {
+  position: absolute;
+  top: 0;
+  left: 30%;
+  right: 30%;
+  z-index: 1;
+  display: block;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: none;
+}
+.dock-grabber::before { content: ''; position: absolute; left: 0; right: 0; top: -16px; bottom: 0; }
+.grabber-pill { display: block; width: 40px; height: 4px; margin: 6px auto 0; border-radius: 2px; background: rgba(18,47,45,.3); transition: background-color .15s ease, width .15s ease; }
+.dock-grabber:hover .grabber-pill, .dock-grabber:focus-visible .grabber-pill { width: 52px; background: rgba(18,47,45,.55); }
+.dock-grabber:focus-visible { outline-offset: -2px; }
+
+/* The adjuster: one control for the chosen tool, always this tall, so the
+   pot never jumps when the tool changes. */
+.dock-adjust {
+  height: 76px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+}
+
+.dock-row { display: flex; align-items: center; gap: var(--space-2); padding-right: var(--space-2); }
+.dock-tools {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  padding: 2px var(--space-2) 2px var(--space-3);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent);
+}
+.dock-tools::-webkit-scrollbar { display: none; }
+.dock-chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 46px;
+  padding: 3px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.dock-chip:focus-visible { outline-offset: -2px; }
+.dock-chip-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.dock-chip-name { font-size: 11px; font-weight: 500; color: rgba(18,47,45,.7); white-space: nowrap; }
+.dock-chip-value { max-width: 104px; overflow: hidden; text-overflow: ellipsis; font-size: 14px; font-weight: 650; color: var(--c-text); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dock-chip-more { display: inline-flex; color: rgba(18,47,45,.6); }
+.dock-chip[aria-selected="true"] { background: var(--c-primary-dark); border-color: var(--c-primary-dark); }
+.dock-chip[aria-selected="true"] .dock-chip-name { color: rgba(255,255,255,.78); }
+.dock-chip[aria-selected="true"] .dock-chip-value,
+.dock-chip[aria-selected="true"] .dock-chip-more { color: #fff; }
+.dock-chip-swatch { flex: none; display: block; width: 26px; height: 26px; border-radius: 6px; background: var(--c-border); box-shadow: 0 0 0 1px rgba(0,0,0,.12); }
+.dock-chip-swatch.is-none,
+.dock-swatch-none {
+  background:
+    linear-gradient(to top right, transparent calc(50% - 1px), var(--c-input-border) calc(50% - 1px), var(--c-input-border) calc(50% + 1px), transparent calc(50% + 1px)),
+    #fff;
+}
+.dock-chip[aria-selected="true"] .dock-chip-swatch { box-shadow: 0 0 0 1.5px #fff; }
+.dock-next { flex: none; min-height: 46px; padding: 0 14px; border-radius: 12px; font-size: 14px; font-weight: 600; }
+
+/* A short message over the stage edge ("Reading the image…"). */
+.dock-msg {
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: calc(100% + var(--space-2));
+  padding: var(--space-2) var(--space-3);
+  border-radius: 10px;
+  background: var(--c-primary-dark);
+  color: #fff;
+  font-size: 13px;
+  box-shadow: var(--shadow-3);
+}
+
+/* ---- The ruler dial ---- */
+.dial {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+}
+.dial-step {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--c-input-border);
+  border-radius: 50%;
+  background: #fff;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--c-text);
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: var(--shadow-1);
+}
+.dial-step:disabled { opacity: .35; cursor: default; box-shadow: none; }
+.dial-mid { display: flex; flex-direction: column; min-width: 0; }
+.dial-value-row { position: relative; display: flex; align-items: center; justify-content: center; height: 28px; }
+.dial-extra { position: absolute; left: 0; top: 50%; transform: translateY(-50%); display: flex; }
+.dial-extra .dock-lock { width: 36px; height: 36px; }
+.dial-value {
+  min-height: 28px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+  cursor: text;
+}
+.dial-value:hover { background: rgba(18,47,45,.06); }
+.dial-unit { font-size: 13px; font-weight: 500; color: var(--c-text-2); }
+.dial-input {
+  width: 116px;
+  height: 30px;
+  border: 1px solid var(--c-primary-dark);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.dial-input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.dial-ruler { position: relative; height: 34px; cursor: ew-resize; touch-action: none; border-radius: 6px; }
+.dial-ruler:focus-visible { outline-offset: 1px; }
+.dial-canvas {
+  display: block;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 18%, #000 82%, transparent);
+}
+.dial-mark {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  width: 3px;
+  height: 24px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--c-primary-dark);
+  pointer-events: none;
+}
+.dial-mark::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  margin-left: -5px;
+  border: 5px solid transparent;
+  border-top-color: var(--c-primary-dark);
+}
+.dial.is-dragging .dial-mark { background: color-mix(in srgb, var(--c-accent) 72%, #000); }
+.dial.is-dragging .dial-mark::before { border-top-color: color-mix(in srgb, var(--c-accent) 72%, #000); }
+.dial-note { height: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; line-height: 14px; color: var(--c-text-2); text-align: center; }
+.dial.is-disabled .dial-value { color: var(--c-text-2); cursor: default; }
+.dial.is-disabled .dial-ruler { cursor: default; }
+.dial.is-disabled .dial-mark { background: rgba(18,47,45,.3); }
+.dial.is-disabled .dial-mark::before { border-top-color: rgba(18,47,45,.3); }
+
+/* ---- Options and hints ---- */
+.dock-optbox { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 0 var(--space-1); }
+.dock-options { display: flex; gap: 6px; }
+.dock-opt {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--c-input-border);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-text);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dock-opt[aria-pressed="true"] { border-color: var(--c-primary-dark); background: rgba(139,197,193,.28); box-shadow: inset 0 0 0 1px var(--c-primary-dark); }
+.dock-note { height: 16px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; line-height: 16px; color: var(--c-text-2); text-align: center; }
+.dock-hint { display: flex; align-items: center; gap: var(--space-3); width: 100%; padding: 0 var(--space-2); }
+.dock-hint-text { flex: 1; min-width: 0; margin: 0; font-size: 13px; line-height: 1.35; color: var(--c-text); }
+.dock-hint-btn { flex: none; min-height: 44px; padding: 0 var(--space-3); gap: 4px; }
+
+/* ---- The swatch carousel (M9): the patterns first and large ---- */
+.dock-carousel {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: calc(100% + var(--space-2) * 2);
+  margin: 0 calc(var(--space-2) * -1);
+  padding: 6px var(--space-3) 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+.dock-carousel::-webkit-scrollbar { display: none; }
+.dock-swatch {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 60px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  scroll-snap-align: center;
+}
+.dock-swatch-canvas, .dock-swatch-none, .dock-swatch-add {
+  display: block;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.12);
+  transition: box-shadow .12s ease, transform .12s ease;
+}
+.dock-swatch:active .dock-swatch-canvas { transform: scale(.96); }
+.dock-swatch[aria-pressed="true"] .dock-swatch-canvas,
+.dock-swatch[aria-pressed="true"] .dock-swatch-none { box-shadow: 0 0 0 2px #fff, 0 0 0 4.5px var(--c-accent); }
+.dock-swatch:focus-visible { outline: none; }
+.dock-swatch:focus-visible .dock-swatch-canvas,
+.dock-swatch:focus-visible .dock-swatch-none,
+.dock-swatch:focus-visible .dock-swatch-add { box-shadow: 0 0 0 2px #fff, 0 0 0 4.5px var(--c-primary-dark); }
+.dock-swatch-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: var(--c-text); }
+.dock-swatch[aria-pressed="true"] .dock-swatch-name { font-weight: 700; }
+.dock-swatch.is-first-mine { margin-left: var(--space-2); }
+.dock-swatch.is-first-mine::before { content: ''; position: absolute; left: calc(var(--space-2) * -1 - 4px); top: 6px; height: 40px; width: 1px; background: var(--c-border); }
+.dock-swatch-add {
+  display: grid;
+  place-items: center;
+  border: 1.5px dashed var(--c-input-border);
+  box-shadow: none;
+  background: #fff;
+  font-size: 22px;
+  font-weight: 300;
+  color: var(--c-text-2);
+}
+.dock-swatch--make .dock-swatch-add { font-size: 19px; }
+.dock-swatch--action:hover .dock-swatch-add { border-color: var(--c-primary-light); color: var(--c-text); }
+.dock-swatch--action:disabled { opacity: .5; cursor: progress; }
