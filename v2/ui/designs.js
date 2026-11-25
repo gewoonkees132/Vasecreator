@@ -12,6 +12,7 @@
 import { looksLikeDesign, normaliseDesign } from '../core/design.js';
 import { designFileBlob, takeFileImages, FILE_MAX_BYTES } from './design-file.js';
 import { shapeOnly } from './steps.js';
+import { labelIcon } from './press-label.js';
 
 const LS_NOTE = 'vc2.storageNoteDismissed';
 const FILE_SUFFIX = '.vasecreator.json';
@@ -139,7 +140,7 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
 
   // ---------- Layout ----------
 
-  const closeBtn = el('button', { type: 'button', class: 'icon-close', 'aria-label': 'Close Designs', text: '×', onclick: () => close() });
+  const closeBtn = labelIcon(el('button', { type: 'button', class: 'icon-close', text: '×', onclick: () => close() }), 'Close Designs');
   const continueGrid = el('div', { class: 'tile-grid' });
   const savedGrid = el('div', { class: 'tile-grid' });
   const status = el('p', { class: 'tile-sub', role: 'status', 'aria-live': 'polite' });
@@ -274,10 +275,9 @@ export function mountDesigns(dialog, ctx, { lastDesign = null } = {}) {
         tileUrls.push(url);
         t.img.src = url;
       }
-      const menuBtn = el('button', {
-        type: 'button', class: 'tile-menu-btn', text: '⋯',
-        'aria-label': `More for ${rec.name}`, 'aria-haspopup': 'menu', 'aria-expanded': 'false',
-      });
+      const menuBtn = labelIcon(el('button', {
+        type: 'button', class: 'tile-menu-btn', text: '⋯', 'aria-haspopup': 'menu', 'aria-expanded': 'false',
+      }), `More for ${rec.name}`);
       const item = (text, fn, cls = '') => el('button', {
         type: 'button', role: 'menuitem', class: `menu-item ${cls}`.trim(), text,
         onclick: () => { closeTileMenu(); fn(); },

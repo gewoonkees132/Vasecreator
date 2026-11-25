@@ -9,6 +9,8 @@ import { MORPH_MAPS, MORPH_DEFAULTS as CORE_DEFAULTS, evaluateMorphMap } from '.
 import * as imageSwatch from '../image-swatch.js';
 import { rasterFromRGBA } from '../../core/raster.js';
 import { saveImage, loadImage, cachedImage } from '../../store/assets.js';
+import { labelIcon } from '../press-label.js';
+import { ICONS } from '../icons.js';
 
 // Picking a map from None starts from the core's defaults (design §13), but
 // with a 6 mm push instead of 16: at 16 mm most maps tip the presets past 45°
@@ -18,8 +20,6 @@ const { map: _defaultMap, ...CORE_REST } = CORE_DEFAULTS;
 const MORPH_DEFAULTS = { ...CORE_REST, strengthMm: 6 };
 
 const SWATCH_PX = 52;
-// The "+ Image" tile: a plain square with a plus, not the struck-out None look.
-const ADD_STYLE = 'display:flex;align-items:center;justify-content:center;background:var(--c-input-bg);font-size:24px;color:var(--c-text-2)';
 
 // The Pattern image upload (ui/image-swatch.js) when it offers one; else the
 // same steps here: decode, greyscale, store, hand to the engine.
@@ -128,10 +128,12 @@ const section = {
     imageTile.btn.hidden = true;
     let imageDrawn = '';
     const fileInput = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', hidden: true });
-    const addBtn = h('button', { type: 'button', class: 'swatch', title: 'Use your own image as the morph map' }, [
-      h('span', { class: 'swatch-none', 'aria-hidden': 'true', text: '+', style: ADD_STYLE }),
-      h('span', { class: 'swatch-name', text: 'Image' }),
-    ]);
+    // + Image: the image icon where a map would be, like the Detailed morph's tile.
+    const addMark = h('span', { class: 'swatch-add', 'aria-hidden': 'true' });
+    addMark.innerHTML = ICONS.image;
+    const addBtn = labelIcon(h('button', { type: 'button', class: 'swatch swatch-action' }, [
+      addMark, h('span', { class: 'swatch-name', text: 'Image' }),
+    ]), 'Use your own image as the morph map');
     grid.append(addBtn, fileInput);
 
     const pick = (id, name) => {

@@ -122,6 +122,25 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .icon-close:hover { background: #fff; color: var(--c-text); }
 
+/* A long press on a phone shows an icon button's name (ui/press-label.js, D49):
+   above the button, or below it when there's no room (the top bar). */
+.press-label {
+  position: fixed;
+  z-index: 200;
+  max-width: calc(100vw - 16px);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--c-primary-dark);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  box-shadow: var(--shadow-3);
+}
+
 /* ---------- Top bar ---------- */
 
 .topbar {

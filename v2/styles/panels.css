@@ -56,8 +56,9 @@
 
 /* ---------- The step frame (issue #1, ui/steps.js) ---------- */
 
-/* Desktop: one card, the step row on top, the parts in the middle (they
-   scroll), Next at the bottom; the row and Next stay in sight (C27). */
+/* Desktop: one card, the step row on top and the parts under it (they
+   scroll); the row stays in sight (C27). There is no Next: the emblems move
+   between steps (pattern studio D49). */
 .steps {
   display: flex;
   flex-direction: column;
@@ -168,10 +169,6 @@
 .more-toggle:hover .more-title { text-decoration: underline; text-underline-offset: 2px; }
 .more-body { display: flex; flex-direction: column; gap: var(--space-3); }
 .steps:not(.steps--phone) .more-shape:not(.is-open) .more-body { display: none; }
-
-.step-foot { flex: none; padding: var(--space-3) var(--space-4) var(--space-4); border-top: 1px solid var(--c-border); }
-.step-next--foot { width: 100%; }
-.step-next--head { display: none; }
 
 /* ---------- Number field ---------- */
 
@@ -373,7 +370,8 @@
 .slot-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slot-sub { font-size: 11px; color: var(--c-text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Narrow on desktop so "main pattern" fits the slot card; 44 px on touch below. */
-.swap-btn { width: 26px; font-size: 18px; }
+.swap-btn { width: 26px; }
+.swap-btn svg { width: 18px; height: 18px; }
 
 .grid-label { margin-bottom: calc(var(--space-2) * -1); font-size: 12px; color: var(--c-text-2); }
 .swatch-grid {
@@ -658,7 +656,6 @@
 }
 .steps--sheet .sheet-collapse:not([hidden]) { display: inline-flex; width: 44px; height: 44px; color: var(--c-text); }
 .step-title { flex: 1; min-width: 0; margin: 0; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.steps--phone .step-next--head { display: inline-flex; min-height: 44px; padding: 0 var(--space-3); }
 
 .steps--phone .part-tabs {
   display: flex;
@@ -689,7 +686,6 @@
 
 /* The current part's controls; a long part scrolls here, never the page. */
 .steps--phone .step-scroll { flex: 1 1 0; padding: var(--space-1) var(--space-4) var(--space-3); }
-.steps--phone .step-foot,
 .steps--phone .part-heading,
 .steps--phone .more-toggle { display: none; }
 .steps--phone .more-shape { margin: 0; border: 0; }
@@ -753,6 +749,7 @@
   font-weight: 300;
   color: var(--c-text-2);
 }
+.swatch-add svg { width: 24px; height: 24px; }
 .swatch-action:hover .swatch-add { border-color: var(--c-primary-light); color: var(--c-text); }
 .swatch-action:disabled { opacity: .5; cursor: progress; }
 /* One of My patterns: the swatch plus a small delete button on its corner. */
@@ -853,7 +850,9 @@
   padding: 0 var(--space-2);
 }
 
-.dock-row { display: flex; align-items: center; gap: var(--space-2); padding-right: var(--space-2); }
+/* The tool row runs the whole width and fades out at the screen's edge; the
+   step emblems below move between steps, so it keeps no Next (D49). */
+.dock-row { display: flex; align-items: center; gap: var(--space-2); }
 .dock-tools {
   flex: 1 1 auto;
   min-width: 0;
@@ -898,7 +897,6 @@
     #fff;
 }
 .dock-chip[aria-selected="true"] .dock-chip-swatch { box-shadow: 0 0 0 1.5px #fff; }
-.dock-next { flex: none; min-height: 46px; padding: 0 14px; border-radius: 12px; font-size: 14px; font-weight: 600; }
 
 /* A short message over the stage edge ("Reading the image…"). */
 .dock-msg {
@@ -1082,7 +1080,7 @@
   font-weight: 300;
   color: var(--c-text-2);
 }
-.dock-swatch--make .dock-swatch-add { font-size: 19px; }
+.dock-swatch-add svg { width: 26px; height: 26px; }
 .dock-swatch--action:hover .dock-swatch-add { border-color: var(--c-primary-light); color: var(--c-text); }
 .dock-swatch--action:disabled { opacity: .5; cursor: progress; }
 

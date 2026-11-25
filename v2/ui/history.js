@@ -4,6 +4,7 @@
 // button that sat below it went with issue #1, D33.)
 
 import { relativeTime } from '../store/store.js';
+import { labelIcon } from './press-label.js';
 
 const PHONE = '(max-width: 760px)';
 
@@ -54,10 +55,10 @@ export function mountHistory(root, ctx) {
 
   // Full list for the phone, over the controls area and the step bar.
   const overlayList = el('ol', { class: 'history-list', 'aria-label': 'Steps, newest first' });
-  const overlayClose = el('button', {
-    type: 'button', class: 'icon-close', 'aria-label': 'Close history', text: '×',
+  const overlayClose = labelIcon(el('button', {
+    type: 'button', class: 'icon-close', text: '×',
     onclick: () => closeOverlay(),
-  });
+  }), 'Close history');
   const overlay = el('div', {
     class: 'history-overlay', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'history-overlay-title', hidden: true,
   }, [

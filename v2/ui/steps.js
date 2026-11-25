@@ -2,11 +2,13 @@
 // Five steps in a fixed order, Shape, Pattern, Layers & seam, Base and Print,
 // and any of them opens at any time: nothing is locked.
 //
-// Desktop: the five emblems at the top of the left panel, the current step's
-// parts under small headings (Shape's finer parts, the Morph and the Detailed
-// morph among them, behind "More shape options"), and Next at the bottom. Phone (≤ 760 px): the same emblems as a
-// bottom bar, and above it a controls area of one fixed height with the
-// step's name and Next, a row of part buttons, and only that part's controls.
+// Desktop: the five emblems at the top of the left panel and the current
+// step's parts under small headings (Shape's finer parts, the Morph and the
+// Detailed morph among them, behind "More shape options"). Phone (≤ 760 px):
+// the same emblems as a bottom bar, and above it a controls area of one fixed
+// height with the step's name, a row of part buttons, and only that part's
+// controls. The emblems are how you move between steps: there is no Next
+// (pattern studio D49).
 //
 // Mobile stage (docs/design/v2-mobile-stage.md): on a phone the controls area
 // is an optional sheet. By default the phone shows the dock (ui/dock.js), a
@@ -33,6 +35,7 @@ import layers from './sections/layers.js';
 import base from './sections/base.js';
 import { mountPrintPanel } from './print.js';
 import { mountDock } from './dock.js';
+import { labelIcon } from './press-label.js';
 
 const PHONE_QUERY = '(max-width: 760px)';
 const LS_MORE = 'vc2.moreShape';
@@ -166,7 +169,7 @@ export function mountSteps(panel, ctx) {
     tab.insertAdjacentHTML('beforeend', `<span class="step-emblem">${EMBLEMS[step.id]}</span>`);
     tab.append(h('span', { class: 'step-label', text: step.short }));
     // A click or a tap leaves the focus where it is; Enter or Space (a click
-    // without a pointer) moves it into the step, like Next.
+    // without a pointer) moves it into the step.
     tab.addEventListener('click', (e) => go(step.id, { focus: e.detail === 0 }));
     tabRow.append(tab);
     tabs.set(step.id, { tab, desc, text: null });
@@ -182,22 +185,12 @@ export function mountSteps(panel, ctx) {
     go(next.id.replace('step-tab-', ''), { focus: false });
   });
 
-  // ---- Phone header: the step's full name and Next ----
+  // ---- Phone header: ⌄ (back to the pot) and the step's full name ----
   const headTitle = h('h2', { class: 'step-title' });
-  const nextButton = (cls) => {
-    const label = h('span');
-    const btn = h('button', { type: 'button', class: `btn btn-primary step-next ${cls}` }, [label, h('span', { 'aria-hidden': 'true', text: ' →' })]);
-    btn.addEventListener('click', () => {
-      const i = STEP_LIST.findIndex((s) => s.id === store.state.view.step);
-      if (i >= 0 && i < STEP_LIST.length - 1) go(STEP_LIST[i + 1].id, { focus: true });
-    });
-    return { btn, label };
-  };
-  const headNext = nextButton('step-next--head');
-  const collapse = h('button', { type: 'button', class: 'icon-btn sheet-collapse', 'aria-label': 'Hide all settings', title: 'Back to the pot', 'aria-expanded': 'true' });
+  const collapse = labelIcon(h('button', { type: 'button', class: 'icon-btn sheet-collapse', 'aria-expanded': 'true' }), 'Hide all settings');
   collapse.insertAdjacentHTML('beforeend', CHEVRON_DOWN);
   collapse.addEventListener('click', (e) => setSheet(false, { focus: e.detail === 0 }));
-  const head = h('div', { class: 'step-head' }, [collapse, headTitle, headNext.btn]);
+  const head = h('div', { class: 'step-head' }, [collapse, headTitle]);
   let headSwipe = null;
   head.addEventListener('pointerdown', (e) => {
     if (e.target.closest('button')) return;
@@ -291,10 +284,6 @@ export function mountSteps(panel, ctx) {
     }
   }
 
-  // ---- Desktop foot: Next, always in sight ----
-  const footNext = nextButton('step-next--foot');
-  const foot = h('div', { class: 'step-foot' }, [footNext.btn]);
-
   // The first-visit tip goes at the top of the controls (§7.6).
   const tipHost = h('div', { class: 'step-tip' });
   const scroll = h('div', { class: 'step-scroll' }, [tipHost, ...pages.values()]);
@@ -303,18 +292,10 @@ export function mountSteps(panel, ctx) {
   const dockEl = h('div', { class: 'dock-host' });
   const dock = mountDock(dockEl, ctx, {
     openSheet: (part, { focus = false } = {}) => setSheet(true, { part, focus }),
-    next: () => {
-      const i = STEP_LIST.findIndex((s) => s.id === store.state.view.step);
-      if (i >= 0 && i < STEP_LIST.length - 1) go(STEP_LIST[i + 1].id, { focus: false });
-    },
-    nextName: (stepId) => {
-      const i = STEP_LIST.findIndex((s) => s.id === stepId);
-      return i >= 0 && i < STEP_LIST.length - 1 ? STEP_LIST[i + 1].short : null;
-    },
   });
 
   panel.classList.add('steps');
-  panel.replaceChildren(tabRow, head, partRow, scroll, foot, dockEl, descBox);
+  panel.replaceChildren(tabRow, head, partRow, scroll, dockEl, descBox);
 
   // ---- Behaviour ----
 
@@ -410,8 +391,6 @@ export function mountSteps(panel, ctx) {
     const stepParts = step.parts.filter((p) => apply.has(p.id));
     let part = state.view.parts?.[step.id];
     if (!apply.has(part)) part = stepParts[0]?.id;
-    const i = STEP_LIST.indexOf(step);
-    const next = STEP_LIST[i + 1];
 
     // Tabs: the current one is dark, the others light grey; nothing is locked.
     for (const [id, t] of tabs) {
@@ -420,14 +399,6 @@ export function mountSteps(panel, ctx) {
       t.tab.tabIndex = on ? 0 : -1;
     }
     headTitle.textContent = step.title;
-    for (const n of [headNext, footNext]) {
-      n.btn.hidden = !next;
-      if (next) {
-        n.label.textContent = `Next: ${next.short}`;
-        n.btn.setAttribute('aria-label', `Next: ${next.short}`);
-      }
-    }
-    foot.hidden = !next;
 
     // Part row (phone): only the parts that apply, the current one marked.
     for (const [id, group] of partGroups) group.hidden = id !== step.id;

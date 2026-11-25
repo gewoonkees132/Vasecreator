@@ -5,6 +5,7 @@
 
 import { numberField, slider, segmented, h } from '../controls.js';
 import { LIMITS, setHeight, setWidth, setDepth, widestRadius } from '../../core/design.js';
+import { labelIcon } from '../press-label.js';
 
 /**
  * Field limits from core LIMITS (the first key found), falling back to the
@@ -155,7 +156,7 @@ const section = {
       onCommit: commit,
     });
     // A toggle button: the name stays put and aria-pressed carries the state.
-    const lock = h('button', { type: 'button', class: 'icon-btn lock-btn', 'aria-label': 'Lock depth to width' });
+    const lock = labelIcon(h('button', { type: 'button', class: 'icon-btn lock-btn' }), 'Lock depth to width');
     lock.addEventListener('click', () => {
       if (isLocked(store.state)) {
         store.setView({ sizeLocked: false });
@@ -198,7 +199,7 @@ const section = {
       depth.setDisabled(locked);
       if (lock.getAttribute('aria-pressed') !== String(locked)) {
         lock.setAttribute('aria-pressed', String(locked));
-        lock.title = locked ? 'Depth follows width. Click to set it apart' : 'Lock depth to width';
+        labelIcon(lock, 'Lock depth to width', locked ? 'Depth follows width. Click to set it apart' : 'Lock depth to width');
         lock.innerHTML = locked ? LOCK_ICON : UNLOCK_ICON;
       }
       fp.update(d);

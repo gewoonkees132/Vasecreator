@@ -19,6 +19,8 @@ import {
   findLayerEntry, layerMineEntries, pickLayerPattern, drawLayerEntry, readoutOf, densityText, densityLimits, setDensityFace,
   openEditor, editableEntry,
 } from '../pattern-actions.js';
+import { labelIcon } from '../press-label.js';
+import { ICONS } from '../icons.js';
 
 const SWATCH = 52;
 const PARTS = ['drawing', 'depth', 'density', 'range', 'fade', 'soften'];
@@ -69,11 +71,10 @@ const section = {
 
     // Make your own (an empty grid) and Edit (the drawing on the pot), in the 2D editor (§3.8, D46).
     const editorMsg = h('p', { class: 'panel-note image-msg', role: 'alert', hidden: true });
-    const actionTile = (glyph, name, label, mode) => {
-      const btn = h('button', { type: 'button', class: 'swatch swatch-action', title: label, 'aria-label': label }, [
-        h('span', { class: 'swatch-add', 'aria-hidden': 'true', text: glyph }),
-        h('span', { class: 'swatch-name', text: name }),
-      ]);
+    const actionTile = (icon, name, label, mode) => {
+      const mark = h('span', { class: 'swatch-add', 'aria-hidden': 'true' });
+      mark.innerHTML = ICONS[icon];
+      const btn = labelIcon(h('button', { type: 'button', class: 'swatch swatch-action' }, [mark, h('span', { class: 'swatch-name', text: name })]), label);
       btn.addEventListener('click', () => {
         editorMsg.hidden = true;
         openEditor(ctx, { kind: 'pattern' }, { mode, returnFocus: btn }).catch((err) => {
@@ -84,8 +85,8 @@ const section = {
       });
       return btn;
     };
-    const makeBtn = actionTile('+', 'Make', 'Make your own pattern', 'make');
-    const editBtn = actionTile('✎', 'Edit', 'Edit the pattern', 'edit');
+    const makeBtn = actionTile('make', 'Make', 'Make your own pattern', 'make');
+    const editBtn = actionTile('edit', 'Edit', 'Edit the pattern', 'edit');
 
     // ---- Depth ----
     const depth = slider({
@@ -178,9 +179,7 @@ const section = {
       const editable = editableEntry(d, library, { kind: 'pattern' });
       editBtn.hidden = !editable;
       if (editable) {
-        const label = editable.own ? `Edit ${editable.name}` : `Edit a copy of ${editable.name}`;
-        editBtn.setAttribute('aria-label', label);
-        editBtn.title = label;
+        labelIcon(editBtn, editable.own ? `Edit ${editable.name}` : `Edit a copy of ${editable.name}`);
       }
       for (const t of mineTiles) {
         t.btn.setAttribute('aria-pressed', String(t.id === current));

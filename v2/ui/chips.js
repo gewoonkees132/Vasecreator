@@ -11,6 +11,7 @@ import { LIMITS } from '../core/design.js';
 import { depthLocked } from './sections/shape.js';
 import { SIZE_AXES, fitOuterSize } from './size-fit.js';
 import { RULES, cardLayout, ruleLimits, setRule, shownRule } from './rules.js';
+import { attachPressLabel, labelIcon } from './press-label.js';
 
 const PHONE = '(max-width: 760px)';
 // A preview that never comes (a broken engine) mustn't keep a size edit open.
@@ -90,6 +91,8 @@ export function mountChips(root, ctx) {
       else openCard();
     },
   }, [icon, label, short, clear]);
+  // In the phone's top bar the chip shows only ✓ or a count: a long press says what it holds.
+  attachPressLabel(chip);
 
   const list = el('ul', { class: 'warn-list' });
   const none = el('p', { class: 'warn-none', text: 'No warnings', hidden: true });
@@ -97,10 +100,10 @@ export function mountChips(root, ctx) {
     el('span', { class: 'label-desk', text: 'Click a warning to show where it is on the pot.' }),
     el('span', { class: 'label-phone', text: 'Tap a warning to show where it is on the pot.' }),
   ]);
-  const closeBtn = el('button', {
-    type: 'button', class: 'icon-close', 'aria-label': 'Close warnings', text: '×',
+  const closeBtn = labelIcon(el('button', {
+    type: 'button', class: 'icon-close', text: '×',
     onclick: () => closeCard({ focusChip: true }),
-  });
+  }), 'Close warnings');
 
   // The Rules group at the foot: the rules whose warning isn't showing, so
   // every rule can be reached with no warning at all (D44).
@@ -177,10 +180,10 @@ export function mountChips(root, ctx) {
       onCommit: (v) => sizeCommit(axis, v),
     });
   }
-  const sizeClose = el('button', {
-    type: 'button', class: 'icon-close', 'aria-label': 'Close size', text: '×',
+  const sizeClose = labelIcon(el('button', {
+    type: 'button', class: 'icon-close', text: '×',
     onclick: () => closeSize({ focusChip: true }),
-  });
+  }), 'Close size');
   // In Shape the pot, and so the chip, is the bare form (D29); from Pattern on
   // the pattern is in it, so the same pot can read a few mm wider there.
   const sizeHint = el('p', { class: 'warn-hint' });

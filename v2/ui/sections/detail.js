@@ -15,6 +15,8 @@ import { footprintAt, limit } from './shape.js';
 import { BLEND_OPTIONS } from '../dock-tools.js';
 import { listPatterns, deletePattern, onPatternsChanged } from '../../store/assets.js';
 import { printableResolution } from '../../core/raster.js';
+import { labelIcon } from '../press-label.js';
+import { ICONS } from '../icons.js';
 import {
   IMAGE_ACCEPT, findEntry, usesAsset, snapToLayers, pickPattern, loadImages,
   importImageFile, openEditor, drawEntry, mineEntries, editableEntry,
@@ -74,7 +76,8 @@ const section = {
       slotCards[s] = { btn, canvas, name, drawn: '' };
       return btn;
     };
-    const swap = h('button', { type: 'button', class: 'icon-btn swap-btn', 'aria-label': 'Swap A and B', title: 'Swap A and B', text: '⇅' });
+    const swap = labelIcon(h('button', { type: 'button', class: 'icon-btn swap-btn' }), 'Swap A and B');
+    swap.innerHTML = ICONS.swap;
     swap.addEventListener('click', () => {
       if (!store.state.design.form.detail.b) return;
       store.apply('Swap A and B', (d) => {
@@ -118,15 +121,15 @@ const section = {
     let mineTiles = [];
     let mineKey = null;
     const fileInput = h('input', { type: 'file', accept: IMAGE_ACCEPT, class: 'visually-hidden image-file', tabIndex: -1, 'aria-hidden': 'true' });
-    const imageBtn = h('button', { type: 'button', class: 'swatch swatch-action', title: 'Use an image as a swatch', 'aria-label': 'Add an image as a swatch' }, [
-      h('span', { class: 'swatch-add', 'aria-hidden': 'true', text: '+' }),
-      h('span', { class: 'swatch-name', text: 'Image' }),
-    ]);
-    const editorTile = (glyph, name, label, mode) => {
-      const btn = h('button', { type: 'button', class: 'swatch swatch-action', title: label, 'aria-label': label }, [
-        h('span', { class: 'swatch-add', 'aria-hidden': 'true', text: glyph }),
-        h('span', { class: 'swatch-name', text: name }),
-      ]);
+    // Tiles that do something: an icon where the swatch would be, and a name.
+    const actionTile = (icon, name, label) => {
+      const mark = h('span', { class: 'swatch-add', 'aria-hidden': 'true' });
+      mark.innerHTML = ICONS[icon];
+      return labelIcon(h('button', { type: 'button', class: 'swatch swatch-action' }, [mark, h('span', { class: 'swatch-name', text: name })]), label);
+    };
+    const imageBtn = actionTile('image', 'Image', 'Use an image as a swatch');
+    const editorTile = (icon, name, label, mode) => {
+      const btn = actionTile(icon, name, label);
       btn.addEventListener('click', () => {
         showImageMsg('');
         openEditor(ctx, { kind: 'detail', slot: slotOf() }, { mode, saved, returnFocus: btn }).catch((err) => {
@@ -136,8 +139,8 @@ const section = {
       });
       return btn;
     };
-    const makeBtn = editorTile('+', 'Make', 'Make your own swatch', 'make');
-    const editBtn = editorTile('✎', 'Edit', 'Edit the swatch', 'edit');
+    const makeBtn = editorTile('make', 'Make', 'Make your own swatch', 'make');
+    const editBtn = editorTile('edit', 'Edit', 'Edit the swatch', 'edit');
     const imageMsg = h('p', { class: 'panel-note image-msg', role: 'alert', hidden: true });
 
     // Deleting one of My patterns, after a confirmation under the grid. The
@@ -234,9 +237,9 @@ const section = {
           btn.addEventListener('click', () => pick(e.id));
           // Saved in this browser: a corner button deletes it (after a confirmation).
           if (!savedIds.has(e.id)) return { id: e.id, el: btn, btn, canvas, drawn: '' };
-          const del = h('button', { type: 'button', class: 'swatch-del', title: 'Delete from My patterns', 'aria-label': `Delete ${e.name} from My patterns` }, [
+          const del = labelIcon(h('button', { type: 'button', class: 'swatch-del' }, [
             h('span', { class: 'swatch-del-dot', 'aria-hidden': 'true', text: '×' }),
-          ]);
+          ]), `Delete ${e.name} from My patterns`);
           del.addEventListener('click', () => askDelete(e, del));
           return { id: e.id, el: h('div', { class: 'swatch-item' }, [btn, del]), btn, canvas, drawn: '' };
         });
@@ -368,11 +371,9 @@ const section = {
       const editable = editableEntry(d, library, { kind: 'detail', slot: s }, saved);
       editBtn.hidden = !editable;
       if (editable) {
-        const label = editable.own || String(editable.id).startsWith('user:') ? `Edit ${editable.name}` : `Edit a copy of ${editable.name}`;
-        editBtn.setAttribute('aria-label', label);
-        editBtn.title = label;
+        labelIcon(editBtn, editable.own || String(editable.id).startsWith('user:') ? `Edit ${editable.name}` : `Edit a copy of ${editable.name}`);
       }
-      makeBtn.setAttribute('aria-label', `Make your own swatch for ${s.toUpperCase()}`);
+      labelIcon(makeBtn, `Make your own swatch for ${s.toUpperCase()}`);
 
       const isPlain = slot && slot.pattern === PLAIN.id;
       const isImage = !!slot && d.assets?.[slot.pattern]?.kind === 'image';

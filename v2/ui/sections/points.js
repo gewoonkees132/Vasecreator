@@ -10,6 +10,7 @@
 import { numberField, h } from '../controls.js';
 import { moveKnot, insertKnot, deleteKnot, MAX_KNOTS, MIN_KNOTS } from '../../core/design.js';
 import { limit } from './shape.js';
+import { labelIcon } from '../press-label.js';
 
 const SHARP_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 2.5 13.5 8 8 13.5 2.5 8Z" fill="currentColor"/></svg>';
 const ROUND_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
@@ -78,7 +79,8 @@ const section = {
           onInput: (v) => store.change('Point corner', (d) => { d.form.profile.knots[i].corner = v; }),
           onCommit: () => store.commit(),
         });
-        const sharp = h('button', { type: 'button', class: 'icon-btn sharp-btn', 'aria-label': `Point ${i + 1} sharp` });
+        // A toggle: the name stays, aria-pressed and the tooltip carry the state.
+        const sharp = labelIcon(h('button', { type: 'button', class: 'icon-btn sharp-btn' }), `Point ${i + 1} sharp`);
         sharp.addEventListener('click', (e) => {
           e.stopPropagation();
           const on = !store.state.design.form.profile.knots[i]?.sharp;
@@ -87,7 +89,7 @@ const section = {
             else delete d.form.profile.knots[i].sharp;
           });
         });
-        const del = h('button', { type: 'button', class: 'icon-btn del-btn', text: '×', 'aria-label': `Remove point ${i + 1}`, title: 'Remove point' });
+        const del = labelIcon(h('button', { type: 'button', class: 'icon-btn del-btn', text: '×' }), `Remove point ${i + 1}`);
         del.disabled = i === 0 || i === knots.length - 1 || knots.length <= MIN_KNOTS;
         del.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -160,7 +162,7 @@ const section = {
         if (row.sharp.getAttribute('aria-pressed') !== String(sharp)) {
           row.sharp.setAttribute('aria-pressed', String(sharp));
           row.sharp.innerHTML = sharp ? SHARP_ICON : ROUND_ICON;
-          row.sharp.title = sharp ? 'Sharp: a corner in the curve. Click to make it smooth' : 'Smooth. Click to make a corner here';
+          labelIcon(row.sharp, `Point ${i + 1} sharp`, sharp ? 'Sharp: a corner in the curve. Click to make it smooth' : 'Smooth. Click to make a corner here');
         }
         row.del.disabled = isEnd || knots.length <= MIN_KNOTS;
         const selected = state.view.selectedKnot === i;

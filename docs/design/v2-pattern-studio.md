@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Owner decisions D35–D57. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`) and 4 (the warnings card rules) are built on `t3/pattern-studio` (local, not pushed); slices 5–6 are next (§11, notes in §11.1–§11.4).
+- **Status:** Owner decisions D35–D57. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`) and 5 (the *Next* and icon sweep) are built on `t3/pattern-studio` (pushed up to slice 4, `afd281d`, for the owner's review; slice 5 is local); slice 6 is next (§11, notes in §11.1–§11.5).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -352,6 +352,8 @@ These go on the branch `t3/pattern-studio`, cut from `t3/guided-journey`. Each s
    - Build: overhang limit, bead support and fineness, editable in the card; the overhang limit removed from *Layers & seam* and the dock.
    - **Built** (§11.4).
 5. **The *Next* and icon-first sweep** (§8).
+   - Accept when (the builder's reading; §8 lists none): no *Next* is left on desktop or on a phone, and the step emblems still move between steps by mouse, touch and keyboard; every single-task button the sweep touches is an icon with a tooltip, a long-press label and an accessible name; the room *Next* held is used; nothing covers the pot at 1280 × 800 or 360 × 660.
+   - **Built** (§11.5).
 6. **Saved patterns** (§3.9, D48).
    - Build: *Save pattern* for Pattern and Detailed morph; apply to any design, presets included; the design keeps its own copy.
 
@@ -540,7 +542,61 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
     - On Knit, − on *Bead support* down to 10 % brings up the warning in the Rules group, the pot above it amber.
 - **Left for later:**
   - Esc closes the card only when the focus is inside it, as before.
-  - The card's × is as it was. The *Rules* disclosure keeps its text, because it shows and hides a group rather than doing one task (D49). Slice 5's icon sweep can revisit both.
+  - The card's × is as it was. The *Rules* disclosure keeps its text, because it shows and hides a group rather than doing one task (D49). Slice 5's icon sweep can revisit both. (Slice 5: the × gained its tooltip and long-press label; *Rules* keeps its text, §11.5.)
+
+### 11.5 Slice 5 as built (notes for the next slice)
+
+- **No *Next* (D49).** The three are gone: the sheet's header (`step-next--head`), the desktop foot (`step-next--foot`, with the `.step-foot` that held it) and the dock's. The step emblems move between steps: a click or a tap, the arrow keys, Home and End on the step row, and Enter or Space on an emblem moves the focus into its step. `mountDock` takes only `openSheet` now. `test/icons.test.js` fails if a *Next* comes back.
+- **Where *Next*'s room went.**
+  - **Desktop:** the parts scroll down to the card's foot. At 1280 × 800 that is about 70 px more of the step's controls in sight.
+  - **The dock:** the tool row runs the whole width and fades out at the screen's edge. At 360 px it is 360 px wide instead of 268 px. Shape and Pattern (with a Pattern) now show three chips whole instead of two, and Layers & seam four of five instead of three.
+  - **The Morph group row:** the back button stays at the left, and the *Large · Detailed* toggle and the Detailed morph's tools have the rest of the row. Before, *Next* hid while the row was open; now there is nothing to hide.
+  - **The sheet's header:** ⌄ and the step's name. In Print, only the name.
+- **Icon-first.** A button that does one clear task is an icon, and its text is its accessible name, its tooltip on desktop and the label a long press shows on a phone.
+  - **`ui/press-label.js`:**
+    - `labelIcon(btn, label, tip?)` sets all three; the tooltip adds the shortcut where there is one, such as "Undo (Ctrl+Z)".
+    - `attachPressLabel` now marks the button `data-press-label`. Inside an open dialog (Designs) the label goes into the dialog, so it shows over it.
+    - The label sits above the button, or below it when there's no room above (the top bar), so the finger never hides it. The placement is the pure `labelPlacement`, which is tested.
+  - **`ui/icons.js`:** the icons more than one module uses (save, swap, image, make, edit).
+  - **The 2D editor** was icon-first already (§11.3) and is unchanged.
+
+  | Where | Now an icon, or newly named three ways | Keeps its text |
+  |---|---|---|
+  | Top bar | undo, redo (named "Undo in the editor" while the editor is open), **Save design** (a floppy disk, new), the logo's menu | *Designs*: it opens a screen, and the first-visit tip names it |
+  | Chips' cards | × on the warnings and size cards. The warnings chip, which shows only ✓ or a count on a phone, has a long-press label too | the *Rules* disclosure, the warnings, the fields |
+  | Sheet and dock | ⌄, the grabber, the dock's back, the depth lock (sheet and dock) | part tabs, the dock's tool chips, *Large · Detailed*, *mm · pts*, option buttons, *Edit as numbers* and the other sheet buttons |
+  | Shape | swap A ⇅ B (now a drawn icon), a point's sharp toggle and ×, a saved swatch's × | *+ Add point*, *More shape options*, the slot cards |
+  | Swatch grids and carousels | *Image*, *Make* and *Edit* get their own icons (a picture, a grid with a plus, a pencil) instead of + + ✎, and keep their names under them like the swatches beside them. Morph's *+ Image* tile now looks like the Detailed morph's | the swatches |
+  | Print | | *Edit printer*, *Reset to defaults*, *Download G-code*, *Download design file*, *Toolpath (.dxf)*, *Solid (.stl)* |
+  | Designs, the tip, history | ×, the saved tiles' ⋯, the tip's × on a phone, the history list's × | *Open design file…*, *Got it*, *Show designs*, *+ Save design*, the confirmations |
+
+- **Builder's calls made:**
+  - *Designs* keeps its word. It opens a screen rather than doing one task, and the first-visit tip points at it by name. *Save design* is the top bar's save, as §8's example list has it.
+  - *+ Add point* keeps its text. A + alone under the points table could be read several ways, and the words say what it adds.
+  - The *Image*, *Make* and *Edit* tiles keep their names. Every tile in those rows is named, and an unnamed tile would read as a swatch; the new icons tell the two + tiles apart.
+  - A toggle (the depth lock, a point's sharp) keeps one name, and its pressed state and its tooltip say whether it is on. The dock's lock keeps its two names, as before.
+  - The − / + steppers repeat while held, so they get no long-press label. Neither does the pot's *Remove* pop-up, which a long press itself opens.
+  - The sheet keeps its header row of ⌄ and the step's name. Merging it into the part row would give the controls about 44 px more, but it changes the sheet's look, so it is left for the owner (below).
+- **Tests:** `test/icons.test.js` covers where the label goes (above, below with no room, inside the window), that the shared icons are decorative, and that no *Next* is left in `ui/`, `styles/`, `index.html` or `main.js`. That makes 349 in all.
+- **Browser check:** as in §11.1, on port 8041, with scratch scripts. A button audit lists every visible button. Each icon-only one must have an `aria-label`, a `title` and `data-press-label`. The − / + steppers are left out.
+  - **Desktop, 1280 × 800:**
+    - No *Next*, and no button named *Next*, in any step, the cards, Designs or the editor.
+    - A mouse click on each emblem changes the step. ArrowRight and ArrowLeft move the step with the focus on the row, End and Home go to Print and Shape, and Enter moves the focus into the step's page.
+    - The audit finds no icon button without its three names: 12 icons in Shape with *More shape options* open, 31 in the editor.
+    - *Save design* asks for a name, and Esc closes the prompt.
+    - The pot (x 576–889, y 234–704) is clear of every panel, chip and card in all five steps, with the warnings or size card open, and with the editor open (the pot moves to x 697–1009).
+  - **Phone, 360 × 660 with touch:**
+    - A tap on each emblem changes the step.
+    - The tool row spans 0–360 px in every step. The Morph group row has its back button at the left and the toggle and tools from 60 px to the edge.
+    - A long press on undo shows "Undo" below the button (y 66–97 under a button at 14–58) and doesn't undo.
+    - A long press on the group's back shows "Back to the Shape tools" above it, and the group stays open. The same goes for ⌄ ("Hide all settings") and the warnings card's × ("Close warnings").
+    - The sheet's header holds ⌄ and "Shape"; in Print only "Print".
+    - *Make* and *Edit* in the Pattern carousel carry their icons and long-press labels. *Make* opens the editor, which is unchanged.
+    - The pot stays clear of the dock, the sheet, the card, the history list and the editor.
+    - No console errors on either size.
+- **Left for later:**
+  - **For the owner:** should the phone sheet drop its header row (⌄ and the step's name) and put ⌄ at the start of the part row? The step bar right below already shows the step. It would give each part's controls about 44 px more on a 660 px phone.
+  - **Pre-existing, seen in the check:** the desktop card (`#panel`) can be scrolled by a script's `scrollIntoView`, which hides the step row. A hidden file input, placed absolutely, overflows the card. Real focus and the wheel don't scroll it, so it was left alone.
 
 ---
 
@@ -554,7 +610,9 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 
 ## 13. Open for the owner, and left to the builder
 
-**Settled by the owner (2026-11-25):** presets keep their relief (D52), coarse grids keep *Sharp, Soft, Round* (D53), and the A/B blend gains *Diagonal* (D54). After slice 3: no *Cancel* in the editor (D55), cells that stay easy to hit (D56), and pinch to zoom with a clickable cap (D57). After slice 4: the warnings and size cards keep opening over the history column on desktop, for now (§11.4). Nothing is open for the owner now.
+**Settled by the owner (2026-11-25):** presets keep their relief (D52), coarse grids keep *Sharp, Soft, Round* (D53), and the A/B blend gains *Diagonal* (D54). After slice 3: no *Cancel* in the editor (D55), cells that stay easy to hit (D56), and pinch to zoom with a clickable cap (D57). After slice 4: the warnings and size cards keep opening over the history column on desktop, for now (§11.4).
+
+**Open for the owner after slice 5:** whether the phone sheet's header row (⌄ and the step's name) folds into the part row, for about 44 px more room for the controls (§11.5).
 
 **Left to the builder:**
 - the exact *Diagonal* fade formula (slice 1: 1 − a·sin²(π(t + u)))
@@ -569,6 +627,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 - how fineness becomes settable (slice 4: two rules under the one warning, the tightest curve and layers per bump, §11.4)
 - how the rules are reached with no warning (slice 4: a *Rules* group at the foot of the card, §11.4)
 - the warning text for bead support (slice 1: "Bead not supported" plus the heights)
+- which buttons become icons and which keep their text, and what fills *Next*'s room (slice 5: §11.5)
 
 ---
 

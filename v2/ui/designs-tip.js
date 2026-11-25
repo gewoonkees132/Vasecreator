@@ -13,6 +13,8 @@
 // and then stays away in this browser. It never comes back on its own. It
 // hides in Print.
 
+import { labelIcon } from './press-label.js';
+
 const LS_TIP = 'vc2.designsTip';
 const HINT_CLASS = 'designs-hinted';
 
@@ -51,10 +53,10 @@ export function mountDesignsTip(host, ctx) {
       el('button', { type: 'button', class: 'btn', text: 'Show designs', onclick: () => ctx.designs?.open() }),
       el('button', { type: 'button', class: 'btn btn-ghost', text: 'Got it', onclick: () => done({ focus: true }) }),
     ]),
-    el('button', {
+    labelIcon(el('button', {
       type: 'button', class: 'icon-close designs-tip-close', 'data-phone-only': true,
-      'aria-label': 'Close the tip', text: '×', onclick: () => done({ focus: true }),
-    }),
+      text: '×', onclick: () => done({ focus: true }),
+    }), 'Close the tip'),
   ]);
   host.prepend(tip);
   const root = document.documentElement;

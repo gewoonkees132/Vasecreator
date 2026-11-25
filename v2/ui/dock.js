@@ -3,15 +3,20 @@
 //   the grabber (tap or swipe up: all settings, ui/steps.js's sheet),
 //   the adjuster, one control for the chosen tool: the ruler dial
 //     (ui/dial.js), option buttons, a swatch carousel or a short hint,
-//   the tool row (ui/dock-tools.js), chips with their values, and Next.
+//   the tool row (ui/dock-tools.js), chips with their values, the whole
+//     width of the screen: there is no Next, the step emblems below move
+//     between steps (pattern studio D49).
 // A group tool (Shape's Morph, D36) opens a row of its own: a back button
 // that stays put at the left, then the group's toggle (Large · Detailed) and
-// its tools, which scroll; Next makes room for them meanwhile.
+// its tools, which scroll.
 // The adjuster keeps one height whatever the tool, so the pot never jumps.
-// Every edit goes through the store like the sheet's controls.
+// Every edit goes through the store like the sheet's controls. Buttons that
+// do one task are icons, named by ui/press-label.js labelIcon.
 
 import { h } from './controls.js';
 import { createDial } from './dial.js';
+import { labelIcon } from './press-label.js';
+import { ICONS } from './icons.js';
 import { toolsFor, currentTool, toolName, slotInfo, drawingInfo, openGroup } from './dock-tools.js';
 import { depthLocked } from './sections/shape.js';
 import { PLAIN } from '../core/patterns.js';
@@ -34,8 +39,8 @@ const BACK_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="
 /**
  * @param {HTMLElement} el  the dock element (ui/steps.js puts it in the panel)
  * @param {object} ctx  main.js's ctx
- * @param {{ openSheet(part?: string): void, next(): void, nextName(stepId: string): string | null }} frame
- * @returns {{ tipSlot: HTMLElement, setActive(on: boolean): void, destroy(): void }}
+ * @param {{ openSheet(part?: string, opts?: { focus?: boolean }): void }} frame
+ * @returns {{ tipSlot: HTMLElement, grabber: HTMLElement, setActive(on: boolean): void, destroy(): void }}
  */
 export function mountDock(el, ctx, frame) {
   const { store, library } = ctx;
@@ -47,23 +52,19 @@ export function mountDock(el, ctx, frame) {
   // ---------- Frame ----------
 
   const tipSlot = h('div', { class: 'dock-tip' });
-  const grabber = h('button', { type: 'button', class: 'dock-grabber', 'aria-label': 'Show all settings', 'aria-expanded': 'false', title: 'All settings' }, [
+  const grabber = labelIcon(h('button', { type: 'button', class: 'dock-grabber', 'aria-expanded': 'false' }, [
     h('span', { class: 'grabber-pill', 'aria-hidden': 'true' }),
-  ]);
+  ]), 'Show all settings');
   const adjust = h('div', { class: 'dock-adjust', role: 'tabpanel', id: 'dock-adjust' });
   // The row scrolls sideways: an open group's toggle, then the chips (the tabs).
   const lead = h('div', { class: 'dock-lead', hidden: true });
   const back = h('button', { type: 'button', class: 'dock-back', hidden: true });
   const tabs = h('div', { class: 'dock-tablist', role: 'tablist' });
   const toolRow = h('div', { class: 'dock-tools' }, [lead, tabs]);
-  const nextLabel = h('span', { text: 'Next' });
-  const next = h('button', { type: 'button', class: 'btn btn-primary dock-next' }, [nextLabel, h('span', { 'aria-hidden': 'true', text: ' ›' })]);
   const msg = h('div', { class: 'dock-msg', role: 'status', 'aria-live': 'polite', hidden: true });
   el.classList.add('dock');
   el.setAttribute('aria-label', 'Tools');
-  el.replaceChildren(tipSlot, grabber, adjust, h('div', { class: 'dock-row' }, [back, toolRow, next]), msg);
-
-  next.addEventListener('click', () => frame.next());
+  el.replaceChildren(tipSlot, grabber, adjust, h('div', { class: 'dock-row' }, [back, toolRow]), msg);
 
   // Tap the grabber, or swipe it up, for all settings.
   let swipe = null;
@@ -121,8 +122,7 @@ export function mountDock(el, ctx, frame) {
     const locked = depthLocked(state);
     if (lock.getAttribute('aria-pressed') === String(locked)) return;
     lock.setAttribute('aria-pressed', String(locked));
-    lock.setAttribute('aria-label', locked ? 'Depth follows width. Unlock it' : 'Lock depth to width');
-    lock.title = lock.getAttribute('aria-label');
+    labelIcon(lock, locked ? 'Depth follows width. Unlock it' : 'Lock depth to width');
     lock.innerHTML = locked ? LOCK_ICON : UNLOCK_ICON;
   }
 
@@ -180,15 +180,18 @@ export function mountDock(el, ctx, frame) {
     none.canvas = null;
     return none;
   };
-  const actionTile = (cls, glyph, name, label, onClick) => {
-    const btn = h('button', { type: 'button', class: `dock-swatch dock-swatch--action ${cls}`, 'aria-label': label, title: label }, [
-      h('span', { class: 'dock-swatch-add', 'aria-hidden': 'true', text: glyph }),
-      h('span', { class: 'dock-swatch-name', text: name }),
-    ]);
+  // A tile that does something rather than pick a swatch: an icon where the
+  // swatch would be, and a short name under it like every tile in the row.
+  const actionTile = (cls, icon, name, label, onClick) => {
+    const mark = h('span', { class: 'dock-swatch-add', 'aria-hidden': 'true' });
+    mark.innerHTML = ICONS[icon];
+    const btn = labelIcon(h('button', { type: 'button', class: `dock-swatch dock-swatch--action ${cls}` }, [
+      mark, h('span', { class: 'dock-swatch-name', text: name }),
+    ]), label);
     btn.addEventListener('click', onClick);
     return btn;
   };
-  const imageTile = actionTile('dock-swatch--image', '+', 'Image', 'Use an image as a swatch', () => {
+  const imageTile = actionTile('dock-swatch--image', 'image', 'Image', 'Use an image as a swatch', () => {
     loadImages().catch(() => {}); // warm up while the picker is open
     fileInput.value = '';
     fileInput.click();
@@ -200,18 +203,16 @@ export function mountDock(el, ctx, frame) {
       say('The editor didn’t load. Reload the page to try again.');
     });
   };
-  const makeTile = actionTile('dock-swatch--make', '+', 'Make', 'Make your own swatch', () => edit({ kind: 'detail', slot: carouselSlot }, 'make', makeTile));
-  const editTile = actionTile('dock-swatch--edit', '✎', 'Edit', 'Edit the swatch', () => edit({ kind: 'detail', slot: carouselSlot }, 'edit', editTile));
-  const makeDrawingTile = actionTile('dock-swatch--make', '+', 'Make', 'Make your own pattern', () => edit({ kind: 'pattern' }, 'make', makeDrawingTile));
-  const editDrawingTile = actionTile('dock-swatch--edit', '✎', 'Edit', 'Edit the pattern', () => edit({ kind: 'pattern' }, 'edit', editDrawingTile));
+  const makeTile = actionTile('dock-swatch--make', 'make', 'Make', 'Make your own swatch', () => edit({ kind: 'detail', slot: carouselSlot }, 'make', makeTile));
+  const editTile = actionTile('dock-swatch--edit', 'edit', 'Edit', 'Edit the swatch', () => edit({ kind: 'detail', slot: carouselSlot }, 'edit', editTile));
+  const makeDrawingTile = actionTile('dock-swatch--make', 'make', 'Make', 'Make your own pattern', () => edit({ kind: 'pattern' }, 'make', makeDrawingTile));
+  const editDrawingTile = actionTile('dock-swatch--edit', 'edit', 'Edit', 'Edit the pattern', () => edit({ kind: 'pattern' }, 'edit', editDrawingTile));
   /** Shows an Edit tile only when the target holds a drawing, named for what it edits. */
   function syncEditTile(tileEl, target, d) {
     const e = editableEntry(d, library, target, saved);
     tileEl.hidden = !e;
     if (!e) return;
-    const label = e.own || String(e.id).startsWith('user:') ? `Edit ${e.name}` : `Edit a copy of ${e.name}`;
-    tileEl.setAttribute('aria-label', label);
-    tileEl.title = label;
+    labelIcon(tileEl, e.own || String(e.id).startsWith('user:') ? `Edit ${e.name}` : `Edit a copy of ${e.name}`);
   }
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files?.[0];
@@ -331,8 +332,7 @@ export function mountDock(el, ctx, frame) {
     lead.hidden = back.hidden = !g;
     if (!g) return;
     const t = g.tool;
-    back.setAttribute('aria-label', `Back to the ${t.back} tools`);
-    back.title = back.getAttribute('aria-label');
+    labelIcon(back, `Back to the ${t.back} tools`);
     if (modesKey !== t.id) {
       modesKey = t.id;
       modes.setAttribute('aria-label', t.modesLabel || toolName(t, state));
@@ -436,10 +436,6 @@ export function mountDock(el, ctx, frame) {
         c.btn.setAttribute('aria-label', `${name}: ${value}`);
       }
     }
-
-    const nextName = frame.nextName(step);
-    next.hidden = !nextName || !!g;
-    if (nextName) next.setAttribute('aria-label', `Next: ${nextName}`);
 
     // The adjuster: switch only when the tool (or its slot) changed.
     const fresh = cur !== tool || step !== shownStep || (cur?.kind === 'patterns' && cur.slot !== carouselSlot);

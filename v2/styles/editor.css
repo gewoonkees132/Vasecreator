@@ -110,21 +110,6 @@ html.is-editing #panel { display: none !important; }
 .ed-tabs { display: none; }
 .ed-status { flex: none; min-height: 28px; padding: 6px var(--space-4); font-size: 12px; color: var(--c-text-2); border-top: 1px solid var(--c-border); }
 
-/* A long press on a phone shows an icon button's name (ui/press-label.js, D49). */
-.press-label {
-  position: fixed;
-  z-index: 200;
-  padding: 6px 10px;
-  border-radius: 8px;
-  background: var(--c-primary-dark);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 500;
-  white-space: nowrap;
-  pointer-events: none;
-  box-shadow: var(--shadow-3);
-}
-
 @media (pointer: coarse) {
   .ed-btn { width: 44px; height: 44px; }
   .ed-group .seg-btn { min-height: 44px; }

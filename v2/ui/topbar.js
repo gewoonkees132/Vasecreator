@@ -4,6 +4,11 @@
 // the bar keeps undo and redo. While the 2D editor is open, undo and redo
 // step through the editor's own history (ctx.editorHistory, D46), so its
 // session stays one step of the design's history.
+// Undo, redo and Save design each do one task, so they are icons (D49), named
+// by labelIcon; Designs opens a screen and keeps its word.
+
+import { labelIcon } from './press-label.js';
+import { ICONS } from './icons.js';
 
 const UNDO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 const REDO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>';
@@ -38,22 +43,20 @@ export function mountTopbar(header, ctx) {
 
   const undo = el('button', {
     type: 'button', class: 'btn btn-icon', html: UNDO_ICON,
-    'aria-label': 'Undo', title: `Undo (${isMac ? '⌘' : 'Ctrl+'}Z)`,
     onclick: () => (ctx.editorHistory ? ctx.editorHistory.undo() : store.undo()),
   });
   const redo = el('button', {
     type: 'button', class: 'btn btn-icon', html: REDO_ICON,
-    'aria-label': 'Redo', title: `Redo (${isMac ? '⇧⌘Z' : 'Ctrl+Y'})`,
     onclick: () => (ctx.editorHistory ? ctx.editorHistory.redo() : store.redo()),
   });
   const designsBtn = el('button', {
     type: 'button', class: 'btn designs-btn', text: 'Designs', 'data-desk-only': true,
     onclick: () => ctx.designs.open(),
   });
-  const saveBtn = el('button', {
-    type: 'button', class: 'btn', text: 'Save design', 'data-desk-only': true,
+  const saveBtn = labelIcon(el('button', {
+    type: 'button', class: 'btn btn-icon', html: ICONS.save, 'data-desk-only': true,
     onclick: () => ctx.designs.promptSave(),
-  });
+  }), 'Save design');
   actions.replaceChildren(undo, redo, el('span', { class: 'sep', 'aria-hidden': 'true' }), designsBtn, saveBtn);
 
   // Logo menu: Designs and Save design (the only way to them on a phone), and
@@ -65,6 +68,7 @@ export function mountTopbar(header, ctx) {
     html: 'Vase Creator · Created with ♥ by <a href="https://gewoonkees132.github.io/gewoonkees132/" target="_blank" rel="noopener noreferrer">Kees Leemeijer</a>',
   });
   menu.replaceChildren(menuDesigns, menuSave, credit);
+  labelIcon(logo, logo.getAttribute('aria-label') || 'Menu');
 
   function openMenu() {
     menu.hidden = false;
@@ -104,8 +108,8 @@ export function mountTopbar(header, ctx) {
     undo.disabled = printing || !(ed ? ed.canUndo() : store.canUndo());
     redo.disabled = printing || !(ed ? ed.canRedo() : store.canRedo());
     const where = ed ? ' in the editor' : '';
-    undo.title = `Undo${where} (${isMac ? '⌘' : 'Ctrl+'}Z)`;
-    redo.title = `Redo${where} (${isMac ? '⇧⌘Z' : 'Ctrl+Y'})`;
+    labelIcon(undo, `Undo${where}`, `Undo${where} (${isMac ? '⌘' : 'Ctrl+'}Z)`);
+    labelIcon(redo, `Redo${where}`, `Redo${where} (${isMac ? '⇧⌘Z' : 'Ctrl+Y'})`);
     saveBtn.disabled = printing;
     menuSave.disabled = printing;
   }
