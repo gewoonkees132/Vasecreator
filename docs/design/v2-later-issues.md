@@ -41,7 +41,7 @@ Users want to send a design to someone without a file. D0 and research Q8 rule o
 - `ui/topbar.js` (desktop) and the logo menu (phone, C11) for the button.
 
 ### Acceptance criteria
-- [ ] node:test: encode → decode gives a design equal to the original (`designsEqual`) for the three presets.
+- [ ] node:test: encode → decode gives a design equal to the original (`designsEqual`) for every preset.
 - [ ] A link from a newer design version shows an error. It never opens the default pot.
 - [ ] A broken or truncated link shows a plain message, and the current design stays.
 - [ ] The link length for each preset is measured and noted in the PR.
@@ -586,7 +586,7 @@ Design D3, D22, C11, §15; research §10.3, D3; `ARCHITECTURE.md` (Status, Rende
 D4 deferred physical verification, so the generic gantry profile is labelled "draft, not tested on a printer". Before it can drop that label, its output has to run on real clay printers.
 
 ### Scope
-Print the cylinder and the three presets (the golden files) and check each process move:
+Print the cylinder and the presets (the golden files; at least the first three) and check each process move:
 - Prime: the stationary prime at the park point, its volume, and that the blob isn't printed into.
 - Skirt: offset and loops.
 - Seam ramp: the climb over `rampLengthMm`, and the first 4 wall layers above the base (`RAMP_IN_LAYERS`).

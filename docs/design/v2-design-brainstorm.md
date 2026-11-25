@@ -246,7 +246,7 @@ The tools were already settled: three.js on WebGL 2 (D3), plain JavaScript with 
 
 - **When it opens:** from the *Designs* button (on a phone, from the logo menu). It no longer opens by itself (issue #2, C20): the app opens straight into the designer, on the first preset for a first visit and on the last design after that. A one-time tip at the top of the controls points at *Designs*, and the button gets a ring (on a phone, the logo). The tip goes for good once Designs has been opened or the tip is closed. On the very first visit, *Last design* is missing and the presets lead.
 - **Tiles are rectangular,** with a white bead thumbnail of the pot and its name (D13). One click loads the design and closes the screen.
-- **Three built-in presets,** suggested on 2026-11-23 and confirmed by the owner on 2026-11-24: **Classic vase** (flutes fading into a smooth neck), **Twisted column** (pleats with a 60° twist; a rounded square since issue #1, D34) and **Square planter** (basket weave on a square footprint, with a drainage hole). They are in `v2/library/presets.json` (§16).
+- **Eight built-in presets,** in `v2/library/presets.json` (§16). The first three were suggested on 2026-11-23 and confirmed by the owner on 2026-11-24: **Classic vase** (flutes fading into a smooth neck), **Twisted column** (pleats with a 60° twist; a rounded square since issue #1, D34) and **Square planter** (basket weave on a square footprint, with a drainage hole). Five more followed on 2026-11-25 and wait for the owner's look ([`v2-presets.md`](v2-presets.md)): **Bud vase** (a small bulb under a long neck with a band of rings), **Petal bowl** (a wide fluted bowl whose rim opens into six petals, a Morph), **Double gourd** (two bulbs at a crisp waist, a smooth band winding through flutes), **Faceted flask** (a flat oval in ten facets with a sharp shoulder) and **Drape vase** (soft folds that drift round as it rises, a Morph). Every preset warns about nothing on the generic gantry, and every starter Pattern passes on it.
 - **Save design** asks for a name (default "Design 1", "Design 2"…) and adds a tile under *Saved*. Saving an already-saved design updates its tile. A *Save as new* option keeps both.
 - **Tile menu (⋯)** on saved tiles: rename, duplicate, delete (with confirmation), and *Download design file*. The Designs screen also has *Open design file*, which adds a tile from a `.json` file. Design files are how designs move between devices and how students hand work in.
 - **Storage.** Saved designs and their thumbnails live in the browser (IndexedDB, with `navigator.storage.persist()`). Because browsers may clear storage, the Designs screen reminds users once to download important designs (research §8.4).
@@ -620,13 +620,13 @@ Each line is meant to become one issue. Its title is in bold, followed by its sc
 | Q7 | Default layer change | **Planar with a seam ramp** (D10). No spiral mode. | No, decided |
 | Q8 | Any server component? | **None.** Everything is static and local. Share links later via the URL fragment. | No |
 | Q9 | Mesh import | **Out.** Listed in §15.4. | No |
-| Q10 | Pattern library | **12 in-house generator recipes,** so there are no third-party licences. Set and three presets in `v2/library/` (§9.2, §8.3). | No, decided: the owner confirmed the suggested 12 and the three presets on 2026-11-24. |
+| Q10 | Pattern library | **12 in-house generator recipes,** so there are no third-party licences. Set and presets in `v2/library/` (§9.2, §8.3). | No, decided: the owner confirmed the suggested 12 and the first three presets on 2026-11-24. Five more presets (2026-11-25, [`v2-presets.md`](v2-presets.md)) wait for the owner's look. |
 | Q11 | First printer profiles | **One generic gantry clay profile** (D9). Named drafts later. | No, decided |
 | Q12 | When to adopt WebGPURenderer | **Keep the research's trigger.** WebGL 2 stays the guaranteed path. | No |
 | Q13 | Shrinkage compensation | **Later** (§15.4). | No |
 | Q14 | Multi-copy layout | **Later** (§15.4). | No |
 
-Every open question is now decided. Q10 was the last; the owner confirmed it on 2026-11-24.
+Every open question is now decided. Q10 was the last; the owner confirmed it on 2026-11-24. The five presets added on 2026-11-25 still need the owner's look.
 
 ---
 

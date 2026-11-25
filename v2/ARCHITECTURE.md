@@ -19,7 +19,7 @@ Read these first: `docs/design/v2-design-brainstorm.md` (the approved design, ca
 Still open:
 - **Phone check (D3).** A phase only counts as done once it works on desktop and on a real mid-range Android phone in Chrome, within the research §10.3 budgets. The phone check hasn't been done yet, so neither phase counts as done.
 - **The swap (item 9, §14).** Built and verified on branch `t3/v2-swap`: v2 at the root with v1's SEO meta, v1 at `/v1/` with `noindex`. The owner chose to keep it separate until the phone check; until it is merged, v2 changes no v1 file.
-- **Patterns and presets (Q10).** Decided: the owner confirmed the 12 patterns in `library/patterns.json` and the 3 presets in `library/presets.json` on 2026-11-24.
+- **Patterns and presets (Q10).** Decided: the owner confirmed the 12 patterns in `library/patterns.json` and the first 3 presets in `library/presets.json` on 2026-11-24. Five more presets (Bud vase, Petal bowl, Double gourd, Faceted flask, Drape vase) were added on `t3/vase-presets` on 2026-11-25 and wait for the owner's look; the audit and the reasons for their numbers are in [`docs/design/v2-presets.md`](../docs/design/v2-presets.md). Every preset warns about nothing on the generic gantry and passes every starter Pattern (`test/presets.test.js`, `test/starters.test.js`).
 - **Printer profile (D4).** The generic gantry values are a draft that hasn't been tested on a printer. The app labels it that way.
 - **Deploy routine (§14).** Decided: deploys run automatically from `main` (owner, 2026-11-24). Merging into `main` publishes; the swap waits on branch `t3/v2-swap` by the owner's choice until a real Android phone check (D3).
 
@@ -332,7 +332,7 @@ body
 ## Testing and running
 
 - `cd v2 && npm test` runs `test/*.test.js` with `node:test` (Node 24, no dependencies). The suites cover `core/` and the store: `test/store.test.js` runs the store against the in-memory database, with two stores on one database standing for two tabs. The renderer and the UI are checked by hand in a browser.
-- **Golden G-code.** `test/golden/*.gcode` holds the output for a plain cylinder and the three presets. Any change to the output fails with the first line that differs. Read the diff, and if the change is intended, rewrite the files with `UPDATE_GOLDEN=1 npm test` (PowerShell: `$env:UPDATE_GOLDEN=1; npm test`). Commit them with the change. A missing golden file is written on the next run.
+- **Golden G-code.** `test/golden/*.gcode` holds the output for a plain cylinder and every preset, each file named after the preset's id (`preset:bud-vase@1` → `bud-vase.gcode`). Any change to the output fails with the first line that differs. Read the diff, and if the change is intended, rewrite the files with `UPDATE_GOLDEN=1 npm test` (PowerShell: `$env:UPDATE_GOLDEN=1; npm test`). Commit them with the change. A missing golden file is written on the next run.
 - **Determinism.** A test in `test/math.test.js` scans `core/*.js`, with comments stripped, for the banned `Math` functions and `**` (see Rules).
 - **Run the app.** From the repository root, run `node v2/tools/serve.mjs [port]` and open <http://localhost:8020/v2/>. The server serves the repository root without caching, so `/v2/` sits at the same path as on the live site. You need a server because module workers don't load from `file://`. The browser needs WebGL 2, plus network access for three.js and the Inter font.
 

@@ -1,25 +1,52 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { findPattern } from '../core/patterns.js';
 import { BLEND_SHAPES, detailWeights } from '../core/surface.js';
-import { DESIGN_VERSION } from '../core/design.js';
+import { DESIGN_VERSION, normaliseDesign } from '../core/design.js';
 import { createProfile } from '../core/profile.js';
+import { isMorphMap } from '../core/morph.js';
+import { computePreview, computePrint } from '../core/engine.js';
+import { normalisePrinter } from '../core/printer.js';
+import { shapeOnly } from '../ui/steps.js';
+import { library, presets } from './support/fixtures.js';
 import { measureWall, wallLimits } from './support/printability.js';
 
-const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
-const library = read('../library/patterns.json');
-const { presets } = read('../library/presets.json');
+const printer = normalisePrinter(null);
 
-test('there are three presets with distinct ids and names', () => {
-  assert.equal(presets.length, 3);
-  assert.equal(new Set(presets.map((p) => p.meta.id)).size, 3);
-  assert.equal(new Set(presets.map((p) => p.meta.name)).size, 3);
+// The three the owner confirmed on 2026-11-24 (design §8.3, Q10) come first, in
+// their order: the app opens on the first, and defaultDesign() is a copy of it.
+// The five after them were added on 2026-11-25 (docs/design/v2-presets.md).
+const NAMES = ['Classic vase', 'Twisted column', 'Square planter', 'Bud vase', 'Petal bowl', 'Double gourd', 'Faceted flask', 'Drape vase'];
+
+test('there are eight presets with distinct ids and names, the confirmed three first', () => {
+  assert.deepEqual(presets.map((p) => p.meta.name), NAMES);
+  assert.equal(new Set(presets.map((p) => p.meta.id)).size, NAMES.length);
 });
 
 for (const design of presets) {
   const { form, layers, base, finish } = design;
   const detail = form.detail;
+
+  test(`${design.meta.name} has a stable id, a plain one-line description, and is a shape`, () => {
+    const slug = design.meta.name.toLowerCase().replace(/ /g, '-');
+    assert.equal(design.meta.id, `preset:${slug}@1`);
+    const text = design.meta.description;
+    assert.ok(typeof text === 'string' && text.length >= 20 && text.length <= 120 && !text.includes('\n'), 'one line');
+    assert.ok(text.endsWith('.'));
+    assert.ok(!/clay|slicer|material|layer/i.test(text), 'plain design words (D7, D15)');
+    // Presets open without a Pattern (D52) and can't carry images or drawings of their own.
+    assert.equal(design.pattern ?? null, null);
+    assert.equal(design.assets, undefined);
+    if (form.morph) assert.ok(isMorphMap(form.morph.map), 'a built-in morph map');
+  });
+
+  test(`${design.meta.name} previews and prints on the generic gantry without a warning`, () => {
+    const shape = shapeOnly(normaliseDesign(design));
+    assert.deepEqual(computePreview(shape, { library, printer }).warnings, []);
+    const print = computePrint(shape, { library, printer });
+    assert.deepEqual(print.checks.map((c) => `${c.id} ${c.severity}`), ['bed ok']);
+    assert.equal(print.canExport, true);
+  });
 
   test(`${design.meta.name} is a well-formed design`, () => {
     assert.equal(design.schema, 'vasecreator/design');

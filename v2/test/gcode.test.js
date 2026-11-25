@@ -214,12 +214,13 @@ test('the profile hash is FNV-1a and ignores key order', () => {
 });
 
 // Golden files (research §8.5): a change to the output needs UPDATE_GOLDEN=1
-// and a look at the diff.
+// and a look at the diff. Every preset has one, named by its id
+// ('preset:classic-vase@1' → classic-vase.gcode), so between them they guard
+// the Morph, the Gentle and Angular curves, a sharp point, an oval and the
+// Middle and Diagonal blends as well as the first three's features.
 const goldens = [
   ['plain-cylinder', cylinder()],
-  ['classic-vase', presets[0]],
-  ['twisted-column', presets[1]],
-  ['square-planter', presets[2]],
+  ...presets.map((p) => [p.meta.id.replace(/^preset:|@\d+$/g, ''), p]),
 ];
 for (const [name, design] of goldens) {
   test(`golden: ${name}`, () => {

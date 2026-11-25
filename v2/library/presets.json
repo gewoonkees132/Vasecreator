@@ -118,6 +118,212 @@
       "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
       "base": { "layers": 4, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 14 } },
       "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+    },
+    {
+      "schema": "vasecreator/design",
+      "version": 3,
+      "units": "mm",
+      "meta": {
+        "id": "preset:bud-vase@1",
+        "name": "Bud vase",
+        "description": "A small round bulb under a long, slim neck, with a band of rings on the neck."
+      },
+      "form": {
+        "height": 210,
+        "profile": {
+          "interp": "catmullRomCentripetal",
+          "tension": 0.5,
+          "knots": [
+            { "z": 0, "r": 30 },
+            { "z": 40, "r": 44 },
+            { "z": 118, "r": 20 },
+            { "z": 188, "r": 19 },
+            { "z": 210, "r": 25 }
+          ]
+        },
+        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
+        "twist": { "degrees": 0 },
+        "detail": {
+          "fromMm": 60,
+          "toMm": 196,
+          "a": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 18 },
+          "b": { "pattern": "lib:ribs@1", "depthMm": 1, "repeats": 1, "tileHeightMm": 15 },
+          "blend": { "shape": "middle", "amount": 1 }
+        }
+      },
+      "layers": {
+        "beadWidthMm": 3,
+        "layerHeightMm": 1.5,
+        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+      },
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
+      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
+      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+    },
+    {
+      "schema": "vasecreator/design",
+      "version": 3,
+      "units": "mm",
+      "meta": {
+        "id": "preset:petal-bowl@1",
+        "name": "Petal bowl",
+        "description": "A wide, fluted bowl on a low foot; its rim opens into six soft petals."
+      },
+      "form": {
+        "height": 90,
+        "profile": {
+          "interp": "monotone",
+          "tension": 0.5,
+          "knots": [
+            { "z": 0, "r": 52 },
+            { "z": 10, "r": 53 },
+            { "z": 50, "r": 72 },
+            { "z": 90, "r": 86 }
+          ]
+        },
+        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
+        "twist": { "degrees": 0 },
+        "morph": { "map": "lib:lean@1", "softnessMm": 24, "strengthMm": 8, "repeats": 6, "blend": 1 },
+        "detail": {
+          "fromMm": 6,
+          "toMm": 86,
+          "a": { "pattern": "lib:flutes@1", "depthMm": 1.5, "repeats": 30, "tileHeightMm": 19.5 },
+          "b": null,
+          "blend": { "shape": "fadesUp", "amount": 1 }
+        }
+      },
+      "layers": {
+        "beadWidthMm": 3,
+        "layerHeightMm": 1.5,
+        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+      },
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
+      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
+      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+    },
+    {
+      "schema": "vasecreator/design",
+      "version": 3,
+      "units": "mm",
+      "meta": {
+        "id": "preset:double-gourd@1",
+        "name": "Double gourd",
+        "description": "Two round bulbs meet at a crisp waist; a smooth band winds once round through the flutes."
+      },
+      "form": {
+        "height": 200,
+        "profile": {
+          "interp": "catmullRomCentripetal",
+          "tension": 0.5,
+          "knots": [
+            { "z": 0, "r": 42 },
+            { "z": 10, "r": 44 },
+            { "z": 50, "r": 57 },
+            { "z": 102, "r": 31, "sharp": true },
+            { "z": 150, "r": 44 },
+            { "z": 188, "r": 27 },
+            { "z": 200, "r": 29 }
+          ]
+        },
+        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
+        "twist": { "degrees": 0 },
+        "detail": {
+          "fromMm": 6,
+          "toMm": 194,
+          "a": { "pattern": "lib:flutes@1", "depthMm": 1.5, "repeats": 16, "tileHeightMm": 19.5 },
+          "b": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 19.5 },
+          "blend": { "shape": "diagonal", "amount": 1 }
+        }
+      },
+      "layers": {
+        "beadWidthMm": 3,
+        "layerHeightMm": 1.5,
+        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+      },
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
+      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
+      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+    },
+    {
+      "schema": "vasecreator/design",
+      "version": 3,
+      "units": "mm",
+      "meta": {
+        "id": "preset:faceted-flask@1",
+        "name": "Faceted flask",
+        "description": "A flat oval flask cut into ten facets, with a sharp shoulder and a short neck."
+      },
+      "form": {
+        "height": 180,
+        "profile": {
+          "interp": "linear",
+          "tension": 0.5,
+          "knots": [
+            { "z": 0, "r": 40 },
+            { "z": 95, "r": 58 },
+            { "z": 158, "r": 33 },
+            { "z": 180, "r": 36 }
+          ]
+        },
+        "plan": { "footprint": "circle", "depthRatio": 0.6, "cornerRounding": 0 },
+        "twist": { "degrees": 0 },
+        "detail": {
+          "fromMm": 10,
+          "toMm": 168,
+          "a": { "pattern": "lib:pleats@1", "depthMm": 1.5, "repeats": 10, "tileHeightMm": 19.5 },
+          "b": null,
+          "blend": { "shape": "fadesUp", "amount": 1 }
+        }
+      },
+      "layers": {
+        "beadWidthMm": 3,
+        "layerHeightMm": 1.5,
+        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+      },
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
+      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
+      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+    },
+    {
+      "schema": "vasecreator/design",
+      "version": 3,
+      "units": "mm",
+      "meta": {
+        "id": "preset:drape-vase@1",
+        "name": "Drape vase",
+        "description": "Soft folds that drift round the pot as it rises, like draped cloth."
+      },
+      "form": {
+        "height": 175,
+        "profile": {
+          "interp": "catmullRomCentripetal",
+          "tension": 0.5,
+          "knots": [
+            { "z": 0, "r": 36 },
+            { "z": 60, "r": 58 },
+            { "z": 135, "r": 44 },
+            { "z": 175, "r": 32 }
+          ]
+        },
+        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
+        "twist": { "degrees": 0 },
+        "morph": { "map": "lib:swirl@1", "softnessMm": 24, "strengthMm": 6, "repeats": 5, "blend": 1 },
+        "detail": {
+          "fromMm": 8,
+          "toMm": 165,
+          "a": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 18 },
+          "b": null,
+          "blend": { "shape": "fadesUp", "amount": 1 }
+        }
+      },
+      "layers": {
+        "beadWidthMm": 3,
+        "layerHeightMm": 1.5,
+        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+      },
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
+      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
+      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
     }
   ]
 }
