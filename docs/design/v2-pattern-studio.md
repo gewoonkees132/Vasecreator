@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Brainstorm finished. These are owner decisions (D35–D51), and none of it is built yet. The next step is to build it on a new branch, `t3/pattern-studio`, cut from `t3/guided-journey` (§11).
+- **Status:** Owner decisions D35–D54. D52–D54 settled §13's open questions on 2026-11-25. Slice 1 (the engine) is built on `t3/pattern-studio` (commit `a916a65`, local, not pushed); slices 2–6 are next (§11, notes in §11.1).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -96,6 +96,9 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 | D49 | **App-wide: the *Next* buttons go** (reverses that part of D28), because the step emblems are how you move on. **Buttons that do one clear task are icons,** with their text as a tooltip on desktop, a long-press label on phones and the accessible name. Controls that hold a value (Depth, Density) keep a text label. | Owner (Q19, Q23) |
 | D50 | **No backwards compatibility.** Old design files, saved designs, user recipes and the golden G-code may all change. The design format gets a version bump, with no migration code. | Owner (Q25) |
 | D51 | **Issue #3 folds into this work.** It is built on `t3/pattern-studio` (from `t3/guided-journey`) in the six slices of §11. | Accepted (Q6, Q26) |
+| D52 | **Presets open with their Detailed morph.** A preset is a shape (D30), and the Detailed morph is part of the shape now (D36), so the Classic vase opens with its flutes. `shapeOnly` strips only the Pattern. | Owner (§13, 2026-11-25) |
+| D53 | **Detailed morph grids keep *Sharp, Soft, Round*.** The bitmap's optional `edges` field stays, and the editor offers the three for a Detailed morph grid. A Pattern is always crisp. | Owner (§13, 2026-11-25) |
+| D54 | **The Detailed morph's A/B blend gains *Diagonal*:** the same winding band as the Pattern's Fade, with B's share amount × sin²(π(t + u)), one turn over From–To. | Owner (§13, 2026-11-25) |
 
 **What this revises:**
 - D16 (swatches from a bitmap generator) is now carried by D45 and D47.
@@ -103,6 +106,7 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 - D24 (the pattern editor) is replaced by D45 and D46.
 - D28 loses *Next* (D49).
 - D29 is revised by D36.
+- D30 is narrowed by D52: presets open as shapes with their Detailed morph and without a Pattern.
 - Design §9.2 now describes Detailed morph's settings only.
 - Design §9.6 stays as it is, with Detailed morph added beside it.
 
@@ -181,13 +185,13 @@ About 8 drawings in a new library, separate from the Detailed morph library: **K
 
 ## 4. Detailed morph (today's relief, moved)
 
-- **What it is:** everything that is the *Surface* section today. Slots A and B, depth, repeats around, tile height (snapped to whole layers), From / To, blend (*Even*, *Fades up*, **Fades down** (new), *Middle*) and the amount. The 12 library swatches (`library/patterns.json`), *Plain*, *None* for B, image swatches and My patterns all stay, under the new name.
+- **What it is:** everything that is the *Surface* section today. Slots A and B, depth, repeats around, tile height (snapped to whole layers), From / To, blend (*Even*, *Fades up*, **Fades down** (new), *Middle*, **Diagonal** (new, D54)) and the amount. The 12 library swatches (`library/patterns.json`), *Plain*, *None* for B, image swatches and My patterns all stay, under the new name.
 - **Where it lives:** in the Shape step, as a part beside Morph (journey §6.3). On a phone, Morph and Detailed morph share one dock tool with a *Large · Detailed* toggle. That tool's sub-tools are Detailed morph's current tools (A, B, Depth, Repeats, Tile, From, To, Blend, Amount). How they nest in the dock is the builder's call, within M1–M12. Its From / To bracket shows in Shape.
 - **The generator rework (D45):**
   - The `motif` recipe kind is removed. Its job moves into the 2D editor as a coarse `bitmap` grid that the engine draws **soft**.
   - The library's *Out·In·Out* entry becomes a coarse bitmap that looks the same.
   - Analytic shapes (`SHAPES` in `core/patterns.js`) stay as library-only recipes.
-- **How a coarse grid is drawn soft:** generalise today's motif blending (`motifRow`, `EDGE_WIDTHS`) to two dimensions, so each cell blends into its neighbours across both borders. Whether today's *Edges* setting (sharp, soft, round) carries over to Detailed morph grids is open (§13).
+- **How a coarse grid is drawn soft:** generalise today's motif blending (`motifRow`, `EDGE_WIDTHS`) to two dimensions, so each cell blends into its neighbours across both borders. Today's *Edges* setting (sharp, soft, round) carries over to Detailed morph grids (D53).
 - **Maths for the 11 analytic shapes and image swatches:** unchanged. Golden G-code may still change, because D50 allows it.
 
 ---
@@ -201,7 +205,7 @@ About 8 drawings in a new library, separate from the Detailed morph library: **K
 | (new) | **Pattern** | Pattern (step 2) |
 
 - **The step order is unchanged:** 1 Shape, 2 Pattern, 3 Layers & seam, 4 Base, 5 Print. Pattern stays in step 2 even though the layer height is set in step 3. Rows lock to layers, so changing the layer height later only rescales the drawing in mm and never breaks it. The bead preview shows real layers in every step.
-- **Shape shows the pot with Morph and Detailed morph.** The bitmap Pattern appears from step 2 on (revises D29). The Designs screen's `shapeOnly` (`ui/steps.js`, used by `ui/designs.js`) has to follow whatever §13's open question on presets decides.
+- **Shape shows the pot with Morph and Detailed morph.** The bitmap Pattern appears from step 2 on (revises D29). The Designs screen's `shapeOnly` (`ui/steps.js`, used by `ui/designs.js`) keeps the Detailed morph and strips only the Pattern (D52), so preset tiles show their relief.
 
 ---
 
@@ -332,11 +336,12 @@ These go on the branch `t3/pattern-studio`, cut from `t3/guided-journey`. Each s
 1. **Engine.**
    - Build: the `bitmap` kind; the Pattern term (nodes, rows = layers, density with both faces, depth, its own From / To, Fade, Soften); points per layer inside the range; the seam on a node; the bead-support check and the exemptions; Detailed morph renamed and moved in the data (`form.detail`), with *Fades down*; the `motif` kind removed.
    - Accept when: tests show a drawn tile prints node for node (a 2-column in/out tile gives an exact zigzag at ±depth); columns line up on a tapered pot; the point count is the same on every layer in the range; support warnings fire at 0.5 bead and not below.
+   - **Built** in `a916a65` (§11.1).
 2. **Pattern step and Shape step.**
-   - Build: the starter library and the Pattern carousel; the Density, Depth, Fade, Soften, From and To tools (dock and sheet); the second bracket; Detailed morph as a Shape part, with the *Large · Detailed* toggle on phones; `shapeOnly` updated.
+   - Build: the starter library and the Pattern carousel; the Density, Depth, Fade, Soften, From and To tools (dock and sheet); the second bracket; Detailed morph as a Shape part, with the *Large · Detailed* toggle on phones; `shapeOnly` strips only the Pattern, so presets open with their relief (D52); *Diagonal* for the A/B blend (D54: the blend weight now depends on u as well as z, so `detailWeights` in `core/surface.js` and the z-keyed weight cache in `core/toolpath.js` change).
    - Accept when: one tap puts *Knit* on the pot; the density readout shows points per layer and the mm range; changing the layer height keeps the drawing row for row.
 3. **The 2D editor.**
-   - Build: the phone and desktop tool sets in §6, live on the pot, also opened from Detailed morph with a coarse grid and a soft render.
+   - Build: the phone and desktop tool sets in §6, live on the pot, also opened from Detailed morph with a coarse grid, a soft render and *Sharp, Soft, Round* (D53).
    - Accept when: on a phone the pot stays visible and live while drawing; inverting a column or a diagonal works across the dimmed repeats; one history entry per session.
 4. **The warnings card rules.**
    - Build: overhang limit, bead support and fineness, editable in the card; the overhang limit removed from *Layers & seam* and the dock.
@@ -345,6 +350,27 @@ These go on the branch `t3/pattern-studio`, cut from `t3/guided-journey`. Each s
    - Build: *Save pattern* for Pattern and Detailed morph; apply to any design, presets included; the design keeps its own copy.
 
 When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) and the design's §9.2 and §9.6.
+
+### 11.1 Slice 1 as built (notes for the next slices)
+
+- **Data:** version 3. The Detailed morph is `form.detail`, the Pattern is `pattern` (null when off) and the thresholds are `rules: { overhangLimitDeg, supportRatio }`. The contracts are already in `v2/ARCHITECTURE.md`: "The design document (JSON)", "Engine" (`PreviewResult.pattern`, the density readout) and "Checks" (`support`, ISSUE bit 16).
+- **`core/layer-pattern.js`** holds the Pattern. It exports `createLayerPattern`, `nodesAround`, `fadeAt`, `defaultPatternRange`, `findDrawing`, `newPattern` (the settings a new Pattern starts with) and the limits. Its `lib:` drawings resolve from `library.layerPatterns`, which nothing loads yet. Slice 2 adds the starter file (for example `library/layer-patterns.json`), loads it in `main.js` beside `patterns.json`, and passes it to the worker inside `library`.
+- **Builder's calls made:**
+  - Rows are stored bottom row first.
+  - A layer is in the range when its middle, (i + ½)·h, lies in From–To.
+  - The nodes start at u = 0.
+  - The seam rounds to the nearest node, and a hidden seam moves in whole nodes, at most a bead width a layer.
+  - *Diagonal* is 1 − a·sin²(π(t + u)).
+  - The warning reads "Bead not supported" plus the heights.
+- **Checks:** at a Pattern node, the bead-scale curve check (V6) measures to the nodes either side (`tp.nodes`). Otherwise the extra points between nodes would turn every node into a corner.
+- **Library:** *Out·In·Out* is a 6 × 4 bitmap with round edges. The direct copy with soft edges failed the printability tests.
+- **UI, only renamed so far:**
+  - `ui/sections/surface.js` still sits in the Pattern step and edits `form.detail`.
+  - The overhang limit is still in *Layers & seam* (slice 4 moves it).
+  - `ui/pattern-editor.js` is a stopgap that writes bitmaps through the quick fills (`fillBitmap`). Slice 3 replaces it.
+  - `mineEntries` lists every own recipe, so a Pattern drawing in the design's assets shows among the Detailed morph's *My patterns*. Slice 2 must keep the two apart.
+- **Finding for the starter library:** where a cell flips straight from in to out between layers, the default depth of ¼ bead puts out over in at exactly half a bead, the support limit. Any lean in the profile then warns: a knit at ¼ bead on the Classic vase warns from 14 to 150 mm. The defaults must pass bead support on the default pot (§3.8), so use less depth, or drawings without direct in↔out flips between rows.
+- **Browser check used:** headless Chrome over CDP, from a scratch script. It loads `/v2/` at 1280 × 800, then at 360 × 660 with touch emulation. It applies a Pattern through `window.vc2.store.apply`, reads `vc2.store.state.result` and the console, and takes screenshots. Port 8041 was free.
 
 ---
 
@@ -358,20 +384,17 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 
 ## 13. Open for the owner, and left to the builder
 
-**Open (ask the owner):**
-- **Presets and Detailed morph.** Presets are shapes (D30), and Detailed morph is now part of Shape. Should a preset open with its relief, for example the Classic vase with its flutes? Today `shapeOnly` strips it.
-- **Edges for Detailed morph grids.** Keep today's *Sharp, Soft, Round* setting for coarse grids, or use one fixed soft look?
-- **Fade *Diagonal* for Detailed morph's A/B blend.** It isn't decided; D42 only adds *Fades down* there.
+**Settled by the owner (2026-11-25):** presets keep their relief (D52), coarse grids keep *Sharp, Soft, Round* (D53), and the A/B blend gains *Diagonal* (D54). Nothing is open for the owner now.
 
 **Left to the builder:**
-- the exact *Diagonal* fade formula
-- where the node positions start in `u`, and how the seam snaps to a node
-- which way up the rows are stored
+- the exact *Diagonal* fade formula (slice 1: 1 − a·sin²(π(t + u)))
+- where the node positions start in `u`, and how the seam snaps to a node (slice 1: from u = 0, to the nearest node)
+- which way up the rows are stored (slice 1: bottom row first)
 - the cells of the eight starter Patterns and their defaults
 - the default density and depth (see §3.2–§3.3)
 - the editor's exact layout and icons, within §6
-- where `rules` sits in the design JSON
-- the warning text for bead support
+- where `rules` sits in the design JSON (slice 1: top level, `design.rules`)
+- the warning text for bead support (slice 1: "Bead not supported" plus the heights)
 
 ---
 

@@ -88,6 +88,9 @@ D0–D5 stand as recorded in research §11.1. These were added in the brainstorm
 | D49 | **App-wide: the *Next* buttons go** (reverses that part of D28); single-task buttons are icons with text as tooltip, long-press label and accessible name | Owner |
 | D50 | **No backwards compatibility** for the pattern studio: old files, saved designs and the golden G-code may change | Owner |
 | D51 | **Issue #3 folds into the pattern studio,** built on `t3/pattern-studio` from `t3/guided-journey` in six slices | Accepted |
+| D52 | **Presets open with their Detailed morph** (narrows D30); only the Pattern is left off | Owner |
+| D53 | **Detailed morph grids keep *Sharp, Soft, Round*** | Owner |
+| D54 | **The Detailed morph's A/B blend gains *Diagonal*,** the Pattern Fade's winding band | Owner |
 
 ---
 
