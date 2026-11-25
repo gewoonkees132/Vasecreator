@@ -1,5 +1,8 @@
 // The chips at the top of the view (design §8.5, D21): the warnings chip and,
 // to its right, the size chip. Clicking a warning colours its beads (§11).
+// The warnings card is also the one place for the rules the checks use
+// (pattern studio D44): each rule sits under its warning, and the ones
+// without a warning wait in a Rules group at the foot (ui/rules.js).
 // Clicking the size chip opens a small card where the outer height, width and
 // depth can be typed or dragged (issue #5, ui/size-fit.js).
 
@@ -7,6 +10,7 @@ import { numberField } from './controls.js';
 import { LIMITS } from '../core/design.js';
 import { depthLocked } from './sections/shape.js';
 import { SIZE_AXES, fitOuterSize } from './size-fit.js';
+import { RULES, cardLayout, ruleLimits, setRule, shownRule } from './rules.js';
 
 const PHONE = '(max-width: 760px)';
 // A preview that never comes (a broken engine) mustn't keep a size edit open.
@@ -57,6 +61,13 @@ function countLabel(warnings) {
  * fixed. On a phone the card opens over the controls area, never over the pot
  * (D22), and picking a warning closes it so the controls are free to fix the
  * problem; the chip then shows that beads are coloured, and a tap on it stops.
+ * On desktop the card opens over the history column, clear of the pot.
+ *
+ * The card also sets the rules (D44): each rule's fields sit under its
+ * warning, the rest in a Rules group at the foot, so the chip opens the card
+ * with no warnings too. Editing a rule is one history step per gesture,
+ * colours that rule's beads, and keeps the rule where it is until the card
+ * closes. In Print the rules only show (C31).
  * @param {HTMLElement} root  div#chips
  * @param {{ store }} ctx
  * @returns {{ destroy(): void }}
@@ -81,18 +92,67 @@ export function mountChips(root, ctx) {
   }, [icon, label, short, clear]);
 
   const list = el('ul', { class: 'warn-list' });
+  const none = el('p', { class: 'warn-none', text: 'No warnings', hidden: true });
+  const hint = el('p', { class: 'warn-hint' }, [
+    el('span', { class: 'label-desk', text: 'Click a warning to show where it is on the pot.' }),
+    el('span', { class: 'label-phone', text: 'Tap a warning to show where it is on the pot.' }),
+  ]);
   const closeBtn = el('button', {
     type: 'button', class: 'icon-close', 'aria-label': 'Close warnings', text: '×',
     onclick: () => closeCard({ focusChip: true }),
   });
+
+  // The Rules group at the foot: the rules whose warning isn't showing, so
+  // every rule can be reached with no warning at all (D44).
+  const rulesLabel = el('span', { text: 'Rules' });
+  const rulesToggle = el('button', {
+    type: 'button', class: 'warn-rules-toggle', 'aria-expanded': 'false', 'aria-controls': 'warn-rules',
+    onclick: () => {
+      rulesOpen = !rulesOpen;
+      rulesPreferred = rulesOpen;
+      syncRulesOpen();
+    },
+  }, [rulesLabel, el('span', { class: 'warn-rules-chevron', 'aria-hidden': 'true' })]);
+  const rulesList = el('ul', { class: 'warn-list warn-rules-list', id: 'warn-rules', hidden: true });
+  const rulesBox = el('div', { class: 'warn-rules' }, [rulesToggle, rulesList]);
+  // C31: in Print the design stays as it was computed, so the rules only show.
+  const rulesNote = el('p', { class: 'warn-hint', text: 'Rules change in the design steps, not in Print.', hidden: true });
+
   const card = el('div', { class: 'warn-card', id: 'warn-card', role: 'region', 'aria-label': 'Warnings', hidden: true }, [
     el('div', { class: 'warn-card-head' }, [el('span', { text: 'Warnings' }), closeBtn]),
     list,
-    el('p', { class: 'warn-hint' }, [
-      el('span', { class: 'label-desk', text: 'Click a warning to show where it is on the pot.' }),
-      el('span', { class: 'label-phone', text: 'Tap a warning to show where it is on the pot.' }),
-    ]),
+    none,
+    hint,
+    rulesBox,
+    rulesNote,
   ]);
+
+  // One block per rule, made once: a line for its warning (or that it
+  // passes) and its fields. Blocks move between the list and the Rules group
+  // only while nobody is editing them (ui/rules.js cardLayout).
+  let rulesOpen = false;
+  let rulesPreferred = false;
+  const pinned = new Map();
+  const blocks = new Map(RULES.map((rule) => {
+    const status = el('div', { class: 'warn-status' });
+    const controls = rule.fields.map((field) => numberField({
+      label: field.label, unit: field.unit, ...ruleLimits(field), decimals: field.decimals,
+      value: shownRule(store.state.design, field), info: field.info,
+      onInput: (v) => store.change(field.label, (d) => setRule(d, field, v)),
+      onCommit: () => store.commit(),
+    }));
+    const fields = el('div', { class: 'warn-rule-fields', role: 'group', 'aria-label': `${rule.name} rule` }, controls.map((c) => c.el));
+    const li = el('li', { class: 'warn-rule', 'data-rule': rule.id }, [status, fields]);
+    // Touching a rule keeps it where it is until the card closes, and shows
+    // its beads on the pot, so the colours follow the rule as it changes.
+    const hold = () => {
+      if (!pinned.has(rule.id)) pinned.set(rule.id, li.parentNode === rulesList ? 'rest' : 'list');
+      if (store.state.view.highlight !== rule.warning) store.setView({ highlight: rule.warning });
+    };
+    fields.addEventListener('pointerdown', hold);
+    fields.addEventListener('focusin', hold);
+    return [rule.id, { rule, li, status, controls }];
+  }));
   // The chip's own label changes silently; a polite live region says when
   // the count changes (only then, not on every preview).
   const announce = el('span', { class: 'visually-hidden', role: 'status', 'aria-live': 'polite' });
@@ -132,18 +192,21 @@ export function mountChips(root, ctx) {
   const sizeWrap = el('div', { class: 'chip-wrap' }, [sizeChip, sizeCard]);
   root.replaceChildren(wrap, sizeWrap);
 
-  let lastKey = '';
   let lastCount = null;
 
+  // The card opens with or without warnings: with none, it shows the rules.
   function openCard() {
-    if (listed(store.state.result).length === 0) return;
     const fromKeyboard = document.activeElement === chip && chip.matches(':focus-visible');
     closeSize();
+    pinned.clear();
+    rulesOpen = listed(store.state.result).length === 0 || rulesPreferred;
+    renderCard(store.state);
+    syncRulesOpen();
     card.hidden = false;
     chip.setAttribute('aria-expanded', 'true');
     document.addEventListener('pointerdown', outside, true);
-    // Keyboard users land in the list.
-    if (fromKeyboard) (list.querySelector('button.warn-item') || closeBtn).focus();
+    // Keyboard users land in the list, or on the rules when there's nothing in it.
+    if (fromKeyboard) (list.querySelector('button.warn-item') || (rulesBox.hidden ? closeBtn : rulesToggle)).focus();
     syncChip();
   }
 
@@ -152,12 +215,20 @@ export function mountChips(root, ctx) {
   function closeCard({ focusChip = false, keepHighlight = false } = {}) {
     if (card.hidden) return;
     const hadFocus = card.contains(document.activeElement);
+    // Leaving a rule's field commits what was typed in it (its blur handler).
+    if (hadFocus) document.activeElement.blur();
     card.hidden = true;
+    pinned.clear();
     chip.setAttribute('aria-expanded', 'false');
     document.removeEventListener('pointerdown', outside, true);
     if (!keepHighlight && store.state.view.highlight != null) store.setView({ highlight: null });
     if (focusChip || hadFocus) chip.focus({ preventScroll: true });
     syncChip();
+  }
+
+  function syncRulesOpen() {
+    rulesToggle.setAttribute('aria-expanded', String(rulesOpen));
+    rulesList.hidden = !rulesOpen;
   }
 
   function outside(e) {
@@ -313,30 +384,87 @@ export function mountChips(root, ctx) {
     fields.depth.setInfo(locked ? 'Follows the width. Unlock it under Shape.' : '');
   }
 
-  function pick(w) {
-    const on = store.state.view.highlight !== w.id;
-    store.setView({ highlight: on ? w.id : null });
+  function pick(id) {
+    const on = store.state.view.highlight !== id;
+    store.setView({ highlight: on ? id : null });
     if (on && phone.matches) closeCard({ focusChip: true, keepHighlight: true });
   }
 
-  function renderList(warnings) {
-    const highlight = store.state.view.highlight;
-    const focused = list.contains(document.activeElement) ? document.activeElement.dataset.id : null;
-    list.replaceChildren(...warnings.map((w) => {
-      const sev = w.severity === 'error' ? 'is-error' : w.severity === 'info' ? 'is-info' : 'is-warn';
-      const content = [el('span', { class: 'warn-dot', 'aria-hidden': 'true' }), el('span', { text: w.message || w.id })];
-      // A warning with no beads to colour (the layer height ratio) is just text.
-      const item = w.bit
-        ? el('button', {
-          type: 'button', class: `warn-item ${sev}`, 'data-id': w.id,
-          'aria-pressed': String(highlight === w.id),
-          onclick: () => pick(w),
-        }, content)
-        : el('div', { class: `warn-item is-static ${sev}` }, content);
-      return el('li', {}, [item]);
-    }));
-    // Re-rendering must not drop keyboard focus.
-    if (focused) list.querySelector(`[data-id="${CSS.escape(focused)}"]`)?.focus();
+  // A warning's line: a button that colours its beads, plain text when it has
+  // no beads to colour (the layer height ratio), or a passing rule's line.
+  // The element stays when only its text changes, so focus stays on it.
+  function syncItem(holder, warning, okText) {
+    const kind = !warning ? 'ok' : warning.bit ? 'button' : 'static';
+    let item = holder.firstElementChild;
+    if (!item || item.dataset.kind !== kind) {
+      const hadFocus = item && item === document.activeElement;
+      item = kind === 'button'
+        ? el('button', { type: 'button', onclick: (e) => pick(e.currentTarget.dataset.id) })
+        : el('div');
+      item.dataset.kind = kind;
+      item.append(el('span', { class: 'warn-dot', 'aria-hidden': 'true' }), el('span', { class: 'warn-text' }));
+      holder.replaceChildren(item);
+      if (hadFocus && kind === 'button') item.focus({ preventScroll: true });
+    }
+    const sev = !warning ? 'is-ok' : warning.severity === 'error' ? 'is-error' : warning.severity === 'info' ? 'is-info' : 'is-warn';
+    item.className = `warn-item${kind === 'button' ? '' : ' is-static'} ${sev}`;
+    item.dataset.id = warning?.id ?? '';
+    item.lastChild.textContent = warning ? (warning.message || warning.id) : okText;
+    if (kind === 'button') item.setAttribute('aria-pressed', String(store.state.view.highlight === warning.id));
+  }
+
+  // Puts `children` into `parent` in order, moving as little as it can: a
+  // rule being edited never leaves the page, so its scrub, its typing and
+  // its focus carry on.
+  function syncChildren(parent, children) {
+    const keep = new Set(children);
+    for (const child of [...parent.children]) if (!keep.has(child)) child.remove();
+    children.forEach((child, i) => {
+      if (parent.children[i] !== child) parent.insertBefore(child, parent.children[i] ?? null);
+    });
+  }
+
+  const warningItems = new Map();
+  function itemLi(warning) {
+    let li = warningItems.get(warning.id);
+    if (!li) {
+      li = el('li');
+      warningItems.set(warning.id, li);
+    }
+    syncItem(li, warning, '');
+    return li;
+  }
+
+  function blockLi({ rule, warning }) {
+    const block = blocks.get(rule.id);
+    syncItem(block.status, warning, rule.ok);
+    return block.li;
+  }
+
+  function renderCard(state) {
+    const warnings = listed(state.result);
+    const layout = cardLayout(warnings, pinned);
+    const listItems = layout.list.map((entry) => (entry.rule ? blockLi(entry) : itemLi(entry.warning)));
+    for (const id of [...warningItems.keys()]) {
+      if (!warnings.some((w) => w.id === id)) warningItems.delete(id);
+    }
+    syncChildren(list, listItems);
+    syncChildren(rulesList, layout.rest.map(blockLi));
+    list.hidden = layout.list.length === 0;
+    // A warning a rule brought up in the Rules group still counts.
+    none.hidden = layout.list.length > 0 || layout.rest.some((entry) => entry.warning);
+    hint.hidden = !layout.list.some((entry) => entry.warning?.bit);
+    rulesBox.hidden = layout.rest.length === 0;
+    rulesLabel.textContent = layout.list.some((entry) => entry.rule) ? 'Other rules' : 'Rules';
+    const designing = state.view.mode === 'design';
+    rulesNote.hidden = designing;
+    for (const { rule, controls } of blocks.values()) {
+      rule.fields.forEach((field, i) => {
+        controls[i].set(shownRule(state.design, field));
+        controls[i].setDisabled(!designing);
+      });
+    }
+    syncRulesOpen();
   }
 
   // When beads are coloured the chip says so, and a tap on it stops that.
@@ -349,12 +477,17 @@ export function mountChips(root, ctx) {
     clear.hidden = !showing;
     chip.classList.toggle('is-active', !!active);
     const count = countLabel(warnings);
-    let aria = n === 0 ? 'No warnings' : `${count}, show list`;
+    let aria = n === 0 ? 'No warnings, show the rules' : `${count}, show list`;
     if (showing) aria = `${count}. Showing on the pot: ${active.message || active.id}. Stop showing`;
     chip.setAttribute('aria-label', aria);
     if (showing) chip.title = 'Stop colouring the beads';
+    else if (n === 0) chip.title = 'No warnings. Click to see the rules';
     else chip.removeAttribute('title');
   }
+
+  // A rule being edited keeps its warning's colours on, also while the edit
+  // has made the warning go: they come back the moment it shows again.
+  const heldHighlight = (id) => !card.hidden && RULES.some((r) => r.warning === id && pinned.has(r.id));
 
   function update(state, what) {
     const warnings = listed(state.result);
@@ -371,21 +504,17 @@ export function mountChips(root, ctx) {
       icon.hidden = n === 0;
       chip.classList.remove('is-none', 'is-error', 'is-warn');
       chip.classList.add(n === 0 ? 'is-none' : errors ? 'is-error' : 'is-warn');
-      if (n === 0) closeCard();
       // The problem was fixed: stop colouring beads for a warning that's gone.
       const hl = state.view.highlight;
-      if (hl != null && !warnings.some((w) => w.id === hl && w.bit)) store.setView({ highlight: null });
+      if (hl != null && !warnings.some((w) => w.id === hl && w.bit) && !heldHighlight(hl)) store.setView({ highlight: null });
     }
-    const key = JSON.stringify([warnings.map((w) => [w.id, w.message, w.severity, w.bit]), state.view.highlight]);
-    if (key !== lastKey) {
-      lastKey = key;
-      renderList(warnings);
-    }
+    // The card stays open with no warnings left: its rules are still there.
+    if (!card.hidden) renderCard(state);
     syncChip();
   }
 
   const unsubscribe = store.subscribe((state, what) => {
-    if (what.has('result') || what.has('view')) update(state, what);
+    if (what.has('result') || what.has('view') || what.has('design')) update(state, what);
     if (what.has('result') || what.has('view') || what.has('design')) syncSize(state, { values: what.has('result') });
   });
   update(store.state, new Set(['result']));
@@ -398,6 +527,7 @@ export function mountChips(root, ctx) {
       document.removeEventListener('pointerdown', outside, true);
       document.removeEventListener('pointerdown', outsideSize, true);
       Object.values(fields).forEach((f) => f.destroy());
+      for (const { controls } of blocks.values()) controls.forEach((c) => c.destroy());
       root.replaceChildren();
     },
   };

@@ -72,14 +72,14 @@ function flaggedLayers(tp, bit) {
 }
 
 // Bead-scale curvature (V6): the circle through each wall point and its two
-// neighbours must be at least half a bead wide. At a node of the Pattern the
-// neighbours are the nodes either side: the wall runs straight from node to
-// node by design (D37), and the points the engine adds in between would
-// otherwise turn every node into a corner, by an amount that depends only on
-// how many points there are.
-function markCurvature(tp, w) {
+// neighbours must have a radius of at least rules.curveRatio of a bead width
+// (half a bead by default). At a node of the Pattern the neighbours are the
+// nodes either side: the wall runs straight from node to node by design
+// (D37), and the points the engine adds in between would otherwise turn every
+// node into a corner, by an amount that depends only on how many points there
+// are.
+function markCurvature(tp, limit) {
   const { path, kinds, layerOf, issues, pointCount, nodes } = tp;
-  const limit = w / 2;
   // The next node from p in direction d on the same layer and wall, or −1.
   const nodeFrom = (p, d) => {
     for (let q = p + d; q >= 0 && q < pointCount; q += d) {
@@ -153,8 +153,8 @@ function markBed(tp, printer, w) {
  */
 export function designChecks(tp, design, printer) {
   const { beadWidthMm: w, layerHeightMm: h } = design.layers;
-  const { overhangLimitDeg } = design.rules;
-  markCurvature(tp, w);
+  const { overhangLimitDeg, curveRatio, layersPerBump } = design.rules;
+  markCurvature(tp, curveRatio * w);
   const offBed = markBed(tp, printer, w);
   const warnings = [];
 
@@ -176,11 +176,12 @@ export function designChecks(tp, design, printer) {
     });
   }
 
-  // Vertical fineness (V5): a Detailed morph needs at least two layers per
-  // bump. The Pattern is exempt: one row is one layer by design (D43).
+  // Vertical fineness (V5): a Detailed morph needs at least
+  // rules.layersPerBump layers per bump (two by default). The Pattern is
+  // exempt: one row is one layer by design (D43).
   let rowsTooFine = false;
   for (const s of tp.model.active) {
-    if (s.features.up > 0 && s.tileHeightMm / s.features.up < 2 * h) rowsTooFine = true;
+    if (s.features.up > 0 && s.tileHeightMm / s.features.up < layersPerBump * h - 1e-9) rowsTooFine = true;
   }
   const fine = flaggedLayers(tp, ISSUE.finePattern);
   if (fine || rowsTooFine) {

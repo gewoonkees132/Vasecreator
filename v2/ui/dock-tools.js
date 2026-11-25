@@ -422,12 +422,6 @@ export const DOCK_TOOLS = {
       }),
       set: (d, v) => { d.layers.layerHeightMm = v; },
     },
-    {
-      id: 'overhang', name: 'Overhang', kind: 'dial',
-      value: (s) => `${fmt(s.design.rules.overhangLimitDeg, 0)}°`,
-      dial: (s) => ({ label: 'Overhang limit', unit: '°', ...L('overhangLimitDeg', {}), step: 1, decimals: 0, value: s.design.rules.overhangLimitDeg }),
-      set: (d, v) => { d.rules.overhangLimitDeg = v; },
-    },
   ],
 
   base: [

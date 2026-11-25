@@ -57,6 +57,18 @@ test('normalise clamps, sorts and spaces the knots', () => {
   assert.equal(n.finish.walls, 1);
 });
 
+test('normalise fills the warning rules and holds them in their limits', () => {
+  assert.deepEqual(normaliseDesign({}).rules, { overhangLimitDeg: 45, supportRatio: 0.5, curveRatio: 0.5, layersPerBump: 2 });
+  assert.deepEqual(normaliseDesign({ rules: 'x' }).rules, defaultDesign().rules);
+  const low = normaliseDesign({ rules: { overhangLimitDeg: 1, supportRatio: 0, curveRatio: 0, layersPerBump: 0 } }).rules;
+  assert.deepEqual(low, { overhangLimitDeg: 5, supportRatio: 0.1, curveRatio: 0.1, layersPerBump: 1 });
+  const high = normaliseDesign({ rules: { overhangLimitDeg: 90, supportRatio: 3, curveRatio: 9, layersPerBump: 40 } }).rules;
+  assert.deepEqual(high, { overhangLimitDeg: 80, supportRatio: 1, curveRatio: 1.5, layersPerBump: 6 });
+  // Layers per bump are whole layers; the other rules keep what was set.
+  const set = normaliseDesign({ rules: { overhangLimitDeg: 52, supportRatio: 0.35, curveRatio: 0.65, layersPerBump: 2.6 } }).rules;
+  assert.deepEqual(set, { overhangLimitDeg: 52, supportRatio: 0.35, curveRatio: 0.65, layersPerBump: 3 });
+});
+
 test('the height scales knots that stop short of it', () => {
   const n = normaliseDesign({ form: { height: 200, profile: { knots: [{ z: 0, r: 40 }, { z: 50, r: 60 }, { z: 100, r: 40 }] } } });
   assert.deepEqual(n.form.profile.knots.map((k) => k.z), [0, 100, 200]);
@@ -90,7 +102,7 @@ test('LIMITS give min, max and step for every edited field', () => {
   for (const key of ['height', 'width', 'depth', 'depthRatio', 'cornerRounding', 'twist', 'knotZ', 'knotR', 'tension', 'cornerMm',
     'depthMm', 'repeats', 'tileHeightMm', 'fromMm', 'toMm', 'amount', 'beadWidthMm', 'layerHeightMm', 'overhangLimitDeg',
     'rampLengthMm', 'angleDeg', 'baseLayers', 'spacingRatio', 'holeDiameter', 'wallSpacingMm',
-    'patternDepthMm', 'spacingMm', 'points', 'softenCells', 'supportRatio']) {
+    'patternDepthMm', 'spacingMm', 'points', 'softenCells', 'supportRatio', 'curveRatio', 'layersPerBump']) {
     const l = LIMITS[key];
     assert.ok(l && l.min < l.max && l.step > 0, key);
   }

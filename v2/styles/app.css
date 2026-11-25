@@ -324,7 +324,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .chip-warnings:hover { background: #fff; }
-.chip-warnings.is-none { color: var(--c-text-2); cursor: default; }
+/* With no warnings the chip still opens the card, for its rules (D44). */
+.chip-warnings.is-none { color: var(--c-text-2); }
 .chip-warnings.is-warn { background: rgb(252,241,212); border-color: rgba(224,161,0,.45); }
 .chip-warnings.is-error { background: rgb(250,229,229); border-color: rgba(214,69,69,.45); }
 .chip-warnings .chip-icon { color: #9a6c00; }
@@ -341,12 +342,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .chip-wrap { position: relative; }
 
+/* On desktop the cards open below the chips over the history column, at the
+   right edge of the window, where they stay clear of the pot (D22) as far as
+   the window allows: the warnings card holds the rules too (D44), so it is
+   tall. It scrolls when the window is short. */
 .warn-card {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
+  top: calc(var(--content-top) + 42px);
+  right: var(--gap);
   width: 300px;
   max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - var(--content-top) - 42px - var(--gap));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--space-2);
   background: #fff;
   border: 1px solid var(--c-border);
@@ -378,7 +386,39 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .warn-dot { flex: none; width: 10px; height: 10px; margin-top: 4px; border-radius: 50%; background: var(--c-warn); }
 .warn-item.is-error .warn-dot { background: var(--c-error); }
 .warn-item.is-info .warn-dot { background: var(--c-primary-light); }
+.warn-item.is-ok { color: var(--c-text-2); }
+.warn-item.is-ok .warn-dot { background: var(--c-accent); }
 .warn-hint { padding: var(--space-2) var(--space-2) var(--space-1); font-size: 12px; color: var(--c-text-2); }
+.warn-none { margin: 0; padding: var(--space-1) var(--space-2) var(--space-2); font-size: 13px; color: var(--c-text-2); }
+
+/* The rules (pattern studio D44): each one's fields sit under its warning's
+   line, lined up with the text after the dot. */
+.warn-rule-fields {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--space-3) + 10px + var(--space-2));
+  font-size: 13px;
+}
+.warn-rules { margin-top: var(--space-2); padding-top: var(--space-1); border-top: 1px solid var(--c-border); }
+.warn-rules-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%;
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2);
+  border: 0; border-radius: var(--radius-ctl);
+  background: none;
+  font-size: 13px; font-weight: 600; text-align: left;
+  cursor: pointer;
+}
+.warn-rules-toggle:hover { background: rgba(0,0,0,.04); }
+.warn-rules-chevron {
+  width: 8px; height: 8px; margin: 0 4px 4px 0;
+  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform .15s;
+}
+.warn-rules-toggle[aria-expanded="true"] .warn-rules-chevron { margin: 4px 4px 0 0; transform: rotate(-135deg); }
+.warn-rules-list { margin-top: var(--space-1); }
 
 /* The size chip opens the size card (issue #5). It shares the warnings
    card's frame, so on a phone it also opens over the controls (D22). */
@@ -747,6 +787,9 @@ dialog::backdrop {
   .warn-item { min-height: 44px; padding: var(--space-3); font-size: 15px; align-items: center; }
   .warn-dot { margin-top: 0; }
   .warn-hint { font-size: 13px; }
+  .warn-none { font-size: 15px; }
+  .warn-rule-fields { padding-right: 0; font-size: 14px; }
+  .warn-rules-toggle { min-height: 44px; font-size: 15px; }
   .size-card { width: auto; }
   .size-fields { padding: 0; }
 

@@ -101,7 +101,6 @@ export const STEP_LIST = [
     parts: [
       { id: 'seam', name: 'Seam', section: 'layers' },
       { id: 'bead', name: 'Bead', section: 'layers' },
-      { id: 'overhang', name: 'Overhang', section: 'layers' },
     ],
   },
   {

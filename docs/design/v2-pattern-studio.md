@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Owner decisions D35–D57. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`) and 3 (the 2D editor) are built on `t3/pattern-studio` (local, not pushed); slices 4–6 are next (§11, notes in §11.1–§11.3).
+- **Status:** Owner decisions D35–D57. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`) and 4 (the warnings card rules) are built on `t3/pattern-studio` (local, not pushed); slices 5–6 are next (§11, notes in §11.1–§11.4).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -350,6 +350,7 @@ These go on the branch `t3/pattern-studio`, cut from `t3/guided-journey`. Each s
    - **Built** (§11.3).
 4. **The warnings card rules.**
    - Build: overhang limit, bead support and fineness, editable in the card; the overhang limit removed from *Layers & seam* and the dock.
+   - **Built** (§11.4).
 5. **The *Next* and icon-first sweep** (§8).
 6. **Saved patterns** (§3.9, D48).
    - Build: *Save pattern* for Pattern and Detailed morph; apply to any design, presets included; the design keeps its own copy.
@@ -496,6 +497,51 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
   - *Save pattern* and names (slice 6).
   - The *Next* and icon sweep (slice 5) can reuse `ui/press-label.js`.
 
+### 11.4 Slice 4 as built (notes for the next slices)
+
+- **Data.** `design.rules` is `{ overhangLimitDeg: 45, supportRatio: 0.5, curveRatio: 0.5, layersPerBump: 2 }`.
+  - The two new fields make fineness settable. `curveRatio` is the radius of the tightest curve, as a fraction of a bead width (V6, 0.1–1.5). `layersPerBump` is how many layers a Detailed morph bump needs at least (V5, whole, 1–6).
+  - `normaliseDesign` fills and clamps all four, and `core/checks.js` reads both new ones. The cap of 1600 points a layer stays a hard limit of the engine, not a rule.
+  - There is no migration (D50). The golden G-code changed only in the design line of its header.
+  - The contracts are in `v2/ARCHITECTURE.md`: "The design document (JSON)", "Checks" and "UI contracts" (the warnings card).
+- **Where it lives.** `ui/rules.js` has no DOM and holds the rules, how each one shows (degrees, or a percentage of a bead width) and where each one goes in the card (`cardLayout`). `ui/chips.js` builds the card.
+- **The card as built.**
+  - The chip always opens the card, also with no warnings. Its name then reads "No warnings, show the rules".
+  - Each rule's fields sit right under its warning, with the rules first (Overhang, Bead support, Fineness) and then the other warnings. That is the order the checks already gave.
+  - The rules without a warning wait in a *Rules* group at the foot, called *Other rules* while some rule is above it. It is open when the card opens with no warnings, and otherwise as you last left it.
+  - **Fields:** *Overhang limit* (°), *Bead support* (% of a bead width), *Tightest curve* (% of a bead width, its radius) and *Layers per bump*. They are the app's number fields: drag sideways, type, use the arrow keys, or − and + on a touch screen.
+  - **History:** each gesture is one step, named after the field: a drag, a held stepper, a typed value, one arrow key or one tap, as with every number field.
+  - **Live (D20):** touching a rule colours its warning's beads, so the flagged beads come and go on the pot as the threshold moves.
+  - **Nothing moves under a finger.** A rule you touch stays where it is until the card closes. If the edit fixes its warning, the line turns into a passing line with a green dot ("Nothing leans past the limit"). If an edit in the Rules group brings a warning up, the warning shows on the rule's own line there, and "No warnings" goes.
+  - The card no longer closes itself when the last warning goes, so the rules stay in reach.
+  - **In Print** the fields are read-only, with "Rules change in the design steps, not in Print." (C31, as the size card).
+- **Removed:** the *Overhang* part and field of *Layers & seam*, which now has the parts Seam and Bead, and the *Overhang* dock tool. A test checks that no dock tool and no step part sets a rule.
+- **Builder's calls made:**
+  - **Fineness is two rules, not one.** The two checks measure different things in different units: a curve around the pot in bead widths, and bumps up the wall in layers. They share one warning, so both fields sit under it.
+  - Ratios of a bead width show as percentages, as the bead support default of 50 % reads in D44.
+  - The limits: bead support 10–100 % (as before), the tightest curve 10–150 %, layers per bump 1–6.
+  - The wording of the passing lines: "Nothing leans past the limit", "Every bead sits on the one below", "Nothing finer than the bead can print". The info lines under the fields say what a percentage is of.
+  - **Desktop placement.** With its rules the card is up to about 520 px tall, and hanging under the chip it covered half the pot (D22). So on desktop it (and the size card, which shares its frame) now opens below the chips at the window's right edge, over the history column. At 1280 × 800 it clears the Classic vase (the pot spans x 577–889, the card 964–1264). In a narrower desktop window it can still reach the pot's right side. The phone layout is unchanged: the card opens over the dock or sheet (`--bottom-chrome`) and scrolls.
+- **Tests:** `test/rules.test.js` covers the fields against `design.rules`, the percentages and limits, writing a value back, the layout and the pinning, that no dock tool or part sets a rule, and a card edit changing the warning. There are also a design test for the rules' defaults and limits and two checks tests for the new rules. That makes 344 in all.
+- **Browser check:** as in §11.1, on port 8041, with scratch scripts.
+  - **Desktop, 1280 × 800:**
+    - With no warnings the chip opens the card with the three rules.
+    - Dragging *Overhang limit* from 45° to 20° adds one step, "Overhang limit". The warning shows on the rule's own line, the beads turn amber, and "No warnings" goes.
+    - Reopened, the rule sits under its warning, with *Other rules* closed below. A typed value and each arrow key make one step each, and Ctrl+Z undoes them.
+    - On a Detailed morph of dots 5 mm tall, the fineness warning carries both fields, and *Layers per bump* at 1 fixes it, leaving a passing line.
+    - Bead support at 20 % on Knit brings up "Bead not supported" in the Rules group, with the beads coloured.
+    - *Layers & seam* has no overhang field. In Print the fields are read-only with the note.
+  - **Phone, 360 × 660 with touch:**
+    - ✓ in the top bar opens the card over the dock (it starts at y 392; the pot's region ends at 384).
+    - Holding − on *Overhang limit* takes it from 45° to 34° in one step, with the warning and its beads showing.
+    - Tapping the warning closes the card with the beads still coloured, and the chip stops that, as before.
+    - Tapping + until the warning goes leaves the passing line.
+    - The Layers dock has Seam, Angle, Ramp, Bead and Layer, and the sheet has no Overhang part.
+    - On Knit, − on *Bead support* down to 10 % brings up the warning in the Rules group, the pot above it amber.
+- **Left for later:**
+  - Esc closes the card only when the focus is inside it, as before.
+  - The card's × is as it was. The *Rules* disclosure keeps its text, because it shows and hides a group rather than doing one task (D49). Slice 5's icon sweep can revisit both.
+
 ---
 
 ## 12. Later (parked; drafted in [`v2-later-issues.md`](v2-later-issues.md), issues 17–19)
@@ -520,6 +566,8 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 - how the Morph and Detailed morph nest in the phone dock (slice 2: a group tool with a *Large · Detailed* toggle, §11.2)
 - the editor's exact layout and icons, within §6 (slice 3: §11.3)
 - where `rules` sits in the design JSON (slice 1: top level, `design.rules`)
+- how fineness becomes settable (slice 4: two rules under the one warning, the tightest curve and layers per bump, §11.4)
+- how the rules are reached with no warning (slice 4: a *Rules* group at the foot of the card, §11.4)
 - the warning text for bead support (slice 1: "Bead not supported" plus the heights)
 
 ---

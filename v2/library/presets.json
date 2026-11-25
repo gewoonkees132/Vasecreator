@@ -38,7 +38,7 @@
         "layerHeightMm": 1.5,
         "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5 },
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
       "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
       "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
     },
@@ -77,7 +77,7 @@
         "layerHeightMm": 1.5,
         "seam": { "rampLengthMm": 15, "position": "followTwist", "angleDeg": 0 }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5 },
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
       "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
       "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
     },
@@ -115,7 +115,7 @@
         "layerHeightMm": 1.5,
         "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5 },
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
       "base": { "layers": 4, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 14 } },
       "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
     }

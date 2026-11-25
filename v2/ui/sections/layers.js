@@ -1,6 +1,7 @@
-// Layers & seam section (design §9.3): the seam, bead width, layer height and
-// the overhang limit, as the parts Seam, Bead and Overhang of the Layers step
-// (ui/steps.js). main.js shows the seam marker while that step is open.
+// Layers & seam section (design §9.3): the seam, bead width and layer height,
+// as the parts Seam and Bead of the Layers step (ui/steps.js). The overhang
+// limit is a rule in the warnings card now (ui/chips.js, pattern studio D44).
+// main.js shows the seam marker while that step is open.
 
 import { numberField, segmented } from '../controls.js';
 import { limit } from './shape.js';
@@ -38,12 +39,6 @@ const section = {
       onInput: (v) => store.change('Layer height', (d) => { d.layers.layerHeightMm = v; }),
       onCommit: commit,
     });
-    const overhang = numberField({
-      label: 'Overhang limit', unit: '°', ...limit(['overhangLimitDeg', 'rules.overhangLimitDeg'], { min: 5, max: 80, step: 1 }), decimals: 0,
-      value: store.state.design.rules.overhangLimitDeg,
-      onInput: (v) => store.change('Overhang limit', (d) => { d.rules.overhangLimitDeg = v; }),
-      onCommit: commit,
-    });
     const ramp = numberField({
       label: 'Seam ramp length', unit: 'mm', ...limit(['rampLengthMm', 'layers.seam.rampLengthMm'], { min: 0, max: 200, step: 1 }), decimals: 1,
       value: l0.seam.rampLengthMm,
@@ -66,15 +61,13 @@ const section = {
 
     for (const e of [position.el, angle.el, ramp.el]) e.dataset.part = 'seam';
     for (const e of [bead.el, layer.el]) e.dataset.part = 'bead';
-    overhang.el.dataset.part = 'overhang';
-    el.append(position.el, angle.el, ramp.el, bead.el, layer.el, overhang.el);
+    el.append(position.el, angle.el, ramp.el, bead.el, layer.el);
 
     const update = (state) => {
       const l = state.design.layers;
       bead.set(l.beadWidthMm);
       layer.set(l.layerHeightMm);
       layer.setInfo(layerInfo(l));
-      overhang.set(state.design.rules.overhangLimitDeg);
       ramp.set(l.seam.rampLengthMm);
       position.set(l.seam.position);
       angle.set(l.seam.angleDeg);

@@ -102,6 +102,36 @@ test('a pattern finer than the bead is flagged', () => {
   assert.ok(rw);
 });
 
+test('the tightest curve is a design setting (rules.curveRatio)', () => {
+  const flutes = (curveRatio) => {
+    const d = cylinder({ radius: 30, height: 60 });
+    d.form.detail.a = { pattern: 'lib:flutes@1', depthMm: 3, repeats: 40, tileHeightMm: 20 };
+    d.rules.curveRatio = curveRatio;
+    return computePreview(d, { library });
+  };
+  // Half a bead by default; a looser rule lets the same flutes pass.
+  assert.equal(warning(flutes(0.5), 'finePattern').bit, ISSUE.finePattern);
+  const loose = flutes(0.1);
+  assert.equal(warning(loose, 'finePattern'), undefined);
+  assert.ok(loose.issues.every((i) => !(i & ISSUE.finePattern)));
+  // A stricter rule flags a preset that passes by default.
+  const vase = structuredClone(presets[0]);
+  vase.rules.curveRatio = 1.5;
+  assert.match(warning(computePreview(vase, { library }), 'finePattern').message, /^Pattern finer than the bead can print at /);
+});
+
+test('layers per bump is a design setting (rules.layersPerBump)', () => {
+  const dots = (layersPerBump) => {
+    const d = cylinder();
+    d.form.detail.a = { pattern: 'lib:dots@1', depthMm: 0.3, repeats: 4, tileHeightMm: 5 };
+    d.rules.layersPerBump = layersPerBump;
+    return warning(computePreview(d, { library }), 'finePattern');
+  };
+  // Dots 5 mm apart are under two 1.5 mm layers a bump, but over one.
+  assert.deepEqual(dots(2), { id: 'finePattern', severity: 'warning', bit: 0, message: 'Pattern finer than the bead can print' });
+  assert.equal(dots(1), undefined);
+});
+
 test('height ranges read in mm, merged and counted', () => {
   const z = Float64Array.from({ length: 100 }, (_, i) => (i + 1) * 1.5);
   const flags = new Uint8Array(100);

@@ -3,7 +3,9 @@
 //
 // Version 3 (D50, no migration): the Detailed morph is form.detail (it was
 // design.surface), the bead-scale Pattern is design.pattern (null when off),
-// and the warning thresholds are design.rules.
+// and the warning thresholds are design.rules: the overhang limit, bead
+// support and the two fineness rules (the tightest curve, layers per bump),
+// all set in the warnings card (D44).
 //
 // Everything that edits a design goes through here, so the core can rely on a
 // normalised design: knots sorted, a layer height apart, radii above the
@@ -57,6 +59,8 @@ export const LIMITS = Object.freeze({
   layerHeightMm: { min: 0.2, max: 8, step: 0.05 },    // layers.layerHeightMm
   overhangLimitDeg: { min: 5, max: 80, step: 1 },     // rules.overhangLimitDeg
   supportRatio: { min: 0.1, max: 1, step: 0.05 },     // rules.supportRatio, of a bead width
+  curveRatio: { min: 0.1, max: 1.5, step: 0.05 },     // rules.curveRatio, the tightest curve's radius, of a bead width
+  layersPerBump: { min: 1, max: 6, step: 1 },         // rules.layersPerBump, whole layers
   rampLengthMm: { min: 0, max: 200, step: 1 },        // layers.seam.rampLengthMm
   angleDeg: { min: 0, max: 359, step: 1 },            // layers.seam.angleDeg (wraps)
   baseLayers: { min: 0, max: 20, step: 1 },           // base.layers
@@ -106,7 +110,7 @@ const DEFAULT = {
     layerHeightMm: 1.5,
     seam: { rampLengthMm: 15, position: 'hidden', angleDeg: 0 },
   },
-  rules: { overhangLimitDeg: 45, supportRatio: 0.5 },
+  rules: { overhangLimitDeg: 45, supportRatio: 0.5, curveRatio: 0.5, layersPerBump: 2 },
   base: { layers: 3, pattern: 'spiral', spacingRatio: 0.9, outline: true, hole: { diameter: 0 } },
   finish: { walls: 1, wallSpacingMm: 2.7, innerWall: 'smooth' },
   assets: {},
@@ -378,6 +382,8 @@ export function normaliseDesign(json) {
     rules: {
       overhangLimitDeg: num(rules.overhangLimitDeg, D.rules.overhangLimitDeg, LIMITS.overhangLimitDeg),
       supportRatio: num(rules.supportRatio, D.rules.supportRatio, LIMITS.supportRatio),
+      curveRatio: num(rules.curveRatio, D.rules.curveRatio, LIMITS.curveRatio),
+      layersPerBump: num(rules.layersPerBump, D.rules.layersPerBump, LIMITS.layersPerBump, true),
     },
     base: {
       layers: num(base.layers, D.base.layers, LIMITS.baseLayers, true),

@@ -5,7 +5,7 @@
 ; Bead width 3.000 mm, layer height 1.500 mm
 ;FLAVOR:Marlin
 ;LAYER_COUNT:20
-; design: {"schema":"vasecreator/design","version":3,"units":"mm","meta":{"name":"Plain cylinder"},"form":{"height":30,"profile":{"interp":"linear","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":30},{"z":30,"r":30}]},"plan":{"footprint":"circle","depthRatio":1,"cornerRounding":0},"twist":{"degrees":0},"detail":{"fromMm":0,"toMm":30,"a":{"pattern":"plain","depthMm":0,"repeats":1,"tileHeightMm":19.5},"b":null,"blend":{"shape":"fadesUp","amount":1}}},"layers":{"beadWidthMm":3,"layerHeightMm":1.5,"seam":{"rampLengthMm":15,"position":"fixed","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":0}},"finish":{"walls":1,"wallSpacingMm":2.7,"innerWall":"smooth"}}
+; design: {"schema":"vasecreator/design","version":3,"units":"mm","meta":{"name":"Plain cylinder"},"form":{"height":30,"profile":{"interp":"linear","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":30},{"z":30,"r":30}]},"plan":{"footprint":"circle","depthRatio":1,"cornerRounding":0},"twist":{"degrees":0},"detail":{"fromMm":0,"toMm":30,"a":{"pattern":"plain","depthMm":0,"repeats":1,"tileHeightMm":19.5},"b":null,"blend":{"shape":"fadesUp","amount":1}}},"layers":{"beadWidthMm":3,"layerHeightMm":1.5,"seam":{"rampLengthMm":15,"position":"fixed","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.5,"curveRatio":0.5,"layersPerBump":2},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":0}},"finish":{"walls":1,"wallSpacingMm":2.7,"innerWall":"smooth"}}
 G21
 G90
 M83
