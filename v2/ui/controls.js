@@ -544,6 +544,18 @@ export function slider(o) {
       range.disabled = !!d;
       field.setDisabled(d);
     },
+    /** New ends (a limit that follows the design, such as half a bead); the snap marks follow. */
+    setLimits({ min = o.min, max = o.max } = {}) {
+      if (min === o.min && max === o.max) return;
+      o.min = min;
+      o.max = max;
+      range.min = String(min);
+      range.max = String(max);
+      field.setLimits({ min, max });
+      marks.splice(0, marks.length, ...snapMarks(min, max, o.snap, decimals));
+      ticks?.replaceChildren(...marks.map((m) => el('option', { value: String(m) })));
+      range.value = String(value);
+    },
     destroy() {
       release();
       field.destroy();
@@ -574,7 +586,8 @@ export function segmented(o) {
     group.append(b);
     return b;
   });
-  const root = el('div', { class: 'seg' }, [
+  // Five or more choices (the blend and fade words) wrap onto a second row.
+  const root = el('div', { class: o.options.length > 4 ? 'seg seg--many' : 'seg' }, [
     el('span', { class: `seg-label${o.hideLabel ? ' visually-hidden' : ''}`, id: labelId, text: o.label }),
     group,
   ]);

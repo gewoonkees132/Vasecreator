@@ -21,31 +21,48 @@
 // shown is recomputed from them) or as points per layer (a whole number of
 // tiles). The one set last is kept when the pot changes size.
 
-import { PI, dsin } from './math.js';
 import { PLAIN, bitmapValues } from './patterns.js';
-import { blendShape } from './surface.js';
+import { BLEND_SHAPES, blendShape, softEdgeMm } from './surface.js';
 import { blurGrid } from './raster.js';
+import { createProfile } from './profile.js';
+import { createPlan } from './plan.js';
 
-export const FADE_SHAPES = ['even', 'fadesUp', 'fadesDown', 'middle', 'diagonal'];
+/** The Fade's shapes: the Detailed morph's blend words (D42, D54). */
+export const FADE_SHAPES = BLEND_SHAPES;
 export const DENSITY_FACES = ['spacing', 'points'];
 /** Node spacing around, in bead widths (D40). */
 export const SPACING_BEADS = Object.freeze({ min: 0.5, max: 3, default: 1 });
 /** Depth as a share of a bead width: the most, and the default (D38, §3.3). */
 export const DEPTH_BEADS = Object.freeze({ max: 0.5, default: 0.25 });
 export const DEFAULT_POINTS = 96;
+/** The most nodes a layer may have: the toolpath's MAX_POINTS_PER_LAYER (a test keeps them equal). */
+export const MAX_NODES = 1600;
 
 /**
- * Where a new Pattern runs: the Detailed morph's range when it has one,
- * else from 8 mm to 10 mm below the rim (§3.4).
+ * Where a new Pattern runs (§3.4): over the Detailed morph's range when it
+ * has one, else from 8 mm to 10 mm below the rim.
+ *
+ * Over the Detailed morph it keeps inside the relief's soft start and end,
+ * where the relief is whole. The Pattern starts and stops sharply, and
+ * starting it on the relief's ramp would put two steps on one layer: on
+ * the Classic vase the flutes alone grow 0.67 mm on the layer the Pattern
+ * would start on, so no starter Pattern could pass bead support (D43) there.
+ * A range too short for that keeps the Detailed morph's own.
  * @param {object} design normalised
  * @returns {{ fromMm: number, toMm: number }}
  */
 export function defaultPatternRange(design) {
   const detail = design.form.detail;
-  const on = (slot) => !!slot && slot.pattern !== PLAIN.id && slot.depthMm > 0;
-  if (detail && (on(detail.a) || on(detail.b))) return { fromMm: detail.fromMm, toMm: detail.toMm };
   const H = design.form.height;
   const h = design.layers.layerHeightMm;
+  const on = (slot) => !!slot && slot.pattern !== PLAIN.id && slot.depthMm > 0;
+  if (detail && (on(detail.a) || on(detail.b))) {
+    const edge = softEdgeMm(Math.max(detail.a?.depthMm ?? 0, detail.b?.depthMm ?? 0), h);
+    const fromMm = detail.fromMm + edge;
+    const toMm = Math.min(detail.toMm, H) - edge;
+    if (toMm - fromMm >= h) return { fromMm, toMm };
+    return { fromMm: detail.fromMm, toMm: Math.min(detail.toMm, H) };
+  }
   const toMm = Math.max(H - 10, h);
   return { fromMm: Math.min(8, Math.max(toMm - h, 0)), toMm };
 }
@@ -76,11 +93,7 @@ export function findDrawing(design, library) {
  */
 export function fadeAt(fade, t, u) {
   if (fade.shape === 'even') return 1;
-  if (fade.shape === 'diagonal') {
-    const s = dsin(PI * (t + u));
-    return 1 - fade.amount * s * s;
-  }
-  return 1 - fade.amount * blendShape(fade.shape, t);
+  return 1 - fade.amount * blendShape(fade.shape, t, u);
 }
 
 /**
@@ -103,6 +116,69 @@ export function nodesAround(density, columns, perimeterMinMm, maxNodes) {
 }
 
 /**
+ * Which layers the Pattern prints on and how many nodes each gets (D40, D41):
+ * the wall layers whose middle, (i + ½)·h, lies in From–To (never the base),
+ * and N = repeats × columns from the density, measured on the narrowest of them.
+ * @param {object} design normalised, with a Pattern
+ * @param {object | null} recipe its drawing
+ * @param {{ profile: { at(z: number): number }, unitPerimeter: number, layerCount: number,
+ *           baseLayers: number, maxNodes: number }} wall
+ */
+function patternLayout(design, recipe, { profile, unitPerimeter, layerCount, baseLayers, maxNodes }) {
+  const p = design.pattern;
+  const h = design.layers.layerHeightMm;
+  let first = Math.max(baseLayers, Math.ceil(p.fromMm / h - 0.5 - 1e-9));
+  const last = Math.min(layerCount - 1, Math.floor(p.toMm / h - 0.5 + 1e-9));
+  if (first > last) first = last + 1;
+  const columns = recipe ? recipe.columns : 1;
+  const rows = recipe ? recipe.rows : 1;
+  let perimeterMin = Infinity;
+  let perimeterMax = 0;
+  for (let i = first; i <= last; i++) {
+    const perimeter = profile.at((i + 1) * h) * unitPerimeter;
+    if (perimeter < perimeterMin) perimeterMin = perimeter;
+    if (perimeter > perimeterMax) perimeterMax = perimeter;
+  }
+  if (first > last) perimeterMin = perimeterMax = profile.at(design.form.height / 2) * unitPerimeter;
+  const { repeats, nodes, clamped } = nodesAround(p.density, columns, perimeterMin, maxNodes);
+  return {
+    first, last, columns, rows, repeats, nodes, clamped,
+    perimeterMinMm: perimeterMin, spacingMinMm: perimeterMin / nodes, spacingMaxMm: perimeterMax / nodes,
+  };
+}
+
+/**
+ * The Pattern's density readout without building the toolpath (D40, §3.2),
+ * the same numbers PreviewResult.pattern reports: for the controls, which
+ * also need them in Shape (where the preview leaves the Pattern out) and
+ * before a preview has come back.
+ * @param {object} design normalised
+ * @param {object} library
+ * @returns {null | { columns: number, rows: number, repeats: number, nodes: number, clamped: boolean,
+ *   spacingMinMm: number, spacingMaxMm: number, perimeterMinMm: number, layers: number }}
+ *   null without a Pattern or when its drawing can't be found; layers is how many it prints on
+ */
+export function patternReadout(design, library) {
+  if (!design.pattern) return null;
+  const recipe = findDrawing(design, library);
+  if (!recipe) return null;
+  const h = design.layers.layerHeightMm;
+  const layerCount = Math.max(1, Math.round(design.form.height / h));
+  const l = patternLayout(design, recipe, {
+    profile: createProfile(design.form.profile),
+    unitPerimeter: createPlan(design.form.plan).unitPerimeter,
+    layerCount,
+    baseLayers: Math.min(design.base.layers, layerCount),
+    maxNodes: MAX_NODES,
+  });
+  return {
+    columns: l.columns, rows: l.rows, repeats: l.repeats, nodes: l.nodes, clamped: l.clamped,
+    spacingMinMm: l.spacingMinMm, spacingMaxMm: l.spacingMaxMm, perimeterMinMm: l.perimeterMinMm,
+    layers: Math.max(0, l.last - l.first + 1),
+  };
+}
+
+/**
  * Everything the toolpath needs to add the Pattern, precomputed once.
  * @param {object} design normalised
  * @param {object} library
@@ -115,27 +191,12 @@ export function nodesAround(density, columns, perimeterMinMm, maxNodes) {
  *   inRange(layer: number): boolean, rowOf(layer: number): number, at(layer: number, u: number): number,
  * }} null when the design has no Pattern
  */
-export function createLayerPattern(design, library, { profile, unitPerimeter, layerCount, baseLayers, maxNodes }) {
+export function createLayerPattern(design, library, wall) {
   const p = design.pattern;
   if (!p) return null;
-  const h = design.layers.layerHeightMm;
   const recipe = findDrawing(design, library);
-  // Wall layers whose middle lies in From–To; the Pattern starts and stops sharply.
-  let first = Math.max(baseLayers, Math.ceil(p.fromMm / h - 0.5 - 1e-9));
-  const last = Math.min(layerCount - 1, Math.floor(p.toMm / h - 0.5 + 1e-9));
-  if (first > last) first = last + 1;
-  const columns = recipe ? recipe.columns : 1;
-  const rows = recipe ? recipe.rows : 1;
-
-  let perimeterMin = Infinity;
-  let perimeterMax = 0;
-  for (let i = first; i <= last; i++) {
-    const perimeter = profile.at((i + 1) * h) * unitPerimeter;
-    if (perimeter < perimeterMin) perimeterMin = perimeter;
-    if (perimeter > perimeterMax) perimeterMax = perimeter;
-  }
-  if (first > last) perimeterMin = perimeterMax = profile.at(design.form.height / 2) * unitPerimeter;
-  const { repeats, nodes: N, clamped } = nodesAround(p.density, columns, perimeterMin, maxNodes);
+  // The Pattern starts and stops sharply at its first and last layer.
+  const { first, last, columns, rows, repeats, nodes: N, clamped, spacingMinMm, spacingMaxMm } = patternLayout(design, recipe, wall);
   const active = !!recipe && p.depthMm > 0 && first <= last;
 
   const grid = recipe
@@ -184,23 +245,41 @@ export function createLayerPattern(design, library, { profile, unitPerimeter, la
   return {
     drawing: p.drawing, missing: !recipe, active, recipe,
     columns, rows, repeats, nodes: N, clamped, first, last, depthMm: p.depthMm,
-    spacingMinMm: perimeterMin / N, spacingMaxMm: perimeterMax / N,
+    spacingMinMm, spacingMaxMm,
     inRange, rowOf, at,
   };
 }
 
 /**
- * The Pattern settings a new Pattern starts with (D38, D40): a quarter bead
- * deep, nodes one bead apart, crisp, no fade, over defaultPatternRange.
+ * The depth and density a drawing starts with, in mm for this design's bead:
+ * the drawing's own defaults (in bead widths, as the starter library gives
+ * them) or else a quarter bead deep and nodes one bead apart (D38, D40).
+ * @param {object} design normalised
+ * @param {{ depthBeads?: number, spacingBeads?: number }} [defaults]
+ * @returns {{ depthMm: number, density: { by: 'spacing', spacingMm: number, points: number } }}
+ */
+export function drawingDefaults(design, defaults = {}) {
+  const w = design.layers.beadWidthMm;
+  const depth = Math.min(Math.max(defaults.depthBeads ?? DEPTH_BEADS.default, 0), DEPTH_BEADS.max);
+  const spacing = Math.min(Math.max(defaults.spacingBeads ?? SPACING_BEADS.default, SPACING_BEADS.min), SPACING_BEADS.max);
+  return {
+    // A whole hundredth of a mm, never past half a bead.
+    depthMm: Math.min(Math.round(depth * w * 100) / 100, Math.floor(DEPTH_BEADS.max * w * 100) / 100),
+    density: { by: 'spacing', spacingMm: Math.round(spacing * w * 100) / 100, points: DEFAULT_POINTS },
+  };
+}
+
+/**
+ * The Pattern settings a new Pattern starts with: the drawing's defaults
+ * (drawingDefaults), crisp, no fade, over defaultPatternRange.
  * @param {object} design normalised
  * @param {string} drawing
+ * @param {{ depthBeads?: number, spacingBeads?: number }} [defaults]
  */
-export function newPattern(design, drawing) {
-  const w = design.layers.beadWidthMm;
+export function newPattern(design, drawing, defaults) {
   return {
     drawing,
-    depthMm: Math.round(DEPTH_BEADS.default * w * 100) / 100,
-    density: { by: 'spacing', spacingMm: SPACING_BEADS.default * w, points: DEFAULT_POINTS },
+    ...drawingDefaults(design, defaults),
     ...defaultPatternRange(design),
     fade: { shape: 'even', amount: 1 },
     softenCells: 0,

@@ -283,6 +283,8 @@
 .seg-btn:disabled { color: var(--c-text-2); cursor: default; }
 .seg-group:has(.seg-btn:only-child) { align-self: flex-start; }
 .seg-btn:only-child { flex: none; padding: 0 var(--space-4); }
+.seg--many .seg-group { flex-wrap: wrap; }
+.seg--many .seg-btn { flex: 1 1 calc(33.3% - 2px); }
 
 /* ---------- Toggle and select ---------- */
 
@@ -722,7 +724,7 @@
 .steps--phone .swatch-strip .swatch-del { top: -12px; right: calc(50% - 46px); }
 .steps--phone .mine-grid { padding-left: var(--space-2); border-left: 1px solid var(--c-border); }
 /* The slot cards say which slot the swatches fill; the labels stay for screen readers. */
-.steps--phone [data-part="swatch"].grid-label,
+.steps--phone #section-detail > .grid-label,
 .steps--phone .swatch-strip > .grid-label {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
@@ -1163,3 +1165,68 @@
 .dock-swatch--make .dock-swatch-add { font-size: 19px; }
 .dock-swatch--action:hover .dock-swatch-add { border-color: var(--c-primary-light); color: var(--c-text); }
 .dock-swatch--action:disabled { opacity: .5; cursor: progress; }
+
+/* ---- An open group in the tool row (Shape's Morph: Large · Detailed, D36) ---- */
+.dock-lead { flex: none; display: flex; align-items: center; gap: 6px; }
+.dock-tablist { flex: none; display: flex; gap: 6px; }
+.dock-back {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  min-height: 46px;
+  margin-left: var(--space-2);
+  padding: 0;
+  border: 1px solid var(--c-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--c-text);
+  cursor: pointer;
+}
+.dock-back:not([hidden]) + .dock-tools { padding-left: 0; }
+.dock-back:focus-visible { outline-offset: -2px; }
+.dock-modes { flex: none; display: flex; padding: 3px; border-radius: 12px; background: rgba(18,47,45,.07); }
+.dock-mode {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text-2);
+  cursor: pointer;
+}
+.dock-mode[aria-pressed="true"] { background: #fff; color: var(--c-text); box-shadow: var(--shadow-1); }
+.dock-mode:focus-visible { outline-offset: -2px; }
+.dock-chip-more--group svg { transform: rotate(90deg); }
+
+/* Five options (the blend and fade words) at a phone's width. */
+.dock-options--many { gap: 4px; }
+.dock-options--many .dock-opt { padding: 0 4px; font-size: 12px; white-space: normal; line-height: 1.15; }
+
+/* The density's two faces, left of the dial's value (D40). */
+.dock-face { display: flex; padding: 2px; border-radius: 8px; background: rgba(18,47,45,.07); }
+.dock-face-btn {
+  min-width: 34px;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-2);
+  cursor: pointer;
+}
+.dock-face-btn[aria-pressed="true"] { background: #fff; color: var(--c-text); box-shadow: var(--shadow-1); }
+@media (pointer: coarse) {
+  /* A taller target that keeps the row's height. */
+  .dock-face-btn { position: relative; }
+  .dock-face-btn::after { content: ''; position: absolute; inset: -9px 0; }
+}
+
+/* ---- The Pattern step (ui/sections/pattern.js) ---- */
+.pattern-about { margin-top: var(--space-1); }
+.pattern-density { display: flex; flex-direction: column; gap: var(--space-2); }
+.density-readout { margin: 0; font-variant-numeric: tabular-nums; }

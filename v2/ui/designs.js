@@ -2,10 +2,10 @@
 // presets, then the saved designs and a "+ Save design" tile. Saved designs
 // live in IndexedDB (store/db.js); design files move them between devices.
 //
-// Presets are shapes (D30, C29): their tiles show plain pots, and opening one
-// starts on Shape with no pattern (slot A Plain, slot B none), keeping its
-// form, layers, base and finish. The preset files keep their patterns, so the
-// golden G-code still covers whole designs. Saved designs and design files
+// Presets are shapes (D30, C29, narrowed by D52): their tiles show the pot
+// with its Morph and Detailed morph, which are part of the shape now, and
+// opening one starts on Shape without a Pattern, keeping its form, layers,
+// base and finish. Saved designs and design files
 // open whole. Everything opens on the Shape step, except Last design, which
 // keeps the step you're on.
 

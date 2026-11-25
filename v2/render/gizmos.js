@@ -1,9 +1,13 @@
-// Handles on the pot for the steps after Shape (mobile stage M7, M8):
+// Handles on the pot (mobile stage M7, M8; pattern studio D41):
 //
-//   range  the Pattern step: a bracket beside the wall from the pattern's
-//          From to its To, with a handle at each end, dragged up and down.
-//   seam   the Layers & seam step: a grip at the top of the seam line,
-//          dragged around the pot to turn the seam angle.
+//   detail   Shape: a dark bracket beside the wall from the Detailed morph's
+//            From to its To (form.detail), with a handle at each end, dragged
+//            up and down. It sits on the screen-left side, clear of the
+//            profile handles on the right.
+//   pattern  the Pattern step: the same bracket in blue for the Pattern's own
+//            From / To (design.pattern), on the screen-right side.
+//   seam     the Layers & seam step: a grip at the top of the seam line,
+//            dragged around the pot to turn the seam angle.
 //
 // Like render/handles.js these are DOM elements over the canvas (focusable,
 // 44 px touch targets), re-placed after every render. Raw values go out; the
@@ -34,6 +38,10 @@ const CSS = `
 .vc-gz-handle:focus-visible { box-shadow: 0 0 0 2px #fff, 0 0 0 4.5px #3fa66a, 0 2px 6px rgba(0,0,0,.25); }
 .vc-gz-handle.is-dragging { box-shadow: 0 0 0 2px #fff, 0 0 0 4.5px #3fa66a, 0 4px 10px rgba(0,0,0,.3); }
 .vc-gz-seam { cursor: ew-resize; }
+.vc-gz-root.is-pattern .vc-gz-bracket, .vc-gz-root.is-pattern .vc-gz-tick { stroke: rgb(37,99,170); opacity: .9; }
+.vc-gz-root.is-pattern .vc-gz-from, .vc-gz-root.is-pattern .vc-gz-to { background: rgb(37,99,170); }
+.vc-gz-root.is-pattern .vc-gz-from:hover, .vc-gz-root.is-pattern .vc-gz-to:hover,
+.vc-gz-root.is-pattern .vc-gz-from.is-dragging, .vc-gz-root.is-pattern .vc-gz-to.is-dragging { background: rgb(28,80,142); }
 .vc-gz-seam.is-behind:not(.is-dragging) { opacity: .55; }
 @media (pointer: coarse) {
   .vc-gz-handle { height: 30px; padding: 0 12px 0 10px; border-radius: 15px; font-size: 13px; }
@@ -49,8 +57,8 @@ let styleUsers = 0;
 /**
  * @param {import('./beads.js').BeadRenderer} renderer
  * @param {HTMLElement} overlayEl  the overlay over the canvas (shared with handles.js)
- * @param {{ onRange?(which: 'from' | 'to', zMm: number): void, onSeam?(angleDeg: number): void, onCommit?(): void }} callbacks
- * @returns {{ setMode(mode: 'range' | 'seam' | null): void, update(design: object, result: object | null): void, dispose(): void }}
+ * @param {{ onRange?(target: 'detail' | 'pattern', which: 'from' | 'to', zMm: number): void, onSeam?(angleDeg: number): void, onCommit?(): void }} callbacks
+ * @returns {{ setMode(mode: 'detail' | 'pattern' | 'seam' | null): void, update(design: object, result: object | null): void, dispose(): void }}
  */
 export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } = {}) {
   injectStyle();
@@ -98,8 +106,8 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
     root.append(el);
     return el;
   }
-  const fromEl = makeHandle('vc-gz-from', 'From', ARROWS_V, 'Pattern starts at');
-  const toEl = makeHandle('vc-gz-to', 'To', ARROWS_V, 'Pattern ends at');
+  const fromEl = makeHandle('vc-gz-from', 'From', ARROWS_V, 'Starts at');
+  const toEl = makeHandle('vc-gz-to', 'To', ARROWS_V, 'Ends at');
   const seamEl = makeHandle('vc-gz-seam', 'Seam', ARROWS_H, 'Seam angle');
   for (const el of [fromEl, toEl]) {
     el.setAttribute('aria-orientation', 'vertical');
@@ -168,9 +176,13 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
     return Math.hypot(s.x, ratio * s.y);
   }
 
+  const isRange = () => mode === 'detail' || mode === 'pattern';
+  /** The range the bracket edits: the Detailed morph's or the Pattern's. */
+  const rangeOf = () => (mode === 'pattern' ? design.pattern : design.form.detail);
+
   function rangeValues() {
-    const sf = design.form.detail;
-    return { from: live.from ?? sf.fromMm, to: live.to ?? sf.toMm };
+    const r = rangeOf();
+    return { from: live.from ?? r.fromMm, to: live.to ?? r.toMm };
   }
 
   function layoutRange() {
@@ -178,9 +190,11 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
     const k = silhouetteFactor();
     const sf = design.form.detail;
     const outward = Math.max(sf.a?.depthMm ?? 0, sf.b?.depthMm ?? 0) + (design.form.morph?.map ? (design.form.morph.strengthMm ?? 0) : 0)
-      + design.layers.beadWidthMm / 2 + GAP_MM;
+      + (design.pattern?.depthMm ?? 0) + design.layers.beadWidthMm / 2 + GAP_MM;
+    // The Detailed morph's on the screen-left side, the Pattern's on the right.
+    const side = mode === 'pattern' ? 1 : -1;
     const at = (z) => {
-      const r = radiusAt(z) * k + outward;
+      const r = (radiusAt(z) * k + outward) * side;
       return toScreen(s.x * r, s.y * r, z);
     };
     let pts = '';
@@ -193,9 +207,11 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
     const pf = at(from);
     const pt = at(to);
     // Short ticks towards the pot at both ends.
-    ticks.setAttribute('d', `M${pf.x.toFixed(1)},${pf.y.toFixed(1)}h-8M${pt.x.toFixed(1)},${pt.y.toFixed(1)}h-8`);
-    place(fromEl, pf, 'left');
-    place(toEl, pt, 'left');
+    const tick = side > 0 ? 'h-8' : 'h8';
+    ticks.setAttribute('d', `M${pf.x.toFixed(1)},${pf.y.toFixed(1)}${tick}M${pt.x.toFixed(1)},${pt.y.toFixed(1)}${tick}`);
+    const how = side > 0 ? 'right' : 'left';
+    place(fromEl, pf, how);
+    place(toEl, pt, how);
     label(fromEl, from, 'mm');
     label(toEl, to, 'mm');
   }
@@ -233,8 +249,9 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
     el.hidden = p.behind;
     const w = el.offsetWidth || 50;
     const hgt = el.offsetHeight || 24;
-    let x = how === 'left' ? p.x + 4 : p.x - w / 2;
-    let y = how === 'left' ? p.y - hgt / 2 : p.y - hgt - 8;
+    // right: beside the point, away from the pot; left: the same on the other side; above: over it.
+    let x = how === 'right' ? p.x + 4 : how === 'left' ? p.x - w - 4 : p.x - w / 2;
+    let y = how === 'above' ? p.y - hgt - 8 : p.y - hgt / 2;
     const reg = renderer.region;
     if (reg) {
       const left = reg.x + offset.x;
@@ -258,7 +275,7 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
     const cr = renderer.canvas.getBoundingClientRect();
     const or = overlayEl.getBoundingClientRect();
     offset = { x: cr.left - or.left, y: cr.top - or.top };
-    if (mode === 'range') layoutRange();
+    if (isRange()) layoutRange();
     else if (mode === 'seam') layoutSeam();
   }
 
@@ -305,13 +322,13 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
       const v = z + drag.dz;
       drag.moved = true;
       live[drag.kind] = clampRange(drag.kind, v);
-      onRange?.(drag.kind, live[drag.kind]);
+      onRange?.(mode, drag.kind, live[drag.kind]);
     }
     layout();
   }
 
   function clampRange(kind, v) {
-    const sf = design.form.detail;
+    const sf = rangeOf();
     const step = design.layers.layerHeightMm;
     const lo = kind === 'from' ? 0 : (live.from ?? sf.fromMm) + step;
     const hi = kind === 'from' ? (live.to ?? sf.toMm) - step : design.form.height;
@@ -352,7 +369,7 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
       if (!n) return;
       e.preventDefault();
       const v = clampRange(kind, rangeValues()[kind] + n * (big ? 10 : 1));
-      onRange?.(kind, v);
+      onRange?.(mode, kind, v);
       onCommit?.();
     });
   }
@@ -360,9 +377,13 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
   const unsubscribe = renderer.onAfterRender(layout);
 
   function show() {
-    const on = !!mode && !!design && !!result;
+    const on = !!mode && !!design && !!result && (!isRange() || !!rangeOf());
     root.hidden = !on;
-    const range = on && mode === 'range';
+    const range = on && isRange();
+    root.classList.toggle('is-pattern', mode === 'pattern');
+    const what = mode === 'pattern' ? 'Pattern' : 'Detailed morph';
+    fromEl.setAttribute('aria-label', `${what} starts at`);
+    toEl.setAttribute('aria-label', `${what} ends at`);
     fromEl.hidden = toEl.hidden = !range;
     bracket.style.display = ticks.style.display = range ? '' : 'none';
     seamEl.hidden = !(on && mode === 'seam');
@@ -370,7 +391,7 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
   }
 
   return {
-    /** 'range' (Pattern, with a pattern), 'seam' (Layers & seam) or null. */
+    /** 'detail' (Shape, with a Detailed morph), 'pattern' (Pattern, with a Pattern), 'seam' (Layers & seam) or null. */
     setMode(next) {
       if (next === mode) return;
       if (drag) endDrag({ pointerId: drag.id });

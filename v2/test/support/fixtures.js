@@ -5,7 +5,8 @@ import { defaultDesign } from '../../core/design.js';
 
 const read = (path) => JSON.parse(readFileSync(new URL(path, import.meta.url), 'utf8'));
 
-export const library = read('../../library/patterns.json');
+/** The engine's library, as main.js builds it: the Detailed morph's swatches and the starter Patterns. */
+export const library = { ...read('../../library/patterns.json'), layerPatterns: read('../../library/layer-patterns.json').patterns };
 export const presets = read('../../library/presets.json').presets;
 
 /** A plain cylinder: no pattern, a short base, nothing to warn about. */

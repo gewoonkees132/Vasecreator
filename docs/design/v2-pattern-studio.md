@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Owner decisions D35–D54. D52–D54 settled §13's open questions on 2026-11-25. Slice 1 (the engine) is built on `t3/pattern-studio` (commit `a916a65`, local, not pushed); slices 2–6 are next (§11, notes in §11.1).
+- **Status:** Owner decisions D35–D54. D52–D54 settled §13's open questions on 2026-11-25. Slices 1 (the engine, commit `a916a65`) and 2 (the Pattern and Shape steps) are built on `t3/pattern-studio` (local, not pushed); slices 3–6 are next (§11, notes in §11.1 and §11.2).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -137,7 +137,7 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 
 ### 3.4 Where it runs (D41)
 
-- The Pattern has its own `fromMm` / `toMm`, independent of Detailed morph's. By default it covers the same range as the Detailed morph, or 8 mm to 10 mm below the rim when there is none.
+- The Pattern has its own `fromMm` / `toMm`, independent of Detailed morph's. By default it covers the same range as the Detailed morph, or 8 mm to 10 mm below the rim when there is none. (Slice 2: over a Detailed morph it keeps inside the relief's soft start and end, §11.2.)
 - On the pot, a second bracket (like M7's), in a different colour from Detailed morph's, with a handle at each end. It shows in the Pattern step.
 - The Pattern starts and stops **sharply**: the first layer in the range is fully patterned. Bead support (D43) catches any step that's too big.
 - Outside the range, points per layer follow today's rule (`pointsAround`).
@@ -340,6 +340,7 @@ These go on the branch `t3/pattern-studio`, cut from `t3/guided-journey`. Each s
 2. **Pattern step and Shape step.**
    - Build: the starter library and the Pattern carousel; the Density, Depth, Fade, Soften, From and To tools (dock and sheet); the second bracket; Detailed morph as a Shape part, with the *Large · Detailed* toggle on phones; `shapeOnly` strips only the Pattern, so presets open with their relief (D52); *Diagonal* for the A/B blend (D54: the blend weight now depends on u as well as z, so `detailWeights` in `core/surface.js` and the z-keyed weight cache in `core/toolpath.js` change).
    - Accept when: one tap puts *Knit* on the pot; the density readout shows points per layer and the mm range; changing the layer height keeps the drawing row for row.
+   - **Built** (§11.2).
 3. **The 2D editor.**
    - Build: the phone and desktop tool sets in §6, live on the pot, also opened from Detailed morph with a coarse grid, a soft render and *Sharp, Soft, Round* (D53).
    - Accept when: on a phone the pot stays visible and live while drawing; inverting a column or a diagonal works across the dimmed repeats; one history entry per session.
@@ -372,6 +373,58 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 - **Finding for the starter library:** where a cell flips straight from in to out between layers, the default depth of ¼ bead puts out over in at exactly half a bead, the support limit. Any lean in the profile then warns: a knit at ¼ bead on the Classic vase warns from 14 to 150 mm. The defaults must pass bead support on the default pot (§3.8), so use less depth, or drawings without direct in↔out flips between rows.
 - **Browser check used:** headless Chrome over CDP, from a scratch script. It loads `/v2/` at 1280 × 800, then at 360 × 660 with touch emulation. It applies a Pattern through `window.vc2.store.apply`, reads `vc2.store.state.result` and the console, and takes screenshots. Port 8041 was free.
 
+### 11.2 Slice 2 as built (notes for the next slices)
+
+- **The starter library** is `library/layer-patterns.json`, which `main.js` loads into `library.layerPatterns` beside `patterns.json`, so the worker gets it too. Each entry is `{ id, name, description, recipe (a bitmap, rows bottom first), defaults: { depthBeads, spacingBeads } }`. All eight are spaced one bead apart.
+
+  | Pattern | Tile | Depth | Drawing |
+  |---|---|---|---|
+  | Knit | 4 × 4 | 0.14 bead | Columns of V shapes two layers tall, with an in groove between them |
+  | Rib 1×1 | 2 × 1 | 0.2 bead | Out, in |
+  | Rib 2×2 | 4 × 1 | 0.2 bead | Out, out, in, in |
+  | Brick bond | 6 × 8 | 0.14 bead | Raised bricks 5 points by 3 layers, flat joints, each course offset by half a brick |
+  | Seed | 2 × 2 | 0.14 bead | Out dots in a checker on flat |
+  | Herringbone | 8 × 8 | 0.14 bead | Diagonals of out, flat, in, flat, one point along per two layers, the two halves mirrored |
+  | Basket | 6 × 12 | 0.14 bead | Blocks of 3 × 6 cells, upright and level out strands, in a checker |
+  | Diamond | 6 × 12 | 0.14 bead | Out diamond outlines with in centres, flat between |
+
+- **Why these depths.** No starter cell flips straight from out to in between rows, so each layer steps at most one depth off the layer below.
+  - **Classic vase:** with its flutes (D52), the profile leans up to 0.88 mm a layer in the neck. That leaves 0.62 mm of the 1.5 mm support limit, so 0.2 bead (0.6 mm) is the most a drawing with steps can take there.
+  - **Square planter:** its basket relief leaves less room. 0.14 bead (0.42 mm) passes on all three presets, so one tap never warns on a preset.
+  - **Ribs:** they don't step between rows, so they take 0.2 bead.
+  - **In the browser:** at 0.42 mm the texture reads clearly near the neck and more softly on the belly, where the nodes are 6.5 mm apart. 0.6 mm reads better on the Classic vase but warns on the Square planter.
+  - `test/starters.test.js` checks every starter on every preset.
+- **The default range (a refinement of §3.4).** Over a Detailed morph, a new Pattern runs inside the relief's soft start and end (`softEdgeMm`). On the Classic vase that is 16–144 mm instead of 10–150 mm. Without this, no starter could pass bead support on the default pot: the flutes' soft start (10–16 mm) grows 0.67 mm on the very layer where the Pattern starts sharply. A range too short for the inset keeps the Detailed morph's own.
+- **One tap.** A tap on a starter is one history step, "Pattern: Knit". A first Pattern starts from `newPattern`. Switching drawings keeps From / To, Fade and Soften, and a starter brings its own depth and density. Tapping the drawing already on the pot does nothing, and *None* takes the Pattern off. All of this is in `ui/pattern-actions.js` (`setLayerPattern`, `pickLayerPattern`).
+- **Density.**
+  - The readout reads "60 points per layer · 3.2–6.5 mm". Points are nodes; the toolpath adds its extra points between them on top.
+  - `patternReadout` (`core/layer-pattern.js`) works it out without the toolpath, for the controls, which also need it in Shape and before a preview arrives. A test keeps it equal to the preview's.
+  - The dial and its chip show the value as set: the Spacing face in mm, or the Points face as a count in whole tiles. The note shows what prints.
+  - Switching faces keeps the pot (`setDensityFace`).
+- **Diagonal (D54).** `detailWeights(detail, z, h, u)` takes u. Per height, the toolpath's weight cache now holds the most each slot can reach (A the soft edges, B those times the amount). `detailAt` splits that per point. The golden G-code is unchanged.
+- **UI as built:**
+  - **Shape:** `ui/sections/detail.js` (was `surface.js`) is one part, *Detailed morph*, after Morph. On desktop it sits behind *More shape options*. Its bracket is dark and sits on the screen-left side of the pot, clear of the profile handles.
+  - **The phone dock:** Morph is a group tool. Picking it opens a row with a fixed back button (an icon), a *Large · Detailed* toggle and that side's tools. *Next* hides while the row is open, since the back button and toggle need its room at 360 px; slice 5 removes *Next* anyway. Large shows the Morph's sheet hint as before.
+  - **The Pattern step:** `ui/sections/pattern.js` has the parts Pattern, Depth, Density, From / to, Fade and Soften. The dock has the same tools, and the Density dial has an *mm · pts* toggle. The Pattern's bracket is blue and sits on the screen-right side.
+  - **Swatches:** a Pattern swatch is drawn crisp in three tones at the pot's bead scale: a square of wall 8 bead widths wide, one cell per node spacing by one layer. The drawing on the pot shows at its own spacing, the others at their defaults.
+  - **Controls:** segmented controls with five options (Blend, Fade) wrap onto two rows.
+- **Left for later slices:**
+  - *Make your own* and *Edit* in the carousel wait for the 2D editor (slice 3).
+  - The Pattern's *My patterns* lists only a drawing the design carries, until *Save pattern* (slice 6).
+  - The stopgap editor still opens from the Detailed morph's *Edit swatch…*.
+- **Browser check:** as in §11.1, on port 8041, with scratch scripts.
+  - **Desktop, 1280 × 800:**
+    - A first visit opens the Classic vase with its flutes and the dark bracket.
+    - In Pattern, one tap on Knit gives "Pattern: Knit" at 0.42 mm over 16–144 mm, the readout, the blue bracket and no warnings.
+    - All eight starters are free of warnings on the default pot, and a 1.2 mm layer keeps the drawing row for row.
+    - Designs shows the presets with their relief.
+  - **Phone, 360 × 660 with touch:**
+    - The Morph row opens and closes, and Blend → Diagonal applies.
+    - A tap on Knit in the carousel puts it on the pot, and the Density dial works in both faces, in whole tiles.
+    - The five Fade options fit, and the sheet shows the parts of Shape and Pattern.
+    - The pot's region ends above the dock, and the handles stay inside it.
+  - **Headless flick:** in headless Chrome the dial's flick can run on for seconds after a scripted drag, so values keep changing after the drag. That is the flick, not a bug.
+
 ---
 
 ## 12. Later (parked; drafted in [`v2-later-issues.md`](v2-later-issues.md), issues 17–19)
@@ -390,8 +443,10 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 - the exact *Diagonal* fade formula (slice 1: 1 − a·sin²(π(t + u)))
 - where the node positions start in `u`, and how the seam snaps to a node (slice 1: from u = 0, to the nearest node)
 - which way up the rows are stored (slice 1: bottom row first)
-- the cells of the eight starter Patterns and their defaults
-- the default density and depth (see §3.2–§3.3)
+- the cells of the eight starter Patterns and their defaults (slice 2: §11.2)
+- the default density and depth (see §3.2–§3.3; slice 2: one bead apart, 0.14 bead deep, 0.2 for the ribs)
+- the default range over a Detailed morph (slice 2: inside its soft start and end, §11.2)
+- how the Morph and Detailed morph nest in the phone dock (slice 2: a group tool with a *Large · Detailed* toggle, §11.2)
 - the editor's exact layout and icons, within §6
 - where `rules` sits in the design JSON (slice 1: top level, `design.rules`)
 - the warning text for bead support (slice 1: "Bead not supported" plus the heights)

@@ -1,25 +1,27 @@
-// Pattern section (design §9.2, C7, C8, C16, C18; "Surface" before issue #1).
-// It edits the Detailed morph, design.form.detail (D35), until slice 2 of the
-// pattern studio moves it into Shape: two pattern slots, the swatch grid
-// that fills the selected slot, per-slot settings, and the shared range and
-// blend, as the parts Swatch, Depth, Repeats, From / to and Blend of the
-// Pattern step. Phase 2 (D24): "My patterns" (your own recipes and images)
-// after the library, + Image, and Edit pattern… for the motif generator.
+// Detailed morph section (D35, D36; design §9.2, C7, C8, C16, C18; once the
+// Pattern step's "Surface"): the mm-scale relief, design.form.detail, as one
+// part of Shape beside Morph. Two slots, the swatch grid that fills the
+// selected slot, per-slot settings, and the shared range and blend (Even,
+// Fades up, Fades down, Middle, Diagonal). Phase 2 (D24): "My patterns"
+// (your own recipes and images) after the library, + Image, and Edit
+// swatch… (a stopgap until the 2D editor, D45).
 
 import { numberField, slider, segmented, h } from '../controls.js';
 import { drawSwatch, beadGrid } from '../swatch.js';
 import { PLAIN } from '../../core/patterns.js';
 import { snapTileHeight } from '../../core/design.js';
 import { footprintAt, limit } from './shape.js';
+import { BLEND_OPTIONS } from '../dock-tools.js';
 import { listPatterns, deletePattern, onPatternsChanged } from '../../store/assets.js';
 import { printableResolution } from '../../core/raster.js';
 import {
-  IMAGE_ACCEPT, findEntry, usesAsset, textured, snapToLayers, pickPattern, loadImages,
+  IMAGE_ACCEPT, findEntry, usesAsset, snapToLayers, pickPattern, loadImages,
   importImageFile, openEditor, drawEntry, mineEntries,
 } from '../pattern-actions.js';
 
-const SLOT_SUB = { a: 'main pattern', b: 'blends in' };
-const BLEND_LABELS = { even: 'even', fadesUp: 'fades up', fadesDown: 'fades down', middle: 'middle' };
+const SLOT_SUB = { a: 'main swatch', b: 'blends in' };
+const BLEND_LABELS = { even: 'even', fadesUp: 'fades up', fadesDown: 'fades down', middle: 'middle', diagonal: 'diagonal' };
+const BLEND_WHERE = { fadesUp: 'At the top: ', fadesDown: 'At the bottom: ', middle: 'Halfway up: ', diagonal: 'In the band: ' };
 const GRID_SWATCH = 52;
 const SLOT_SWATCH = 34;
 
@@ -41,8 +43,8 @@ function prettyId(id) {
 }
 
 const section = {
-  id: 'surface',
-  title: 'Pattern',
+  id: 'detail',
+  title: 'Detailed morph',
 
   summary(design, ctx) {
     const lib = ctx?.library;
@@ -50,22 +52,6 @@ const section = {
     const s = design.form.detail;
     if (!s.b) return s.a.pattern === PLAIN.id ? 'plain' : `${name(s.a)} · ${s.a.depthMm} mm`;
     return `${name(s.a)} → ${name(s.b)} · ${BLEND_LABELS[s.blend.shape] ?? s.blend.shape}`;
-  },
-
-  /**
-   * The Pattern step's parts that apply now (C34), the same rules that hide
-   * the controls below: Depth and Repeats with a pattern in the chosen slot,
-   * From / to with a pattern in either slot, Blend once slot B is set.
-   * @param {{ design: object, view: object }} state
-   * @returns {string[]}
-   */
-  applies(state) {
-    const s = state.design.form.detail;
-    const out = ['swatch'];
-    if (textured(s[state.view.slot === 'b' ? 'b' : 'a'])) out.push('depth', 'repeats');
-    if (textured(s.a) || textured(s.b)) out.push('range');
-    if (s.b) out.push('blend');
-    return out;
   },
 
   mount(el, ctx) {
@@ -132,11 +118,11 @@ const section = {
     let mineTiles = [];
     let mineKey = null;
     const fileInput = h('input', { type: 'file', accept: IMAGE_ACCEPT, class: 'visually-hidden image-file', tabIndex: -1, 'aria-hidden': 'true' });
-    const imageBtn = h('button', { type: 'button', class: 'swatch swatch-action', title: 'Use an image as a pattern', 'aria-label': 'Add an image as a pattern' }, [
+    const imageBtn = h('button', { type: 'button', class: 'swatch swatch-action', title: 'Use an image as a swatch', 'aria-label': 'Add an image as a swatch' }, [
       h('span', { class: 'swatch-add', 'aria-hidden': 'true', text: '+' }),
       h('span', { class: 'swatch-name', text: 'Image' }),
     ]);
-    const editBtn = h('button', { type: 'button', class: 'btn edit-pattern-btn', text: 'Edit pattern…' });
+    const editBtn = h('button', { type: 'button', class: 'btn edit-pattern-btn', text: 'Edit swatch…' });
     const imageMsg = h('p', { class: 'panel-note image-msg', role: 'alert', hidden: true });
     const actions = h('div', { class: 'pattern-actions' }, [editBtn]);
 
@@ -290,7 +276,7 @@ const section = {
         store.commit();
       },
     });
-    const emptyNote = h('p', { class: 'panel-note', text: 'B is off. Pick a pattern above to blend it in.' });
+    const emptyNote = h('p', { class: 'panel-note', text: 'B is off. Pick a swatch above to blend it in.' });
     const plainNote = h('p', { class: 'panel-note', text: 'Plain leaves the surface smooth.' });
     const resNote = h('p', { class: 'panel-note res-note', hidden: true });
     const slotBox = h('div', { class: 'slot-settings' }, [depth.el, repeats.el, tileHeight.el, resNote]);
@@ -313,7 +299,7 @@ const section = {
     ]);
     const blend = segmented({
       label: 'Blend',
-      options: [{ value: 'even', label: 'Even' }, { value: 'fadesUp', label: 'Fades up' }, { value: 'fadesDown', label: 'Fades down' }, { value: 'middle', label: 'Middle' }],
+      options: BLEND_OPTIONS,
       value: 'fadesUp',
       onChange: (v) => store.apply('Blend', (d) => {
         if (!d.form.detail.blend) d.form.detail.blend = { shape: v, amount: 1 };
@@ -333,15 +319,6 @@ const section = {
     // grids, on a phone it is one row that scrolls sideways (C35).
     const strip = h('div', { class: 'swatch-strip' }, [grid, mineLabel, mineGrid]);
 
-    // The Pattern step's parts (ui/steps.js). The slot cards belong to every
-    // part that edits the chosen slot, so on a phone they stay in sight (C34).
-    slots.dataset.part = 'swatch depth repeats';
-    for (const e of [gridLabel, strip, confirmBox, imageMsg, actions, emptyNote, plainNote]) e.dataset.part = 'swatch';
-    slotBox.dataset.part = 'depth repeats';
-    depth.el.dataset.part = 'depth';
-    for (const e of [repeats.el, tileHeight.el, resNote]) e.dataset.part = 'repeats';
-    rangeRow.dataset.part = 'range';
-    blendBox.dataset.part = 'blend';
     el.append(slots, gridLabel, strip, confirmBox, fileInput, imageMsg, actions, emptyNote, plainNote, slotBox, rangeRow, blendBox);
 
     const update = (state) => {
@@ -365,7 +342,7 @@ const section = {
       }
       swap.disabled = !surf.b;
 
-      gridLabel.textContent = `Pattern for ${s.toUpperCase()}`;
+      gridLabel.textContent = `Swatch for ${s.toUpperCase()}`;
       for (const t of tiles) {
         t.btn.hidden = t.id === null && s !== 'b';
         const selected = slot ? t.id === slot.pattern : t.id === null;
@@ -383,7 +360,7 @@ const section = {
       }
 
       renderMine(d, fp, layers, slot);
-      editBtn.setAttribute('aria-label', `Edit pattern ${s.toUpperCase()}`);
+      editBtn.setAttribute('aria-label', `Edit swatch ${s.toUpperCase()}`);
 
       const isPlain = slot && slot.pattern === PLAIN.id;
       const isImage = !!slot && d.assets?.[slot.pattern]?.kind === 'image';
@@ -414,8 +391,7 @@ const section = {
         blend.set(surf.blend.shape);
         amount.set(surf.blend.amount);
         const b = Math.round(surf.blend.amount * 100);
-        const where = { fadesUp: 'At the top: ', fadesDown: 'At the bottom: ', middle: 'Halfway up: ' }[surf.blend.shape] ?? '';
-        amount.setInfo(`${where}A ${100 - b} % · B ${b} %`);
+        amount.setInfo(`${BLEND_WHERE[surf.blend.shape] ?? ''}A ${100 - b} % · B ${b} %`);
       }
     };
     update(store.state);
@@ -433,4 +409,4 @@ const section = {
 };
 
 export default section;
-export const { id, title, summary, applies, mount } = section;
+export const { id, title, summary, mount } = section;

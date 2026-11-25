@@ -245,15 +245,21 @@ test('normalising a Pattern clamps it to the bead and the pot', () => {
     drawing: 'lib:knit@1', depthMm: 1.5, density: { by: 'spacing', spacingMm: 1.5, points: 1600 },
     fromMm: 0, toMm: 170, fade: { shape: 'even', amount: 1 }, softenCells: 0,
   });
-  // Missing fields get the defaults: a quarter bead deep, one bead apart, the Detailed morph's range.
+  // Missing fields get the defaults: a quarter bead deep, one bead apart, over
+  // the Detailed morph (10–150 mm) inside its 6 mm soft start and end.
   const bare = normaliseDesign({ ...d, pattern: { drawing: 'lib:knit@1' } }).pattern;
   assert.deepEqual(bare, {
     drawing: 'lib:knit@1', depthMm: 0.75, density: { by: 'spacing', spacingMm: 3, points: 96 },
-    fromMm: 10, toMm: 150, fade: { shape: 'even', amount: 1 }, softenCells: 0,
+    fromMm: 16, toMm: 144, fade: { shape: 'even', amount: 1 }, softenCells: 0,
   });
   // Without a Detailed morph: from 8 mm to 10 mm below the rim.
   const plain = normaliseDesign(cylinder({ height: 80 }));
   assert.deepEqual(defaultPatternRange(plain), { fromMm: 8, toMm: 70 });
+  // A Detailed morph too short to keep inside its soft edges: its own range.
+  const short = normaliseDesign(d);
+  short.form.detail.fromMm = 60;
+  short.form.detail.toMm = 70;
+  assert.deepEqual(defaultPatternRange(short), { fromMm: 60, toMm: 70 });
   // The height scales the Pattern's range like the Detailed morph's.
   const tall = normaliseDesign({ ...d, pattern: { drawing: 'lib:knit@1', fromMm: 20, toMm: 100 } });
   setHeight(tall, 340);

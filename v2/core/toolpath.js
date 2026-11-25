@@ -34,7 +34,7 @@
 
 import { TAU, dcos, dsin, radians } from './math.js';
 import { PLAIN, evaluatePattern, findPattern } from './patterns.js';
-import { detailWeights } from './surface.js';
+import { blendShape, detailGate, detailWeights } from './surface.js';
 import { createLayerPattern } from './layer-pattern.js';
 import { createProfile } from './profile.js';
 import { snapTileHeight } from './design.js';
@@ -221,6 +221,12 @@ export function createWallModel(design, library, { images } = {}) {
   const stepLimit = (h * dsin(limit)) / dcos(limit);
   const supportLimit = design.rules.supportRatio * w;
 
+  // A Diagonal blend (D54) gives B a share that also depends on u, so the
+  // weights cached per height are the most each slot can reach there (A the
+  // soft edges alone, B those times the amount) and detailAt splits them per point.
+  const diagonal = !!detail.b && detail.blend.shape === 'diagonal';
+  const span = Math.max(detail.toMm - detail.fromMm, 1e-9);
+
   // Two-entry weight cache: wall points alternate between their own height
   // and the height one layer below (for the overhang check).
   let zA = NaN, aA = 0, bA = 0, zB = NaN, aB = 0, bB = 0, flip = false;
@@ -228,11 +234,18 @@ export function createWallModel(design, library, { images } = {}) {
   function weightsAt(z) {
     if (z === zA) { weight.a = aA; weight.b = bA; return weight; }
     if (z === zB) { weight.a = aB; weight.b = bB; return weight; }
-    const s = detailWeights(detail, z, h);
-    if (flip) { zA = z; aA = s.a; bA = s.b; } else { zB = z; aB = s.a; bB = s.b; }
+    let a;
+    let b;
+    if (diagonal) {
+      a = detailGate(detail, z, h);
+      b = a * detail.blend.amount;
+    } else {
+      ({ a, b } = detailWeights(detail, z, h));
+    }
+    if (flip) { zA = z; aA = a; bA = b; } else { zB = z; aB = a; bB = b; }
     flip = !flip;
-    weight.a = s.a;
-    weight.b = s.b;
+    weight.a = a;
+    weight.b = b;
     return weight;
   }
 
@@ -240,10 +253,17 @@ export function createWallModel(design, library, { images } = {}) {
   function detailAt(z, u) {
     if (z <= baseTop || active.length === 0) return 0;
     const wt = weightsAt(z);
+    let wa = wt.a;
+    let wb = wt.b;
+    if (diagonal && wa > 0) {
+      const share = detail.blend.amount * blendShape('diagonal', (z - detail.fromMm) / span, u);
+      wb = wa * share;
+      wa *= 1 - share;
+    }
     let d = 0;
     for (let k = 0; k < active.length; k++) {
       const s = active[k];
-      const ws = s.key === 'a' ? wt.a : wt.b;
+      const ws = s.key === 'a' ? wa : wb;
       if (ws > 0) d += ws * s.depthMm * s.evaluate(s.repeats * u, z / s.tileHeightMm);
     }
     return d;

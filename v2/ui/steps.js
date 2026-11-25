@@ -3,8 +3,8 @@
 // and any of them opens at any time: nothing is locked.
 //
 // Desktop: the five emblems at the top of the left panel, the current step's
-// parts under small headings (Shape's finer parts behind "More shape
-// options"), and Next at the bottom. Phone (≤ 760 px): the same emblems as a
+// parts under small headings (Shape's finer parts, the Morph and the Detailed
+// morph among them, behind "More shape options"), and Next at the bottom. Phone (≤ 760 px): the same emblems as a
 // bottom bar, and above it a controls area of one fixed height with the
 // step's name and Next, a row of part buttons, and only that part's controls.
 //
@@ -27,11 +27,11 @@ import shape from './sections/shape.js';
 import curve from './sections/curve.js';
 import points from './sections/points.js';
 import morph from './sections/morph.js';
-import surface from './sections/surface.js';
+import detail from './sections/detail.js';
+import pattern from './sections/pattern.js';
 import layers from './sections/layers.js';
 import base from './sections/base.js';
 import { mountPrintPanel } from './print.js';
-import { PLAIN } from '../core/patterns.js';
 import { mountDock } from './dock.js';
 
 const PHONE_QUERY = '(max-width: 760px)';
@@ -74,7 +74,7 @@ const printSection = {
  */
 export const STEP_LIST = [
   {
-    id: 'shape', title: 'Shape', short: 'Shape', sections: [shape, curve, points, morph],
+    id: 'shape', title: 'Shape', short: 'Shape', sections: [shape, curve, points, morph, detail],
     parts: [
       { id: 'size', name: 'Size', section: 'shape' },
       { id: 'footprint', name: 'Footprint', section: 'shape' },
@@ -82,16 +82,18 @@ export const STEP_LIST = [
       { id: 'curve', name: 'Curve', section: 'curve', fine: true },
       { id: 'points', name: 'Points', section: 'points', fine: true },
       { id: 'morph', name: 'Morph', section: 'morph', fine: true },
+      { id: 'detail', name: 'Detailed morph', section: 'detail', fine: true },
     ],
   },
   {
-    id: 'pattern', title: 'Pattern', short: 'Pattern', sections: [surface],
+    id: 'pattern', title: 'Pattern', short: 'Pattern', sections: [pattern],
     parts: [
-      { id: 'swatch', name: 'Swatch', section: 'surface' },
-      { id: 'depth', name: 'Depth', section: 'surface' },
-      { id: 'repeats', name: 'Repeats', section: 'surface' },
-      { id: 'range', name: 'From / to', section: 'surface' },
-      { id: 'blend', name: 'Blend', section: 'surface' },
+      { id: 'drawing', name: 'Pattern', section: 'pattern' },
+      { id: 'depth', name: 'Depth', section: 'pattern' },
+      { id: 'density', name: 'Density', section: 'pattern' },
+      { id: 'range', name: 'From / to', section: 'pattern' },
+      { id: 'fade', name: 'Fade', section: 'pattern' },
+      { id: 'soften', name: 'Soften', section: 'pattern' },
     ],
   },
   {
@@ -121,22 +123,16 @@ export const STEP_LIST = [
 ];
 
 /**
- * The design as a bare shape: the Detailed morph's slot A Plain (keeping its
- * tile height), slot B none and no Pattern; the rest of the form, layers,
- * base and finish stay. Shape shows the pot this way
- * (D29), and presets open this way (D30, C29). A new object; the design given
- * is not changed.
+ * The design as a shape: everything but the Pattern. The form keeps its
+ * Morph and its Detailed morph, which shape it (D36); the layers, base and
+ * finish stay. Shape shows the pot this way (D29 as revised by D36), and
+ * presets open this way (D30 as narrowed by D52: the Classic vase keeps its
+ * flutes). A new object; the design given is not changed.
  * @param {object} design  a normalised design
  * @returns {object}
  */
 export function shapeOnly(design) {
-  const detail = design.form.detail || {};
-  const tileHeightMm = detail.a?.tileHeightMm ?? detail.b?.tileHeightMm;
-  return {
-    ...design,
-    form: { ...design.form, detail: { ...detail, a: { pattern: PLAIN.id, depthMm: 0, repeats: 1, tileHeightMm }, b: null } },
-    pattern: null,
-  };
+  return { ...design, pattern: null };
 }
 
 const tokens = (el) => (el.dataset.part || '').split(/\s+/).filter(Boolean);

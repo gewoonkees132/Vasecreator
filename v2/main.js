@@ -144,11 +144,15 @@ function showFatal(message) {
 async function boot() {
   if (document.documentElement.classList.contains('no-webgl')) return;
 
-  const [library, presetsDoc, db] = await Promise.all([
+  const [patternsDoc, layerDoc, presetsDoc, db] = await Promise.all([
     fetchJson('library/patterns.json'),
+    fetchJson('library/layer-patterns.json'),
     fetchJson('library/presets.json'),
     openDb(),
   ]);
+  // One library for the engine and the UI: the Detailed morph's swatches
+  // (patterns) and the starter Patterns (layerPatterns, core/layer-pattern.js).
+  const library = { ...patternsDoc, layerPatterns: layerDoc.patterns || [] };
   useDb(db);
   const presets = presetsDoc.presets || [];
   const [persisted, savedPrinter] = await Promise.all([db.loadHistory(), db.get('settings', 'printer')]);
@@ -171,7 +175,8 @@ async function boot() {
   try {
     if (db.persistent && typeof BroadcastChannel === 'function') channel = new BroadcastChannel('vc2-history');
   } catch { /* not supported */ }
-  // A first visit opens Classic vase as a shape, like any preset (D30, C29).
+  // A first visit opens Classic vase as a shape, like any preset (D30, C29):
+  // with its flutes, the Detailed morph, and no Pattern (D52).
   const first = shapeOnly(normaliseDesign(presets[0]));
   const store = createStore({
     design: first,
@@ -220,15 +225,19 @@ async function boot() {
     },
   });
 
-  // Handles on the pot after Shape (mobile stage M7, M8): where the pattern
-  // runs in Pattern, the seam grip in Layers & seam. One history step per drag.
+  // Handles on the pot (mobile stage M7, M8): where the Detailed morph runs
+  // in Shape, where the Pattern runs in Pattern (D41), the seam grip in
+  // Layers & seam. One history step per drag.
   const gizmos = createGizmos(renderer, $('#overlay'), {
-    onRange(which, z) {
+    onRange(target, which, z) {
       dragging = true;
-      store.change(which === 'from' ? 'Pattern from' : 'Pattern to', (d) => {
+      const name = target === 'pattern' ? 'Pattern' : 'Detailed morph';
+      store.change(`${name} ${which}`, (d) => {
+        const range = target === 'pattern' ? d.pattern : d.form.detail;
+        if (!range) return;
         const lh = d.layers.layerHeightMm;
-        if (which === 'from') d.form.detail.fromMm = Math.max(0, Math.min(z, d.form.detail.toMm - lh));
-        else d.form.detail.toMm = Math.min(d.form.height, Math.max(z, d.form.detail.fromMm + lh));
+        if (which === 'from') range.fromMm = Math.max(0, Math.min(z, range.toMm - lh));
+        else range.toMm = Math.min(d.form.height, Math.max(z, range.fromMm + lh));
       });
     },
     onSeam(angle) {
@@ -258,7 +267,7 @@ async function boot() {
      * but this is still the store's object.
      */
     resultDesign: () => shownDesign,
-    /** Whether store.state.result is of the plain copy (Shape, D29): no pattern in it. */
+    /** Whether store.state.result is of the shape copy (Shape, D29, D36): no Pattern in it. */
     resultIsPlain: () => shownPlain,
     designs: null,
   };
@@ -268,9 +277,10 @@ async function boot() {
   // thumbnail renders (presets, design files), so thumbnails wait until the
   // live preview is idle, and a live request a thumbnail cancelled is re-sent.
 
-  // In Shape the pot is shown plain (D29): the engine gets a copy of the
-  // design without its pattern, and that copy also drives the size chip and
-  // the warnings there. From Pattern on, the design goes as it is.
+  // In Shape the pot is shown as a shape (D29, D36): the engine gets a copy of
+  // the design without its Pattern (with its Morph and Detailed morph), and
+  // that copy also drives the size chip and the warnings there. From Pattern
+  // on, the design goes as it is.
 
   let liveSeq = 0;
   let livePending = 0;
@@ -488,13 +498,15 @@ async function boot() {
     if (was === 'shape' && step !== 'shape' && selectedKnot != null) store.setView({ selectedKnot: null });
   }
 
-  // The handles on the pot for this step (M7, M8): the pattern's range once
-  // there is a pattern, the seam grip in Layers & seam; none in Print.
+  // The handles on the pot for this step (M7, M8): the Detailed morph's
+  // range in Shape once it has a swatch, the Pattern's in Pattern once there
+  // is one, the seam grip in Layers & seam; none in Print.
   function applyGizmos() {
     const { view: v, design } = store.state;
     let mode = null;
     if (v.mode === 'design' && v.step === 'layers') mode = 'seam';
-    else if (v.mode === 'design' && v.step === 'pattern' && (textured(design.form.detail.a) || textured(design.form.detail.b))) mode = 'range';
+    else if (v.mode === 'design' && v.step === 'shape' && (textured(design.form.detail.a) || textured(design.form.detail.b))) mode = 'detail';
+    else if (v.mode === 'design' && v.step === 'pattern' && design.pattern) mode = 'pattern';
     gizmos.setMode(mode);
     if (mode) gizmos.update(design, store.state.result);
   }

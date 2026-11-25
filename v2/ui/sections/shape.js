@@ -104,9 +104,11 @@ const UNLOCK_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden
 export const depthLocked = (state) => state.view.sizeLocked !== false && (state.design.form.plan.depthRatio ?? 1) === 1;
 const isLocked = depthLocked;
 
-// Twist turns corners, the morph and the pattern; on a plain round pot it has
+// Twist turns corners, the morph, the Detailed morph and the Pattern; on a plain round pot it has
 // nothing to turn, so say why the pot doesn't change (C30).
-const twistHidden = (d) => d.form.plan.footprint === 'circle' && (d.form.plan.depthRatio ?? 1) === 1 && !d.form.morph?.map;
+const textured = (slot) => !!slot && slot.pattern !== 'plain';
+const twistHidden = (d) => d.form.plan.footprint === 'circle' && (d.form.plan.depthRatio ?? 1) === 1 && !d.form.morph?.map
+  && !textured(d.form.detail?.a) && !textured(d.form.detail?.b) && !d.pattern;
 
 const section = {
   id: 'shape',

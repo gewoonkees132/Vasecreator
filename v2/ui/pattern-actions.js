@@ -1,14 +1,21 @@
-// What picking a pattern does, shared by the Pattern section's swatch grid
-// (ui/sections/surface.js) and the dock's swatch carousel (ui/dock.js), so a
-// pattern behaves the same wherever it is picked (mobile stage, M11): finding
-// a pattern by id, putting it in slot A or B with its own defaults, images,
-// whole-layer tile heights, the editor, and drawing a swatch on the pot's
-// own bead grid.
+// What picking a pattern does, shared by the sheet's swatch grids
+// (ui/sections/detail.js, ui/sections/pattern.js) and the dock's carousels
+// (ui/dock.js), so a pattern behaves the same wherever it is picked (mobile
+// stage, M11).
+//
+// The Detailed morph (form.detail, D35): finding a swatch by id, putting it
+// in slot A or B with its own defaults, images, whole-layer tile heights, the
+// editor, and drawing a swatch on the pot's own bead grid.
+//
+// The Pattern (design.pattern, D37–D48): finding a drawing (the starters in
+// library.layerPatterns, or your own), putting it on the pot in one tap, the
+// density readout and its two faces, and drawing it crisp at the pot's bead scale.
 
 import { PLAIN } from '../core/patterns.js';
 import { LIMITS } from '../core/design.js';
+import { MAX_NODES, SPACING_BEADS, drawingDefaults, newPattern, patternReadout } from '../core/layer-pattern.js';
 import { footprintAt } from './sections/shape.js';
-import { drawSwatch, drawRasterSwatch, beadGrid } from './swatch.js';
+import { drawSwatch, drawRasterSwatch, drawBitmapSwatch, beadGrid } from './swatch.js';
 import { loadImage, cachedImage } from '../store/assets.js';
 
 // The editor and the image decoder load on first use.
@@ -133,7 +140,7 @@ export function ensureImage(ctx, hash) {
 }
 
 /**
- * Picks a pattern for a slot as one history step ("Pattern A: Flutes").
+ * Picks a swatch for a Detailed morph slot as one history step ("Detailed morph A: Flutes").
  * @param {object} ctx  main.js's ctx
  * @param {'a' | 'b'} s
  * @param {string | null} id  null = None (slot B only)
@@ -145,7 +152,7 @@ export function pickPattern(ctx, s, id, saved) {
   const entry = id ? findEntry(library, id, store.state.design.assets, saved) : null;
   if (id && !entry) return false;
   if (entry?.image) ensureImage(ctx, entry.image.hash);
-  store.apply(`Pattern ${s.toUpperCase()}: ${id ? entry.name : 'None'}`, (d) => setSlotPattern(d, s, id, entry));
+  store.apply(`Detailed morph ${s.toUpperCase()}: ${id ? entry.name : 'None'}`, (d) => setSlotPattern(d, s, id, entry));
   return true;
 }
 
@@ -159,7 +166,7 @@ export async function importImageFile(ctx, file, s) {
   const problem = m.fileProblem(file);
   if (problem) throw new Error(problem);
   const { id, asset } = await m.importImage(ctx, file);
-  ctx.store.apply(`Pattern ${s.toUpperCase()}: ${asset.name}`, (d) => {
+  ctx.store.apply(`Detailed morph ${s.toUpperCase()}: ${asset.name}`, (d) => {
     d.assets ??= {};
     d.assets[id] = asset;
     placeImage(d, s, id, asset);
@@ -214,15 +221,176 @@ export function drawEntry(target, entry, slot, design, size, onLoaded) {
 }
 
 /**
- * Your own patterns for this design: My patterns saved in this browser, plus
- * the recipes and images the design carries.
+ * Your own patterns for the Detailed morph: My patterns saved in this
+ * browser, plus the recipes and images the design carries, except a drawing
+ * only the Pattern uses (it shows among the Pattern's own, layerMineEntries).
  */
 export function mineEntries(library, d, saved) {
   const out = new Map();
   for (const p of saved || []) out.set(p.id, { id: p.id, name: p.name, recipe: p.recipe });
+  const detail = d.form?.detail;
   for (const id of Object.keys(d.assets ?? {})) {
+    if (d.pattern?.drawing === id && detail?.a?.pattern !== id && detail?.b?.pattern !== id) continue;
     const e = findEntry(library, id, d.assets);
     if (e?.own) out.set(id, e);
   }
   return [...out.values()];
+}
+
+// ---------- The Pattern (the bead-scale bitmap, D35–D48) ----------
+
+/** How wide a square of wall a Pattern swatch shows, in bead widths: the pot's own bead scale (§3.8). */
+export const LAYER_SWATCH_BEADS = 8;
+
+/**
+ * A Pattern drawing by id: a starter (library.layerPatterns) or a bitmap of
+ * your own in the design's assets.
+ * @returns {{ id: string, name: string, recipe: object, own?: boolean, defaults?: object, description?: string } | null}
+ */
+export function findLayerEntry(library, id, assets) {
+  if (typeof id !== 'string' || !id) return null;
+  const a = assets?.[id];
+  if (a?.kind === 'recipe' && a.recipe?.kind === 'bitmap') return { id, name: a.name || 'My pattern', recipe: a.recipe, own: true };
+  return library?.layerPatterns?.find((p) => p.id === id) ?? null;
+}
+
+/**
+ * Puts a Pattern drawing on the draft design; null takes the Pattern off.
+ * A first Pattern starts from newPattern (its range over the Detailed
+ * morph's, D41). Switching drawings keeps From / To, Fade and Soften; a
+ * starter brings its own depth and density, which pass bead support on the
+ * presets (§3.8), and one of your own keeps the ones you had. Mutates d.
+ * @param {object} d  a draft design (inside store.apply)
+ * @param {object | null} entry  findLayerEntry's result
+ */
+export function setLayerPattern(d, entry) {
+  if (!entry) {
+    d.pattern = null;
+    return;
+  }
+  if (entry.own) {
+    d.assets ??= {};
+    d.assets[entry.id] = { kind: 'recipe', name: entry.name, recipe: structuredClone(entry.recipe) };
+  }
+  if (!d.pattern) {
+    d.pattern = newPattern(d, entry.id, entry.defaults);
+    return;
+  }
+  d.pattern.drawing = entry.id;
+  if (entry.defaults) Object.assign(d.pattern, drawingDefaults(d, entry.defaults));
+}
+
+/**
+ * Puts a Pattern drawing on the pot as one history step ("Pattern: Knit").
+ * @param {object} ctx  main.js's ctx
+ * @param {string | null} id  null = no Pattern
+ * @returns {boolean} false when the id isn't known
+ */
+export function pickLayerPattern(ctx, id) {
+  const { store, library } = ctx;
+  const entry = id ? findLayerEntry(library, id, store.state.design.assets) : null;
+  if (id && !entry) return false;
+  if ((store.state.design.pattern?.drawing ?? null) === (id ?? null)) return true;
+  store.apply(`Pattern: ${entry ? entry.name : 'none'}`, (d) => setLayerPattern(d, entry));
+  return true;
+}
+
+/** Your own Pattern drawings for this design (saving them across designs comes with D48). */
+export function layerMineEntries(library, d) {
+  const id = d.pattern?.drawing;
+  const e = typeof id === 'string' && id.startsWith('user:') ? findLayerEntry(library, id, d.assets) : null;
+  return e ? [e] : [];
+}
+
+const readouts = new WeakMap();
+/**
+ * The Pattern's density readout for a design (core/layer-pattern.js
+ * patternReadout), worked out once per design object.
+ * @returns {ReturnType<typeof patternReadout>}
+ */
+export function readoutOf(design, library) {
+  if (!design?.pattern) return null;
+  if (readouts.has(design)) return readouts.get(design);
+  let r = null;
+  try { r = patternReadout(design, library); } catch { r = null; }
+  readouts.set(design, r);
+  return r;
+}
+
+const mm1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
+/**
+ * The density readout (D40, §3.2): "96 points per layer · 3.8–6.1 mm",
+ * from the narrowest layer in the range to the widest.
+ * @param {ReturnType<typeof patternReadout>} r
+ */
+export function densityText(r) {
+  if (!r) return '';
+  const lo = mm1(r.spacingMinMm);
+  const hi = mm1(r.spacingMaxMm);
+  return `${r.nodes} points per layer · ${lo === hi ? `${lo} mm apart` : `${lo}–${hi} mm`}${r.clamped ? ' · the most a layer takes' : ''}`;
+}
+
+/**
+ * The density's two faces (D40): what the Spacing face (mm) and the Points
+ * face (points per layer, whole tiles) may be set to on this pot, half a
+ * bead to three beads apart on the narrowest layer, never past the point
+ * cap. The range always holds the value in use.
+ * @param {object} design normalised, with a Pattern
+ * @param {NonNullable<ReturnType<typeof patternReadout>>} r
+ */
+export function densityLimits(design, r) {
+  const w = design.layers.beadWidthMm;
+  const c = r.columns;
+  const spacing = {
+    min: Math.ceil(SPACING_BEADS.min * w * 10) / 10,
+    max: Math.floor(SPACING_BEADS.max * w * 10) / 10,
+  };
+  let lo = c * Math.max(1, Math.ceil(r.perimeterMinMm / (SPACING_BEADS.max * w * c) - 1e-9));
+  let hi = c * Math.max(1, Math.floor(Math.min(r.perimeterMinMm / (SPACING_BEADS.min * w), MAX_NODES) / c + 1e-9));
+  lo = Math.min(lo, r.nodes);
+  hi = Math.max(hi, lo, r.nodes);
+  return { spacing, points: { min: lo, max: hi, step: c } };
+}
+
+/**
+ * Switches the density to the other face without changing the pot: the
+ * Points face takes the nodes in use, the Spacing face the spacing in use on
+ * the narrowest layer (rounded down, so the repeats stay whole). Mutates d.
+ * @param {object} d  a draft design with a Pattern
+ * @param {'spacing' | 'points'} by
+ * @param {ReturnType<typeof patternReadout>} r  the readout of d before the switch
+ */
+export function setDensityFace(d, by, r) {
+  const density = d.pattern.density;
+  if (density.by === by) return;
+  density.by = by;
+  if (!r) return;
+  if (by === 'points') density.points = r.nodes;
+  else {
+    const w = d.layers.beadWidthMm;
+    density.spacingMm = Math.min(Math.max(Math.floor(r.spacingMinMm * 100) / 100, SPACING_BEADS.min * w), SPACING_BEADS.max * w);
+  }
+}
+
+/**
+ * Draws a Pattern drawing as it prints, crisp, at this pot's bead scale:
+ * one cell per node spacing by one layer, over a square of wall
+ * LAYER_SWATCH_BEADS bead widths wide.
+ * @param {{ canvas: HTMLCanvasElement, drawn: string }} target
+ * @param {object} entry  findLayerEntry's result
+ * @param {object} design
+ * @param {number} size  CSS px
+ * @param {number} [spacingMm]  the node spacing; by default the drawing's own default
+ */
+export function drawLayerEntry(target, entry, design, size, spacingMm) {
+  if (!entry?.recipe) return;
+  const w = design.layers.beadWidthMm;
+  const h = design.layers.layerHeightMm;
+  const spacing = spacingMm ?? drawingDefaults(design, entry.defaults).density.spacingMm;
+  const key = `${entry.id}|${entry.own ? entry.recipe.cells : ''}|${entry.recipe.columns}|${spacing.toFixed(2)}|${h}|${w}|${size}`;
+  if (key === target.drawn) return;
+  target.drawn = key;
+  drawBitmapSwatch(target.canvas, entry.recipe, {
+    id: entry.own ? undefined : entry.id, size, cellWidthMm: spacing, cellHeightMm: h, windowMm: LAYER_SWATCH_BEADS * w,
+  });
 }
