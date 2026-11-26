@@ -3,8 +3,8 @@
 // and any of them opens at any time: nothing is locked.
 //
 // Desktop: the five emblems at the top of the left panel and the current
-// step's parts under small headings (Shape's finer parts, the Morph and the
-// Detailed morph among them, behind "More shape options"). Phone (≤ 760 px):
+// step's parts under small headings (Shape's finer parts, the Morph
+// among them, behind "More shape options"). Phone (≤ 760 px):
 // the same emblems as a bottom bar, and above it a controls area of one fixed
 // height with the step's name, a row of part buttons, and only that part's
 // controls. The emblems are how you move between steps: there is no Next
@@ -29,7 +29,6 @@ import shape from './sections/shape.js';
 import curve from './sections/curve.js';
 import points from './sections/points.js';
 import morph from './sections/morph.js';
-import detail from './sections/detail.js';
 import pattern from './sections/pattern.js';
 import layers from './sections/layers.js';
 import base from './sections/base.js';
@@ -77,7 +76,7 @@ const printSection = {
  */
 export const STEP_LIST = [
   {
-    id: 'shape', title: 'Shape', short: 'Shape', sections: [shape, curve, points, morph, detail],
+    id: 'shape', title: 'Shape', short: 'Shape', sections: [shape, curve, points, morph],
     parts: [
       { id: 'size', name: 'Size', section: 'shape' },
       { id: 'footprint', name: 'Footprint', section: 'shape' },
@@ -85,7 +84,6 @@ export const STEP_LIST = [
       { id: 'curve', name: 'Curve', section: 'curve', fine: true },
       { id: 'points', name: 'Points', section: 'points', fine: true },
       { id: 'morph', name: 'Morph', section: 'morph', fine: true },
-      { id: 'detail', name: 'Detailed morph', section: 'detail', fine: true },
     ],
   },
   {
@@ -126,10 +124,8 @@ export const STEP_LIST = [
 
 /**
  * The design as a shape: everything but the Pattern. The form keeps its
- * Morph and its Detailed morph, which shape it (D36); the layers, base and
- * finish stay. Shape shows the pot this way (D29 as revised by D36), and
- * presets open this way (D30 as narrowed by D52: the Classic vase keeps its
- * flutes). A new object; the design given is not changed.
+ * Morph, which shapes it (D36); the layers, base and finish stay. Shape shows
+ * the pot this way (D29 as revised by D36), and presets open this way (D30). A new object; the design given is not changed.
  * @param {object} design  a normalised design
  * @returns {object}
  */

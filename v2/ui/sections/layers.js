@@ -10,7 +10,7 @@ const SEAM_LABELS = { fixed: 'fixed angle', followTwist: 'follows twist', hidden
 
 function layerInfo(layers) {
   const ratio = layers.layerHeightMm / layers.beadWidthMm;
-  return ratio < 0.3 || ratio > 0.6 ? 'Unusual for this bead (0.3–0.6 × bead width)' : '';
+  return ratio < 0.3 || ratio > 0.65 ? 'Unusual for this bead (0.3–0.65 × bead width)' : '';
 }
 
 const section = {
@@ -40,9 +40,9 @@ const section = {
       onCommit: commit,
     });
     const ramp = numberField({
-      label: 'Seam ramp length', unit: 'mm', ...limit(['rampLengthMm', 'layers.seam.rampLengthMm'], { min: 0, max: 200, step: 1 }), decimals: 1,
-      value: l0.seam.rampLengthMm,
-      onInput: (v) => store.change('Seam ramp length', (d) => { d.layers.seam.rampLengthMm = v; }),
+      label: 'Seam ramp', unit: 'points', ...limit(['rampPoints', 'layers.seam.rampPoints'], { min: 1, max: 40, step: 1 }), decimals: 0,
+      value: l0.seam.rampPoints, info: 'The climb to the next layer; in a Pattern a point is a cell',
+      onInput: (v) => store.change('Seam ramp', (d) => { d.layers.seam.rampPoints = Math.round(v); }),
       onCommit: commit,
     });
     const position = segmented({
@@ -68,10 +68,10 @@ const section = {
       bead.set(l.beadWidthMm);
       layer.set(l.layerHeightMm);
       layer.setInfo(layerInfo(l));
-      ramp.set(l.seam.rampLengthMm);
+      ramp.set(l.seam.rampPoints);
       position.set(l.seam.position);
       angle.set(l.seam.angleDeg);
-      angle.setInfo(l.seam.position === 'hidden' ? 'Hidden uses the corner or groove nearest this angle' : '');
+      angle.setInfo(l.seam.position === 'hidden' ? 'Hidden takes a Pattern’s quietest column, else the corner nearest this angle' : '');
     };
     update(store.state);
 

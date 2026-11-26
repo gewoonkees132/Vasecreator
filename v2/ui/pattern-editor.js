@@ -1,10 +1,7 @@
-// The 2D editor (D45, D46, docs/design/v2-pattern-studio.md §6): one editor
-// for both kinds of surface detail. It edits one tile of a bitmap, shown in
-// full colour with its repeats dimmed around it, at the cells' true
-// proportions:
-//   the Pattern     crisp, one cell per point around by one layer up
-//   Detailed morph  a coarse grid (up to 16 a side) drawn soft at mm scale,
-//                   with Sharp, Soft or Round edges (D53)
+// The 2D editor (D45, D46, docs/design/v2-pattern-studio.md §6). It edits
+// one tile of the Pattern's bitmap, shown in full colour with its repeats
+// dimmed around it, at the cells' true proportions: crisp, one cell per
+// point around by one layer up.
 //
 // It never covers the pot. It stands in for the step frame while it is open:
 // on a phone it takes the lower part of the screen (the dock, the sheet and
@@ -22,7 +19,7 @@
 // Cells stay easy to hit (D56): never smaller than MIN_CELL on screen, so a
 // large tile runs past the grid's area. Two fingers pinch and move it, and
 // on desktop Ctrl+wheel zooms and the wheel moves it (D57). The editor draws
-// a Pattern up to 24 × 24 cells and a Detailed morph grid up to 16 × 16.
+// a Pattern up to 24 × 24 cells.
 //
 // Every edit is live on the pot (D20): it goes into the design with
 // store.change in the 'editor' group, and Done commits once, so a session
@@ -35,7 +32,7 @@
 // puts the drawing in My patterns with the settings it has on the pot; the
 // drawing on the pot takes the name, inside the session's one step.
 
-import { h, segmented } from './controls.js';
+import { h } from './controls.js';
 import { attachPressLabel, labelIcon } from './press-label.js';
 import { ICONS } from './icons.js';
 import { createSaveForm } from './my-patterns.js';
@@ -45,12 +42,10 @@ import {
   shiftRow, shiftColumn, shiftTile, mirrorTile, insertRow, removeRow, insertColumn, removeColumn,
   doubleRows, quickFill, fillSize, lineCells, wrapCell, cellIndex, drawingId,
 } from '../core/bitmap.js';
-import { evaluatePattern } from '../core/patterns.js';
 import { drawingDefaults, patternReadout } from '../core/layer-pattern.js';
-import { footprintAt } from './sections/shape.js';
 import {
-  EDITOR_MAX, OWN_PATTERN_DEFAULTS, editorStart, writeEditorDrawing, editableEntry, targetDrawingId,
-  detailTileFor, readoutOf, savableEntry, entryNamed,
+  EDITOR_MAX, editorStart, writeEditorDrawing, editableEntry, targetDrawingId,
+  readoutOf, savableEntry, entryNamed,
 } from './pattern-actions.js';
 
 const PHONE_QUERY = '(max-width: 760px)';
@@ -73,7 +68,6 @@ const TABS = {
   select: { name: 'Select', groups: ['tool', 'apply'] },
   tile: { name: 'Tile', groups: ['tile'] },
   fill: { name: 'Fill', groups: ['fill'] },
-  edges: { name: 'Edges', groups: ['edges'] },
 };
 
 // ---------- Geometry (pure, tested) ----------
@@ -268,7 +262,7 @@ export function editorSession() {
 /**
  * Opens the editor on a target (ui/pattern-actions.js openEditor).
  * @param {object} ctx  main.js's ctx
- * @param {{ kind: 'pattern' } | { kind: 'detail', slot: 'a' | 'b' }} target
+ * @param {{ kind: 'pattern' }} target
  * @param {{ mode?: 'make' | 'edit', returnFocus?: HTMLElement | null }} [opts]
  */
 export function openPatternEditor(ctx, target, { mode = 'edit', returnFocus = document.activeElement } = {}) {
@@ -281,7 +275,6 @@ function createSession(ctx, target, mode, returnFocus) {
   const { store, library } = ctx;
   const host = document.getElementById('editor') ?? document.body.appendChild(h('aside', { id: 'editor' }));
   const phoneMedia = matchMedia(PHONE_QUERY);
-  const isDetail = target.kind === 'detail';
   const max = EDITOR_MAX[target.kind];
   const start = editorStart(store.state.design, library, target, mode);
   const openedGrid = gridOf(start.recipe);
@@ -357,7 +350,7 @@ function createSession(ctx, target, mode, returnFocus) {
   const sub = h('p', { class: 'ed-sub' });
   const doneBtn = button('done', 'Done', () => close(), { cls: 'ed-done', title: 'Done (Esc)' });
   // Save to My patterns (D48): an icon (labelIcon, D49) that opens the name form under the header.
-  const saveBtn = labelIcon(h('button', { type: 'button', class: 'ed-btn ed-keep' }), isDetail ? 'Save the swatch to My patterns' : 'Save the pattern to My patterns');
+  const saveBtn = labelIcon(h('button', { type: 'button', class: 'ed-btn ed-keep' }), 'Save the pattern to My patterns');
   saveBtn.innerHTML = ICONS.keep;
   const head = h('div', { class: 'ed-head' }, [h('div', { class: 'ed-titles' }, [h('div', { class: 'ed-title-row' }, [title, sizeText]), sub]), saveBtn, doneBtn]);
 
@@ -442,22 +435,11 @@ function createSession(ctx, target, mode, returnFocus) {
   const fillGroup = group('fill', 'Quick fills', Object.values(fillBtns));
   const fillTitle = fillGroup.querySelector('.ed-group-title');
 
-  // Edges (a Detailed morph grid, D53): a value, so text.
-  const edgesCtl = isDetail
-    ? segmented({
-      label: 'Edges', hideLabel: true,
-      options: [{ value: 'sharp', label: 'Sharp' }, { value: 'soft', label: 'Soft' }, { value: 'round', label: 'Round' }],
-      value: edges ?? 'soft',
-      onChange: (v) => apply(grid, `Edges: ${v}`, v),
-    })
-    : null;
-  const edgesGroup = isDetail ? group('edges', 'Edges', [edgesCtl.el]) : null;
-
-  const groups = [drawGroup, toolGroup, applyGroup, moveGroup, tileGroup, fillGroup, edgesGroup].filter(Boolean);
+  const groups = [drawGroup, toolGroup, applyGroup, moveGroup, tileGroup, fillGroup];
   const tools = h('div', { class: 'ed-tools' }, groups);
 
   // Phone tabs.
-  const tabIds = Object.keys(TABS).filter((t) => t !== 'edges' || isDetail);
+  const tabIds = Object.keys(TABS);
   const tabBtns = new Map(tabIds.map((t) => {
     const b = h('button', { type: 'button', class: 'ed-tab', role: 'tab', id: `ed-tab-${t}`, text: TABS[t].name });
     b.addEventListener('click', () => setTab(t));
@@ -939,12 +921,8 @@ function createSession(ctx, target, mode, returnFocus) {
   function cellMm() {
     const d = store.state.design;
     const lh = d.layers.layerHeightMm;
-    if (!isDetail) {
-      const r = targetDrawingId(d, target) === currentId() ? readoutOf(d, library) : comingReadout(d);
-      return { w: r ? r.spacingMinMm : drawingDefaults(d, OWN_PATTERN_DEFAULTS).density.spacingMm, h: lh };
-    }
-    const t = detailTileFor(start.base, grid.columns, grid.rows, lh);
-    return { w: footprintAt(d).perimeterMm / t.repeats / grid.columns, h: t.tileHeightMm / grid.rows };
+    const r = targetDrawingId(d, target) === currentId() ? readoutOf(d, library) : comingReadout(d);
+    return { w: r ? r.spacingMinMm : drawingDefaults(d).density.spacingMm, h: lh };
   }
 
   let tileImg = null;
@@ -955,23 +933,16 @@ function createSession(ctx, target, mode, returnFocus) {
     tileKey = key;
     const C = grid.columns;
     const R = grid.rows;
-    // The Pattern crisp, one pixel a cell; a Detailed morph grid soft, as it prints (D45).
-    const k = isDetail ? Math.max(4, Math.min(16, Math.floor(256 / Math.max(C, R)))) : 1;
+    // Crisp, one pixel a cell.
+    const k = 1;
     const img = document.createElement('canvas');
     img.width = C * k;
     img.height = R * k;
     const g = img.getContext('2d');
     const data = g.createImageData(C * k, R * k);
-    const recipe = isDetail ? recipeOf(grid, edges) : null;
     for (let py = 0; py < R * k; py++) {
       for (let px = 0; px < C * k; px++) {
-        let t;
-        if (isDetail) {
-          const v = evaluatePattern(recipe, (px + 0.5) / (C * k), (R * k - py - 0.5) / (R * k));
-          t = v >= 0 ? TONE[0] + v * (TONE[1] - TONE[0]) : TONE[0] + v * (TONE[0] - TONE[-1]);
-        } else {
-          t = TONE[grid.cells[(R - 1 - py) * C + px]];
-        }
+        const t = TONE[grid.cells[(R - 1 - py) * C + px]];
         const i = (py * C * k + px) * 4;
         data.data[i] = data.data[i + 1] = data.data[i + 2] = t;
         data.data[i + 3] = 255;
@@ -1010,7 +981,7 @@ function createSession(ctx, target, mode, returnFocus) {
 
     // The tile and its repeats.
     const img = tileImage();
-    g.imageSmoothingEnabled = isDetail;
+    g.imageSmoothingEnabled = false;
     g.imageSmoothingQuality = 'high';
     for (let j = Math.floor(r0 / R); j <= Math.floor(r1 / R); j++) {
       for (let i = Math.floor(c0 / C); i <= Math.floor(c1 / C); i++) {
@@ -1023,11 +994,11 @@ function createSession(ctx, target, mode, returnFocus) {
     // Layers and points: the gaps between rows are the layers.
     const line = 1 / dpr;
     if (ch >= 4) {
-      g.fillStyle = isDetail ? 'rgba(18,47,45,.16)' : 'rgba(18,47,45,.34)';
+      g.fillStyle = 'rgba(18,47,45,.34)';
       for (let vr = r0; vr <= r1 + 1; vr++) g.fillRect(0, snap(oy + (R - vr) * ch), W, line);
     }
     if (cw >= 4) {
-      g.fillStyle = isDetail ? 'rgba(18,47,45,.16)' : 'rgba(18,47,45,.1)';
+      g.fillStyle = 'rgba(18,47,45,.1)';
       for (let vc = c0; vc <= c1 + 1; vc++) g.fillRect(snap(ox + vc * cw), 0, line, H);
     }
 
@@ -1112,13 +1083,11 @@ function createSession(ctx, target, mode, returnFocus) {
     const ph = phone();
     host.classList.toggle('editor--phone', ph);
     const d = store.state.design;
-    title.textContent = isDetail ? `Detailed morph ${target.slot.toUpperCase()}` : 'Pattern';
+    title.textContent = 'Pattern';
     sizeText.textContent = `${C} × ${R}`;
     sizeText.setAttribute('aria-label', `${C} columns by ${R} rows`);
     const mm = cellMm();
-    sub.textContent = isDetail
-      ? `One cell is ${fmt(mm.w)} × ${fmt(mm.h)} mm of wall, drawn soft. ${start.name}.`
-      : `Each row prints as one layer and each cell as one point, ${fmt(mm.w)} mm apart. ${start.name}.`;
+    sub.textContent = `Each row prints as one layer and each cell as one point, ${fmt(mm.w)} mm apart. ${start.name}.`;
     canvas.setAttribute('aria-label', `${title.textContent} grid, ${C} by ${R}. Arrow keys move, Space ${tool() === 'paint' ? 'draws' : 'selects'}.`);
 
     for (const [v, b] of stateBtns) b.setAttribute('aria-checked', String(v === paintState));
@@ -1160,7 +1129,6 @@ function createSession(ctx, target, mode, returnFocus) {
       b.title = b.getAttribute('aria-label');
     }
     fillTitle.textContent = `Quick fills from row ${cursor.r + 1}`;
-    if (edgesCtl) edgesCtl.set(edges ?? 'soft');
 
     // The phone shows one tab's tools; desktop all of them.
     const shown = new Set(TABS[tab]?.groups ?? []);
@@ -1213,7 +1181,6 @@ function createSession(ctx, target, mode, returnFocus) {
     removeEventListener('keydown', onWindowKey, true);
     host.removeEventListener('keydown', onHostKey);
     for (const off of detachers) off();
-    edgesCtl?.destroy();
     host.hidden = true;
     host.replaceChildren();
     document.documentElement.classList.remove('is-editing');

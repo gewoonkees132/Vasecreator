@@ -7,57 +7,49 @@
       "id": "lib:knit@1",
       "name": "Knit",
       "description": "Columns of V stitches with a groove between them.",
-      "recipe": { "kind": "bitmap", "columns": 4, "rows": 4, "cells": "0+0-0+0-+0+-+0+-" },
-      "defaults": { "depthBeads": 0.14, "spacingBeads": 1 }
+      "recipe": { "kind": "bitmap", "columns": 4, "rows": 4, "cells": "0+0-0+0-+0+-+0+-" }
     },
     {
       "id": "lib:rib-1x1@1",
       "name": "Rib 1×1",
       "description": "Narrow upright ribs: one point out, one in.",
-      "recipe": { "kind": "bitmap", "columns": 2, "rows": 1, "cells": "+-" },
-      "defaults": { "depthBeads": 0.2, "spacingBeads": 1 }
+      "recipe": { "kind": "bitmap", "columns": 2, "rows": 1, "cells": "+-" }
     },
     {
       "id": "lib:rib-2x2@1",
       "name": "Rib 2×2",
       "description": "Wider upright ribs with flat tops: two points out, two in.",
-      "recipe": { "kind": "bitmap", "columns": 4, "rows": 1, "cells": "++--" },
-      "defaults": { "depthBeads": 0.2, "spacingBeads": 1 }
+      "recipe": { "kind": "bitmap", "columns": 4, "rows": 1, "cells": "++--" }
     },
     {
       "id": "lib:brick-bond@1",
       "name": "Brick bond",
       "description": "Raised bricks in staggered courses, with flat joints.",
-      "recipe": { "kind": "bitmap", "columns": 6, "rows": 8, "cells": "000000+++++0+++++0+++++0000000++0+++++0+++++0+++" },
-      "defaults": { "depthBeads": 0.14, "spacingBeads": 1 }
+      "recipe": { "kind": "bitmap", "columns": 6, "rows": 8, "cells": "000000+++++0+++++0+++++0000000++0+++++0+++++0+++" }
     },
     {
       "id": "lib:seed@1",
       "name": "Seed",
       "description": "Small raised dots in a checker, a fine all-over texture.",
-      "recipe": { "kind": "bitmap", "columns": 2, "rows": 2, "cells": "+00+" },
-      "defaults": { "depthBeads": 0.14, "spacingBeads": 1 }
+      "recipe": { "kind": "bitmap", "columns": 2, "rows": 2, "cells": "+00+" }
     },
     {
       "id": "lib:herringbone@1",
       "name": "Herringbone",
       "description": "Slanted ribs, out and in, that turn back in zigzag columns.",
-      "recipe": { "kind": "bitmap", "columns": 8, "rows": 8, "cells": "+0-00-0++0-00-0+0+0--0+00+0--0+0-0+00+0--0+00+0-0-0++0-00-0++0-0" },
-      "defaults": { "depthBeads": 0.14, "spacingBeads": 1 }
+      "recipe": { "kind": "bitmap", "columns": 8, "rows": 8, "cells": "+0-00-0++0-00-0+0+0--0+00+0--0+0-0+00+0--0+00+0-0-0++0-00-0++0-0" }
     },
     {
       "id": "lib:basket-weave@1",
       "name": "Basket",
       "description": "Blocks of upright and level strands, woven in a checker.",
-      "recipe": { "kind": "bitmap", "columns": 6, "rows": 12, "cells": "+0+000+0+++++0+000+0+++++0+000+0++++000+0+++++0+000+0+++++0+000+0+++++0+" },
-      "defaults": { "depthBeads": 0.14, "spacingBeads": 1 }
+      "recipe": { "kind": "bitmap", "columns": 6, "rows": 12, "cells": "+0+000+0+++++0+000+0+++++0+000+0++++000+0+++++0+000+0+++++0+000+0+++++0+" }
     },
     {
       "id": "lib:diamond@1",
       "name": "Diamond",
       "description": "A lattice of raised diamond outlines, each round a sunken centre.",
-      "recipe": { "kind": "bitmap", "columns": 6, "rows": 12, "cells": "--0+0--0+++0-0+0+00++0++0+0-0+++0-0++0---0++0-0+0+0-0+0++0++-0+0+0-0+++0" },
-      "defaults": { "depthBeads": 0.14, "spacingBeads": 1 }
+      "recipe": { "kind": "bitmap", "columns": 6, "rows": 12, "cells": "--0+0--0+++0-0+0+00++0++0+0-0+++0-0++0---0++0-0+0+0-0+0++0++-0+0+0-0+++0" }
     }
   ]
 }

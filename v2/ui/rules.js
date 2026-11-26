@@ -24,10 +24,7 @@ export const RULES = Object.freeze([
   {
     id: 'fineness', warning: 'finePattern', name: 'Fineness',
     ok: 'Nothing finer than the bead can print',
-    fields: [
-      { key: 'curveRatio', label: 'Tightest curve', unit: '%', scale: 100, decimals: 0, info: 'Its radius, of a bead width' },
-      { key: 'layersPerBump', label: 'Layers per bump', unit: '', scale: 1, decimals: 0, info: 'Up the wall, for a Detailed morph' },
-    ],
+    fields: [{ key: 'curveRatio', label: 'Tightest curve', unit: '%', scale: 100, decimals: 0, info: 'Its radius, of a bead width' }],
   },
 ]);
 

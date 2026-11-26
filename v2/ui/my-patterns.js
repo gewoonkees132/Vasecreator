@@ -1,6 +1,6 @@
 // My patterns in the UI (pattern studio D48, §3.9): the name form Save
 // opens, and the confirmation before an entry is deleted. The Pattern step,
-// the Detailed morph, the phone dock and the 2D editor share them.
+// the phone dock and the 2D editor share them.
 //
 // Both open in place, never over the pot (D22): under the swatches, in the
 // dock's adjuster, or under the editor's head. Save itself is an icon
@@ -14,7 +14,6 @@ import { entryNamed, suggestName } from './pattern-actions.js';
 
 const ADDS = {
   pattern: 'Adds it to My patterns in this browser, with its depth, density, Fade and Soften.',
-  detail: 'Adds it to My patterns in this browser, with its depth, repeats and tile height.',
 };
 
 let uid = 0;
@@ -41,7 +40,7 @@ export function revealInPlace(el) {
  * The name form Save opens. `open()` lists My patterns, offers a name
  * (suggestName) and focuses the field. A name an entry of this kind already
  * has turns Save into Replace and says so. Enter saves, Esc and Cancel close.
- * @param {{ kind: 'pattern' | 'detail', compact?: boolean,
+ * @param {{ kind: 'pattern', compact?: boolean,
  *   build(): object | null,
  *   save(entry: object, name: string, saved: object[]): Promise<{ entry: object, replaced: boolean } | null>,
  *   onClose?(result: { entry: object, replaced: boolean } | null): void }} opts

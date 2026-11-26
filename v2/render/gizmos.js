@@ -1,11 +1,8 @@
 // Handles on the pot (mobile stage M7, M8; pattern studio D41):
 //
-//   detail   Shape: a dark bracket beside the wall from the Detailed morph's
-//            From to its To (form.detail), with a handle at each end, dragged
-//            up and down. It sits on the screen-left side, clear of the
-//            profile handles on the right.
-//   pattern  the Pattern step: the same bracket in blue for the Pattern's own
-//            From / To (design.pattern), on the screen-right side.
+//   pattern  the Pattern step: a blue bracket beside the wall from the
+//            Pattern's From to its To (design.pattern), with a handle at each
+//            end, dragged up and down, on the screen-right side.
 //   seam     the Layers & seam step: a grip at the top of the seam line,
 //            dragged around the pot to turn the seam angle.
 //
@@ -57,8 +54,8 @@ let styleUsers = 0;
 /**
  * @param {import('./beads.js').BeadRenderer} renderer
  * @param {HTMLElement} overlayEl  the overlay over the canvas (shared with handles.js)
- * @param {{ onRange?(target: 'detail' | 'pattern', which: 'from' | 'to', zMm: number): void, onSeam?(angleDeg: number): void, onCommit?(): void }} callbacks
- * @returns {{ setMode(mode: 'detail' | 'pattern' | 'seam' | null): void, update(design: object, result: object | null): void, dispose(): void }}
+ * @param {{ onRange?(target: 'pattern', which: 'from' | 'to', zMm: number): void, onSeam?(angleDeg: number): void, onCommit?(): void }} callbacks
+ * @returns {{ setMode(mode: 'pattern' | 'seam' | null): void, update(design: object, result: object | null): void, dispose(): void }}
  */
 export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } = {}) {
   injectStyle();
@@ -176,9 +173,9 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
     return Math.hypot(s.x, ratio * s.y);
   }
 
-  const isRange = () => mode === 'detail' || mode === 'pattern';
-  /** The range the bracket edits: the Detailed morph's or the Pattern's. */
-  const rangeOf = () => (mode === 'pattern' ? design.pattern : design.form.detail);
+  const isRange = () => mode === 'pattern';
+  /** The range the bracket edits: the Pattern's. */
+  const rangeOf = () => design.pattern;
 
   function rangeValues() {
     const r = rangeOf();
@@ -188,11 +185,10 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
   function layoutRange() {
     const { from, to } = rangeValues();
     const k = silhouetteFactor();
-    const sf = design.form.detail;
-    const outward = Math.max(sf.a?.depthMm ?? 0, sf.b?.depthMm ?? 0) + (design.form.morph?.map ? (design.form.morph.strengthMm ?? 0) : 0)
+    const outward = (design.form.morph?.map ? (design.form.morph.strengthMm ?? 0) : 0)
       + (design.pattern?.depthMm ?? 0) + design.layers.beadWidthMm / 2 + GAP_MM;
-    // The Detailed morph's on the screen-left side, the Pattern's on the right.
-    const side = mode === 'pattern' ? 1 : -1;
+    // On the screen-right side.
+    const side = 1;
     const at = (z) => {
       const r = (radiusAt(z) * k + outward) * side;
       return toScreen(s.x * r, s.y * r, z);
@@ -381,9 +377,8 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
     root.hidden = !on;
     const range = on && isRange();
     root.classList.toggle('is-pattern', mode === 'pattern');
-    const what = mode === 'pattern' ? 'Pattern' : 'Detailed morph';
-    fromEl.setAttribute('aria-label', `${what} starts at`);
-    toEl.setAttribute('aria-label', `${what} ends at`);
+    fromEl.setAttribute('aria-label', 'Pattern starts at');
+    toEl.setAttribute('aria-label', 'Pattern ends at');
     fromEl.hidden = toEl.hidden = !range;
     bracket.style.display = ticks.style.display = range ? '' : 'none';
     seamEl.hidden = !(on && mode === 'seam');
@@ -391,7 +386,7 @@ export function createGizmos(renderer, overlayEl, { onRange, onSeam, onCommit } 
   }
 
   return {
-    /** 'detail' (Shape, with a Detailed morph), 'pattern' (Pattern, with a Pattern), 'seam' (Layers & seam) or null. */
+    /** 'pattern' (Pattern, with a Pattern), 'seam' (Layers & seam) or null. */
     setMode(next) {
       if (next === mode) return;
       if (drag) endDrag({ pointerId: drag.id });

@@ -12,7 +12,6 @@ import { createEngine } from './worker/client.js';
 import { BeadRenderer } from './render/beads.js';
 import { createProfileHandles } from './render/handles.js';
 import { createGizmos } from './render/gizmos.js';
-import { textured } from './ui/pattern-actions.js';
 import { mountSteps, shapeOnly } from './ui/steps.js';
 import { mountTopbar } from './ui/topbar.js';
 import { mountChips } from './ui/chips.js';
@@ -144,15 +143,14 @@ function showFatal(message) {
 async function boot() {
   if (document.documentElement.classList.contains('no-webgl')) return;
 
-  const [patternsDoc, layerDoc, presetsDoc, db] = await Promise.all([
-    fetchJson('library/patterns.json'),
+  const [layerDoc, presetsDoc, db] = await Promise.all([
     fetchJson('library/layer-patterns.json'),
     fetchJson('library/presets.json'),
     openDb(),
   ]);
-  // One library for the engine and the UI: the Detailed morph's swatches
-  // (patterns) and the starter Patterns (layerPatterns, core/layer-pattern.js).
-  const library = { ...patternsDoc, layerPatterns: layerDoc.patterns || [] };
+  // One library for the engine and the UI: the starter Patterns
+  // (layerPatterns, core/layer-pattern.js).
+  const library = { layerPatterns: layerDoc.patterns || [] };
   useDb(db);
   const presets = presetsDoc.presets || [];
   const [persisted, savedPrinter] = await Promise.all([db.loadHistory(), db.get('settings', 'printer')]);
@@ -176,7 +174,7 @@ async function boot() {
     if (db.persistent && typeof BroadcastChannel === 'function') channel = new BroadcastChannel('vc2-history');
   } catch { /* not supported */ }
   // A first visit opens Classic vase as a shape, like any preset (D30, C29):
-  // with its flutes, the Detailed morph, and no Pattern (D52).
+  // no Pattern yet.
   const first = shapeOnly(normaliseDesign(presets[0]));
   const store = createStore({
     design: first,
@@ -225,15 +223,13 @@ async function boot() {
     },
   });
 
-  // Handles on the pot (mobile stage M7, M8): where the Detailed morph runs
-  // in Shape, where the Pattern runs in Pattern (D41), the seam grip in
-  // Layers & seam. One history step per drag.
+  // Handles on the pot (mobile stage M7, M8): where the Pattern runs in
+  // Pattern (D41), the seam grip in Layers & seam. One history step per drag.
   const gizmos = createGizmos(renderer, $('#overlay'), {
     onRange(target, which, z) {
       dragging = true;
-      const name = target === 'pattern' ? 'Pattern' : 'Detailed morph';
-      store.change(`${name} ${which}`, (d) => {
-        const range = target === 'pattern' ? d.pattern : d.form.detail;
+      store.change(`Pattern ${which}`, (d) => {
+        const range = d.pattern;
         if (!range) return;
         const lh = d.layers.layerHeightMm;
         if (which === 'from') range.fromMm = Math.max(0, Math.min(z, range.toMm - lh));
@@ -280,7 +276,7 @@ async function boot() {
   // live preview is idle, and a live request a thumbnail cancelled is re-sent.
 
   // In Shape the pot is shown as a shape (D29, D36): the engine gets a copy of
-  // the design without its Pattern (with its Morph and Detailed morph), and
+  // the design without its Pattern (with its Morph), and
   // that copy also drives the size chip and the warnings there. From Pattern
   // on, the design goes as it is.
 
@@ -507,9 +503,8 @@ async function boot() {
     if (was === 'shape' && step !== 'shape' && selectedKnot != null) store.setView({ selectedKnot: null });
   }
 
-  // The handles on the pot for this step (M7, M8): the Detailed morph's
-  // range in Shape once it has a swatch, the Pattern's in Pattern once there
-  // is one, the seam grip in Layers & seam; none in Print. While the 2D
+  // The handles on the pot for this step (M7, M8): the Pattern's range in
+  // Pattern once there is one, the seam grip in Layers & seam; none in Print. While the 2D
   // editor is open the pot is a live view only: no handles, so nothing but
   // the editor's session lands in history meanwhile (D46).
   function applyGizmos() {
@@ -517,7 +512,6 @@ async function boot() {
     let mode = null;
     if (v.editor) mode = null;
     else if (v.mode === 'design' && v.step === 'layers') mode = 'seam';
-    else if (v.mode === 'design' && v.step === 'shape' && (textured(design.form.detail.a) || textured(design.form.detail.b))) mode = 'detail';
     else if (v.mode === 'design' && v.step === 'pattern' && design.pattern) mode = 'pattern';
     gizmos.setMode(mode);
     if (mode) gizmos.update(design, store.state.result);

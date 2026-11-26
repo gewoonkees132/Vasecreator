@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import { ISSUE, describeHeights, heightRanges } from '../core/checks.js';
 import { computePreview, computePrint } from '../core/engine.js';
 import { defaultPrinter } from '../core/printer.js';
-import { cylinder, library, linearDesign, presets } from './support/fixtures.js';
+import { TILES, cylinder, library, linearDesign, presets, withPattern } from './support/fixtures.js';
+
+// A crisp zigzag half a bead apart and a quarter bead deep: the tightest
+// corner the Pattern makes, a circle of half a bead (1.5 mm) through three nodes.
+const tightZigzag = (d, patch = {}) => withPattern(d, TILES.zigzag, { depthMm: 0.75, density: { by: 'spacing', spacingMm: 1.5, points: 96 }, ...patch });
 
 const warning = (result, id) => result.warnings.find((w) => w.id === id);
 
@@ -44,10 +48,8 @@ test('the overhang limit is a design setting', () => {
 });
 
 test('a needle is too narrow for the bead', () => {
-  const d = linearDesign([[0, 6], [80, 6]]);
-  d.form.detail.a = { pattern: 'lib:flutes@1', depthMm: 2, repeats: 4, tileHeightMm: 20 };
-  d.form.detail.fromMm = 10;
-  d.form.detail.toMm = 70;
+  // The Pattern's in cells pull the wall under two bead widths.
+  const d = withPattern(linearDesign([[0, 6], [80, 6]]), TILES.zigzag, { fromMm: 10, toMm: 70 });
   const r = computePreview(d, { library });
   const w = warning(r, 'narrow');
   assert.ok(w);
@@ -88,48 +90,26 @@ test('an unusual layer height for the bead is a warning without beads', () => {
 });
 
 test('a pattern finer than the bead is flagged', () => {
-  const d = cylinder({ radius: 30, height: 60 });
-  d.form.detail.a = { pattern: 'lib:flutes@1', depthMm: 3, repeats: 40, tileHeightMm: 20 };
+  const d = tightZigzag(cylinder({ radius: 30, height: 60 }));
+  d.rules.curveRatio = 1;
   const r = computePreview(d, { library });
   const w = warning(r, 'finePattern');
   assert.ok(w);
   assert.equal(w.bit, ISSUE.finePattern);
   assert.match(w.message, /^Pattern finer than the bead can print at \d+–\d+ mm$/);
-  // Rows closer than two layers are flagged too, without beads.
-  const rows = cylinder();
-  rows.form.detail.a = { pattern: 'lib:dots@1', depthMm: 0.3, repeats: 4, tileHeightMm: 5 };
-  const rw = warning(computePreview(rows, { library }), 'finePattern');
-  assert.ok(rw);
 });
 
 test('the tightest curve is a design setting (rules.curveRatio)', () => {
-  const flutes = (curveRatio) => {
-    const d = cylinder({ radius: 30, height: 60 });
-    d.form.detail.a = { pattern: 'lib:flutes@1', depthMm: 3, repeats: 40, tileHeightMm: 20 };
+  const zigzag = (curveRatio) => {
+    const d = tightZigzag(cylinder({ radius: 30, height: 60 }));
     d.rules.curveRatio = curveRatio;
     return computePreview(d, { library });
   };
-  // Half a bead by default; a looser rule lets the same flutes pass.
-  assert.equal(warning(flutes(0.5), 'finePattern').bit, ISSUE.finePattern);
-  const loose = flutes(0.1);
+  // A stricter rule flags the zigzag; a looser one lets the same zigzag pass.
+  assert.equal(warning(zigzag(1), 'finePattern').bit, ISSUE.finePattern);
+  const loose = zigzag(0.3);
   assert.equal(warning(loose, 'finePattern'), undefined);
   assert.ok(loose.issues.every((i) => !(i & ISSUE.finePattern)));
-  // A stricter rule flags a preset that passes by default.
-  const vase = structuredClone(presets[0]);
-  vase.rules.curveRatio = 1.5;
-  assert.match(warning(computePreview(vase, { library }), 'finePattern').message, /^Pattern finer than the bead can print at /);
-});
-
-test('layers per bump is a design setting (rules.layersPerBump)', () => {
-  const dots = (layersPerBump) => {
-    const d = cylinder();
-    d.form.detail.a = { pattern: 'lib:dots@1', depthMm: 0.3, repeats: 4, tileHeightMm: 5 };
-    d.rules.layersPerBump = layersPerBump;
-    return warning(computePreview(d, { library }), 'finePattern');
-  };
-  // Dots 5 mm apart are under two 1.5 mm layers a bump, but over one.
-  assert.deepEqual(dots(2), { id: 'finePattern', severity: 'warning', bit: 0, message: 'Pattern finer than the bead can print' });
-  assert.equal(dots(1), undefined);
 });
 
 test('height ranges read in mm, merged and counted', () => {
@@ -150,14 +130,15 @@ test('height ranges read in mm, merged and counted', () => {
 test('print checks: fits the bed, refills, wall gaps and the hole', () => {
   const printer = defaultPrinter();
   printer.reservoirMl = 100;
-  const d = structuredClone(presets[0]);
+  // Two walls behind a Pattern: the smooth inner wall leaves gaps behind the out cells.
+  const d = withPattern(structuredClone(presets[0]), TILES.knit, { fromMm: 20, toMm: 140 });
   d.finish.walls = 2;
   const print = computePrint(d, { library, printer });
   const byId = Object.fromEntries(print.checks.map((c) => [c.id, c]));
   assert.deepEqual(byId.bed, { id: 'bed', severity: 'ok', bit: 0, message: 'Fits the bed' });
   assert.match(byId.refill.message, /^\d refill pauses?, at [\d, and]+ mm$/);
   assert.equal(byId.refill.severity, 'info');
-  assert.match(byId.wallGap.message, /^Walls fuse in the grooves; gaps up to 4\.0 mm behind raised parts$/);
+  assert.match(byId.wallGap.message, /^Walls fuse in the grooves; gaps up to \d+\.\d mm behind raised parts$/);
   assert.equal(print.canExport, true);
 
   const small = cylinder();

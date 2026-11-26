@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normaliseDesign } from '../core/design.js';
-import { KIND, RAMP_IN_LAYERS, buildToolpath, patternFeatures } from '../core/toolpath.js';
+import { KIND, RAMP_IN_LAYERS, buildToolpath } from '../core/toolpath.js';
 import { TILES, cylinder, distance, library, presets, withPattern } from './support/fixtures.js';
 
 // Designs with a Pattern (D37): a hidden seam, two walls that follow it, and a
@@ -40,11 +40,13 @@ for (const [name, d, walls = 1] of variants) {
     for (let p = 0; p < tp.pointCount; p++) {
       for (let a = 0; a < 3; a++) assert.ok(Number.isFinite(tp.path[3 * p + a]));
     }
+    // A crisp Pattern's beads run from node to node (D58), further apart where the pot is wider.
+    const most = Math.max(2 * w, 1.2 * (tp.model.pattern?.spacingMaxMm ?? 0));
     for (let p = 1; p < tp.pointCount; p++) {
       assert.ok(tp.path[3 * p + 2] >= tp.path[3 * p - 1] - 1e-12, `z drops at point ${p}`);
       if (tp.kinds[p] !== KIND.none) {
         const d = distance(tp.path, p, p - 1);
-        assert.ok(d <= 2 * w, `bead ${p} (kind ${tp.kinds[p]}) jumps ${d.toFixed(2)} mm`);
+        assert.ok(d <= most, `bead ${p} (kind ${tp.kinds[p]}) jumps ${d.toFixed(2)} mm`);
       }
     }
     for (let k = 0; k < L; k++) {
@@ -57,31 +59,45 @@ for (const [name, d, walls = 1] of variants) {
   });
 }
 
-test('wall layers start at their seam one layer down and climb over the ramp', () => {
+test('wall layers start at their seam one layer down and climb over the ramp points', () => {
   const d = cylinder({ height: 30, radius: 40, baseLayers: 2 });
   const { design, tp } = build(d);
   const h = design.layers.layerHeightMm;
-  const ramp = design.layers.seam.rampLengthMm;
-  for (let i = 2; i < tp.layerZ.length; i++) {
+  const ramp = design.layers.seam.rampPoints;
+  const L = tp.layerZ.length;
+  for (let i = 2; i < L; i++) {
     const first = tp.layerStarts[i];
     const last = tp.layerStarts[i + 1] - 1;
     const zStart = tp.layerZ[i - 1];
     const zTop = tp.layerZ[i];
-    // Over the flat base the ramp grows a quarter layer per layer; the rest is a step up.
-    const rise = h * Math.min((i - 1) / RAMP_IN_LAYERS, 1);
-    // The previous layer ends where this one starts (same point, so it is not repeated).
+    // Over the flat base the ramp grows a quarter layer per layer, and under
+    // the rim it shrinks the same way (D68); the rest is a step up.
+    const rise = h * Math.min((i - 1) / RAMP_IN_LAYERS, (L - 1 - i) / RAMP_IN_LAYERS, 1);
+    // The previous layer ends where this one starts (same point, so it is not
+    // repeated unless the layer steps up first).
     assert.ok(Math.abs(tp.path[3 * (first - 1) + 2] - zStart) < 1e-12);
-    // Climbs linearly over the ramp length, then stays at the top.
-    let along = 0;
+    const k0 = rise < h ? 0 : 1;
+    // Climbs evenly over the ramp's points (D67), then stays at the top.
     for (let p = first; p <= last; p++) {
-      along += Math.hypot(tp.path[3 * p] - tp.path[3 * p - 3], tp.path[3 * p + 1] - tp.path[3 * p - 2]);
+      const k = k0 + p - first;
       const z = tp.path[3 * p + 2];
-      if (along > ramp + 0.5) assert.equal(z, zTop);
-      else assert.ok(Math.abs(z - (zTop - rise + (rise * Math.min(along, ramp)) / ramp)) < 0.02, `layer ${i}: z ${z} at ${along} mm`);
+      assert.ok(Math.abs(z - (zTop - rise + rise * Math.min(k / ramp, 1))) < 1e-9, `layer ${i}: z ${z} at point ${k}`);
     }
     assert.equal(tp.path[3 * last + 2], zTop);
     // The loop is closed: it ends on its seam, above where it started.
     assert.ok(Math.hypot(tp.path[3 * last] - tp.path[3 * (first - 1)], tp.path[3 * last + 1] - tp.path[3 * (first - 1) + 1]) < 1e-9);
+  }
+});
+
+test('the top layer is flat, so the rim is level (D68)', () => {
+  for (const preset of presets) {
+    const { tp } = build(structuredClone(preset));
+    const L = tp.layerZ.length;
+    const zTop = tp.layerZ[L - 1];
+    for (let p = tp.layerStarts[L - 1]; p < tp.layerStarts[L]; p++) {
+      if (tp.kinds[p] !== KIND.outer) continue;
+      assert.equal(tp.path[3 * p + 2], zTop, `${preset.meta.name}: point ${p}`);
+    }
   }
 });
 
@@ -123,7 +139,7 @@ const gapCases = [
 function twistedFixed(degrees) {
   const d = cylinder({ height: 60, radius: 40 });
   d.form.twist.degrees = degrees;
-  d.layers.seam = { rampLengthMm: 15, position: 'fixed', angleDeg: 30 };
+  d.layers.seam = { rampPoints: 4, position: 'fixed', angleDeg: 30 };
   return d;
 }
 for (const [name, d] of gapCases) {
@@ -200,9 +216,9 @@ test('two walls: outer, connector in, inner flat at the top, connector out', () 
   // A round footprint, so a smooth inner wall keeps one radius all round (the
   // Twisted column became a rounded square in issue #1, D34).
   const round = { footprint: 'circle', depthRatio: 1, cornerRounding: 0 };
-  const d = { ...presets[1], form: { ...presets[1].form, plan: round }, finish: { walls: 2, wallSpacingMm: 2.7, innerWall: 'smooth' } };
+  const d = withPattern({ ...structuredClone(presets[1]), form: { ...presets[1].form, plan: round }, finish: { walls: 2, wallSpacingMm: 7.2, innerWall: 'smooth' } }, TILES.knit, { fromMm: 10, toMm: 140 });
   const { design, tp } = build(d, 2);
-  const i = 40;
+  const i = 12;
   const first = tp.layerStarts[i];
   const last = tp.layerStarts[i + 1];
   const kinds = Array.from(tp.kinds.subarray(first, last));
@@ -216,7 +232,8 @@ test('two walls: outer, connector in, inner flat at the top, connector out', () 
   for (let p = first + inStart + 1; p < last; p++) radii.push(Math.hypot(tp.path[3 * p], tp.path[3 * p + 1]));
   const spread = Math.max(...radii) - Math.min(...radii);
   assert.ok(spread < 0.05, `inner wall radius varies ${spread}`);
-  assert.ok(tp.maxGapMm > 2.5 && tp.maxGapMm <= 3 + 1e-9);
+  // The Pattern is 0.75 mm deep: out and in are up to 1.5 mm apart.
+  assert.ok(tp.maxGapMm > 1 && tp.maxGapMm <= 1.5 + 1e-9, `gap ${tp.maxGapMm}`);
   assert.equal(design.finish.walls, 2);
 });
 
@@ -224,7 +241,7 @@ test('the seam follows the chosen rule', () => {
   const twisted = (position) => {
     const d = cylinder({ height: 60, radius: 40 });
     d.form.twist.degrees = 90;
-    d.layers.seam = { rampLengthMm: 15, position, angleDeg: 90 };
+    d.layers.seam = { rampPoints: 4, position, angleDeg: 90 };
     return build(d).tp;
   };
   const angle = (tp, i) => (Math.atan2(tp.seamLine[3 * i + 1], tp.seamLine[3 * i]) * 180) / Math.PI;
@@ -235,60 +252,18 @@ test('the seam follows the chosen rule', () => {
   assert.ok(angle(follow, n - 1) - angle(follow, 0) > 80, 'turns with the twist');
 });
 
-test('a hidden seam sits in a flute groove', () => {
-  const { design, tp } = build(presets[0]);
-  const i = 30; // well inside the fluted belly
-  const x = tp.seamLine[3 * i];
-  const y = tp.seamLine[3 * i + 1];
-  const z = tp.seamLine[3 * i + 2];
-  const repeats = design.form.detail.a.repeats;
-  const u = Math.atan2(y, x) / (2 * Math.PI);
-  // Flutes are cos(2π·repeats·u): a groove is where that is −1.
-  assert.ok(Math.cos(2 * Math.PI * repeats * u) < -0.99, `seam at u ${u}, z ${z}`);
-});
-
-test('a hidden seam on a rectangle sits in a corner', () => {
-  const { tp } = build(presets[2]);
-  for (let i = 0; i < tp.seamLine.length / 3; i++) {
-    const a = (Math.atan2(tp.seamLine[3 * i + 1], tp.seamLine[3 * i]) * 180) / Math.PI;
-    assert.ok(Math.abs(a - 45) < 0.5, `seam angle ${a}`);
-  }
-});
-
-test('a typical pot is about 30 k points', () => {
-  const { tp } = build(presets[0]);
-  assert.ok(tp.pointCount > 15000 && tp.pointCount < 45000, `${tp.pointCount} points`);
-});
-
-test('patterns follow the twist', () => {
-  // Same pattern, with and without twist: the radius at a given outline
-  // position u is the same; only the angle moves.
-  const plainTwist = (deg) => {
-    const d = structuredClone(presets[1]);
-    d.form.twist.degrees = deg;
-    d.layers.seam.position = 'followTwist';
-    return build(d).tp;
-  };
-  const a = plainTwist(0);
-  const b = plainTwist(60);
-  assert.equal(a.pointCount, b.pointCount);
-  for (let p = 0; p < a.pointCount; p += 97) {
-    const ra = Math.hypot(a.path[3 * p], a.path[3 * p + 1]);
-    const rb = Math.hypot(b.path[3 * p], b.path[3 * p + 1]);
-    assert.ok(Math.abs(ra - rb) < 1e-9);
-  }
-});
-
-test('pattern features drive the points per layer', () => {
-  assert.deepEqual(patternFeatures({ kind: 'shape', shape: 'flutes' }), { around: 1, up: 0 });
-  assert.deepEqual(patternFeatures({ kind: 'bitmap', columns: 6, rows: 2, cells: '++--++-++++-' }), { around: 6, up: 2 });
-  assert.deepEqual(patternFeatures({ kind: 'bitmap', columns: 3, rows: 2, cells: '+-0+-0' }), { around: 3, up: 0 });
-  assert.deepEqual(patternFeatures({ kind: 'bitmap', columns: 2, rows: 2, cells: '++--' }), { around: 0, up: 2 });
-  const d = cylinder({ radius: 30, height: 30 });
-  d.form.detail.a = { pattern: 'lib:flutes@1', depthMm: 0.5, repeats: 60, tileHeightMm: 20 };
+test('a hidden seam sits on a node of the Pattern, in its groove', () => {
+  // Ribs two out, two in: the groove is an in cell, the same on every layer.
+  const ribs = { kind: 'bitmap', columns: 4, rows: 1, cells: '++--' };
+  const d = withPattern(cylinder({ height: 30, radius: 30 }), ribs);
+  d.layers.seam.position = 'hidden';
   const { tp } = build(d);
-  const i = 15;
-  assert.ok(tp.layerStarts[i + 1] - tp.layerStarts[i] >= 8 * 60);
+  const lp = tp.model.pattern;
+  for (let i = lp.first + 1; i <= lp.last; i++) {
+    const x = tp.seams[i] * lp.nodes;
+    assert.ok(Math.abs(x - Math.round(x)) < 1e-6, `layer ${i}: the seam sits on a node`);
+    assert.ok(lp.at(i, tp.seams[i]) < 0, `layer ${i}: in a groove`);
+  }
 });
 
 test('a huge pot at fine settings stays inside the point budget and says so', () => {

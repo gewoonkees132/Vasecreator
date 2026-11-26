@@ -5,11 +5,11 @@
 // kinds:
 //   dial      a number: dial(state, env) → the dial's spec, set(draft, v, state, env) changes the design
 //   options   a choice: options, current(state), choose(draft, v)
-//   patterns  the Detailed morph's swatch carousel for slot A or B
 //   drawings  the Pattern's carousel: the starter Patterns, None and your own (§3.8)
 //   sheet     a hint and a button that opens the settings sheet at `part`
-//   group     a tool that opens a row of its own (Shape's Morph, D36): `modes`
-//             (a toggle at the front of the row), mode(state) and tools per mode
+//   group     a tool that opens a row of its own: `modes` (a toggle at the
+//             front of the row), mode(state) and tools per mode. No step has
+//             one since the Detailed morph went (D63).
 //
 // env is { library }: the tools that need the libraries (the Pattern's
 // density readout) read them from it.
@@ -19,15 +19,12 @@
 // that has nothing to set yet, like a part that doesn't apply (C34).
 // No DOM here: the module is tested on real designs.
 
-import { LIMITS, setHeight, setWidth, setDepth, snapTileHeight } from '../core/design.js';
-import { PLAIN } from '../core/patterns.js';
+import { LIMITS, setHeight, setWidth, setDepth } from '../core/design.js';
 import { DEPTH_BEADS } from '../core/layer-pattern.js';
 import { footprintAt, depthLocked } from './sections/shape.js';
 import { curveType } from './sections/curve.js';
 import morph from './sections/morph.js';
-import {
-  findEntry, textured, snapToLayers, findLayerEntry, readoutOf, densityText, densityLimits,
-} from './pattern-actions.js';
+import { findLayerEntry, readoutOf, densityText, softenText, densityLimits } from './pattern-actions.js';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 const fmt = (v, decimals = 1) => {
@@ -36,16 +33,10 @@ const fmt = (v, decimals = 1) => {
 };
 const L = (key, fallback) => ({ ...fallback, ...(LIMITS[key] || {}) });
 
-const slotKey = (state) => (state.view.slot === 'b' ? 'b' : 'a');
-const slotOf = (state) => state.design.form.detail[slotKey(state)];
-/** "Depth" while only A is in use, "Depth B" once there is a B. */
-const perSlot = (name) => (state) => (state.design.form.detail.b ? `${name} ${slotKey(state).toUpperCase()}` : name);
-const detailOn = (d) => textured(d.form.detail.a) || textured(d.form.detail.b);
-
 // Twist turns corners, the morph and the patterns; on a plain round pot there
 // is nothing to turn (C30).
 const twistHidden = (d) => d.form.plan.footprint === 'circle' && (d.form.plan.depthRatio ?? 1) === 1
-  && !d.form.morph?.map && !detailOn(d) && !d.pattern;
+  && !d.form.morph?.map && !d.pattern;
 
 const CURVE_NOTES = {
   smooth: 'Flows through the points',
@@ -54,7 +45,7 @@ const CURVE_NOTES = {
 };
 const CURVE_INTERP = { smooth: 'catmullRomCentripetal', gentle: 'monotone', angular: 'linear' };
 
-/** The blend and fade words (D42, D54), shared by the Detailed morph's A/B and the Pattern's Fade. */
+/** The Pattern's Fade words (D42, D54). */
 export const BLEND_OPTIONS = [
   { value: 'even', label: 'Even' }, { value: 'fadesUp', label: 'Fades up' }, { value: 'fadesDown', label: 'Fades down' },
   { value: 'middle', label: 'Middle' }, { value: 'diagonal', label: 'Diagonal' },
@@ -65,126 +56,25 @@ const BLEND_WHERE = { fadesUp: 'At the top: ', fadesDown: 'At the bottom: ', mid
 
 function layerNote(layers) {
   const ratio = layers.layerHeightMm / layers.beadWidthMm;
-  return ratio < 0.3 || ratio > 0.6 ? 'Unusual for this bead (0.3–0.6 × bead width)' : '';
+  return ratio < 0.3 || ratio > 0.65 ? 'Unusual for this bead (0.3–0.65 × bead width)' : '';
 }
 
-// ---------- Shape's Morph tool: Large (the Morph) · Detailed (the Detailed morph) ----------
+// ---------- Shape's Morph tool ----------
 
-const LARGE_TOOLS = [
-  {
-    id: 'morph', name: 'Morph', kind: 'sheet', part: 'morph',
-    value: (s) => (s.design.form.morph?.map ? 'On' : 'Off'),
-    hint: (s) => (s.design.form.morph?.map
-      ? `Morph: ${safe(() => morph.summary(s.design))}.`
-      : 'Push the whole wall in and out with a map or a picture, for big shapes like lobes and waves.'),
-    action: 'Open morph settings',
-  },
-];
-
-/** The Detailed morph's tools (D36): its two slots, their settings, its range and blend. */
-const DETAIL_TOOLS = [
-  { id: 'a', name: 'A', kind: 'patterns', slot: 'a' },
-  { id: 'b', name: 'B', kind: 'patterns', slot: 'b' },
-  {
-    id: 'depth', name: perSlot('Depth'), kind: 'dial',
-    applies: (s) => textured(slotOf(s)),
-    value: (s) => `${fmt(slotOf(s)?.depthMm ?? 0)} mm`,
-    dial: (s) => ({ label: perSlot('Depth')(s), unit: 'mm', ...L('depthMm', {}), step: 0.1, decimals: 1, value: slotOf(s)?.depthMm ?? 0 }),
-    set: (d, v, s) => { const slot = d.form.detail[slotKey(s)]; if (slot) slot.depthMm = v; },
-  },
-  {
-    id: 'repeats', name: perSlot('Repeats'), kind: 'dial',
-    applies: (s) => textured(slotOf(s)),
-    value: (s) => `${slotOf(s)?.repeats ?? 1}×`,
-    dial: (s) => {
-      const slot = slotOf(s);
-      const fp = footprintAt(s.design);
-      let note = `≈ ${Math.round(fp.perimeterMm / Math.max(1, slot?.repeats ?? 1))} mm per repeat`;
-      if (s.design.form.plan.footprint === 'rectangle' && (slot?.repeats ?? 1) % 4 !== 0) note += ' · try a multiple of 4';
-      return { label: perSlot('Repeats around')(s), unit: '×', ...L('repeats', {}), step: 1, decimals: 0, value: slot?.repeats ?? 1, note };
-    },
-    set: (d, v, s) => { const slot = d.form.detail[slotKey(s)]; if (slot) slot.repeats = Math.max(1, Math.round(v)); },
-  },
-  {
-    id: 'tile', name: perSlot('Tile'), kind: 'dial',
-    applies: (s) => textured(slotOf(s)),
-    value: (s) => `${fmt(snapTileHeight(slotOf(s)?.tileHeightMm ?? 0, s.design.layers.layerHeightMm))} mm`,
-    dial: (s) => {
-      const lh = s.design.layers.layerHeightMm;
-      const v = snapTileHeight(slotOf(s)?.tileHeightMm ?? lh, lh);
-      return {
-        label: perSlot('Tile height')(s), unit: 'mm', step: lh, decimals: 2, value: v,
-        min: snapToLayers(LIMITS.tileHeightMm.min, lh), max: Math.min(400, LIMITS.tileHeightMm.max),
-        note: `${Math.round(v / lh)} layers per tile`,
-      };
-    },
-    set: (d, v, s) => { const slot = d.form.detail[slotKey(s)]; if (slot) slot.tileHeightMm = snapToLayers(v, d.layers.layerHeightMm); },
-  },
-  {
-    id: 'from', name: 'From', kind: 'dial',
-    applies: (s) => detailOn(s.design),
-    value: (s) => `${fmt(s.design.form.detail.fromMm, 0)} mm`,
-    dial: (s) => ({
-      label: 'Detailed morph from', unit: 'mm', min: 0, max: s.design.form.height, step: 1, decimals: 1, value: s.design.form.detail.fromMm,
-      note: 'Or drag the bracket beside the pot',
-    }),
-    set: (d, v) => { d.form.detail.fromMm = Math.max(0, Math.min(v, d.form.detail.toMm - 1)); },
-  },
-  {
-    id: 'to', name: 'To', kind: 'dial',
-    applies: (s) => detailOn(s.design),
-    value: (s) => `${fmt(s.design.form.detail.toMm, 0)} mm`,
-    dial: (s) => ({
-      label: 'Detailed morph to', unit: 'mm', min: 0, max: s.design.form.height, step: 1, decimals: 1, value: s.design.form.detail.toMm,
-      note: 'Or drag the bracket beside the pot',
-    }),
-    set: (d, v) => { d.form.detail.toMm = Math.min(d.form.height, Math.max(v, d.form.detail.fromMm + 1)); },
-  },
-  {
-    id: 'blend', name: 'Blend', kind: 'options',
-    applies: (s) => !!s.design.form.detail.b,
-    options: BLEND_OPTIONS,
-    current: (s) => s.design.form.detail.blend?.shape ?? 'fadesUp',
-    value: (s) => blendLabel(s.design.form.detail.blend?.shape),
-    note: (s) => (s.design.form.detail.blend?.shape === 'diagonal' ? 'B comes in as a band that winds round the pot' : 'How B comes in over A, bottom to top'),
-    choose: (d, v) => {
-      if (!d.form.detail.blend) d.form.detail.blend = { shape: v, amount: 1 };
-      d.form.detail.blend.shape = v;
-      // Even at full amount is all B; start at half so the first tap shows a mix.
-      if (v === 'even' && d.form.detail.blend.amount === 1) d.form.detail.blend.amount = 0.5;
-    },
-    label: () => 'Blend',
-  },
-  {
-    id: 'amount', name: 'Amount', kind: 'dial',
-    applies: (s) => !!s.design.form.detail.b,
-    value: (s) => `${Math.round((s.design.form.detail.blend?.amount ?? 1) * 100)} %`,
-    dial: (s) => {
-      const blend = s.design.form.detail.blend ?? { shape: 'fadesUp', amount: 1 };
-      const b = Math.round(blend.amount * 100);
-      return { label: 'Blend amount', unit: '%', min: 0, max: 100, step: 5, decimals: 0, value: b, note: `${BLEND_WHERE[blend.shape] ?? ''}A ${100 - b} % · B ${b} %` };
-    },
-    set: (d, v) => { if (d.form.detail.blend) d.form.detail.blend.amount = Math.min(1, Math.max(0, v / 100)); },
-  },
-];
-
-const MORPH_MODES = [{ value: 'large', label: 'Large' }, { value: 'detailed', label: 'Detailed' }];
-
-/**
- * Which side of the Morph tool shows: the one picked last (view.morphKind),
- * else Detailed when the pot has a Detailed morph and no Morph.
- */
-export function morphMode(state) {
-  const k = state.view.morphKind;
-  if (k === 'large' || k === 'detailed') return k;
-  return detailOn(state.design) && !state.design.form.morph?.map ? 'detailed' : 'large';
-}
+const MORPH_TOOL = {
+  id: 'morph', name: 'Morph', kind: 'sheet', part: 'morph',
+  value: (s) => (s.design.form.morph?.map ? 'On' : 'Off'),
+  hint: (s) => (s.design.form.morph?.map
+    ? `Morph: ${safe(() => morph.summary(s.design))}.`
+    : 'Push the whole wall in and out with a map or a picture, for big shapes like lobes and waves.'),
+  action: 'Open morph settings',
+};
 
 // ---------- The Pattern step's tools (the bead-scale Pattern, D37–D42) ----------
 
 const hasPattern = (s) => !!s.design.pattern;
 const pat = (s) => s.design.pattern;
-const halfBead = (d) => Math.floor(DEPTH_BEADS.max * d.layers.beadWidthMm * 100) / 100;
+const deepest = (d) => Math.floor(DEPTH_BEADS.max * d.layers.beadWidthMm * 100) / 100;
 
 const PATTERN_TOOLS = [
   { id: 'drawing', name: 'Pattern', kind: 'drawings' },
@@ -195,11 +85,11 @@ const PATTERN_TOOLS = [
     dial: (s) => {
       const v = pat(s).depthMm;
       return {
-        label: 'Pattern depth', unit: 'mm', min: 0, max: Math.max(halfBead(s.design), v), step: 0.05, decimals: 2, value: v,
-        note: v > 0 ? `Out +${fmt(v, 2)} mm, in −${fmt(v, 2)} mm · up to half a bead` : 'Flat: the drawing doesn’t print',
+        label: 'Pattern depth', unit: 'mm', min: 0, max: Math.max(deepest(s.design), v), step: 0.05, decimals: 2, value: v,
+        note: v > 0 ? `Out +${fmt(v, 2)} mm, in −${fmt(v, 2)} mm · up to ⅔ of a bead` : 'Flat: the drawing doesn’t print',
       };
     },
-    set: (d, v) => { if (d.pattern) d.pattern.depthMm = Math.min(Math.max(0, v), halfBead(d)); },
+    set: (d, v) => { if (d.pattern) d.pattern.depthMm = Math.min(Math.max(0, v), deepest(d)); },
   },
   {
     id: 'density', name: 'Density', kind: 'dial', face: true,
@@ -215,7 +105,7 @@ const PATTERN_TOOLS = [
       const r = readoutOf(s.design, env?.library);
       if (!r) return { label: 'Density', unit: '', min: 0, max: 1, step: 1, decimals: 0, value: 0, disabled: true, note: 'The drawing isn’t available' };
       const lim = densityLimits(s.design, r);
-      const note = densityText(r);
+      const note = densityText(r, { compact: true });
       if (p.density.by === 'points') {
         return { label: 'Points per layer', unit: 'pts', ...lim.points, decimals: 0, value: r.nodes, note };
       }
@@ -281,9 +171,9 @@ const PATTERN_TOOLS = [
     id: 'soften', name: 'Soften', kind: 'dial',
     applies: hasPattern,
     value: (s) => (pat(s).softenCells > 0 ? fmt(pat(s).softenCells, 2) : 'Crisp'),
-    dial: (s) => ({
+    dial: (s, env) => ({
       label: 'Soften', unit: 'cells', ...L('softenCells', {}), step: 0.05, decimals: 2, value: pat(s).softenCells,
-      note: pat(s).softenCells > 0 ? 'Blurs each point into its neighbours; the drawing stays as it is' : 'Crisp: what you draw is what prints',
+      note: softenText(pat(s).softenCells, readoutOf(s.design, env?.library), { compact: true }),
     }),
     set: (d, v) => { if (d.pattern) d.pattern.softenCells = Math.min(2, Math.max(0, v)); },
   },
@@ -363,19 +253,7 @@ export const DOCK_TOOLS = {
       choose: (d, v) => { d.form.profile.interp = CURVE_INTERP[v]; },
       label: (v) => `${({ smooth: 'Smooth', gentle: 'Gentle', angular: 'Angular' })[v]} curve`,
     },
-    {
-      id: 'morph', name: 'Morph', kind: 'group', back: 'Shape',
-      value: (s) => {
-        const large = !!s.design.form.morph?.map;
-        const detailed = detailOn(s.design);
-        return large && detailed ? 'Both' : large ? 'Large' : detailed ? 'Detailed' : 'Off';
-      },
-      modes: MORPH_MODES,
-      modesLabel: 'Morph size',
-      mode: morphMode,
-      setMode: (v) => ({ morphKind: v }),
-      tools: { large: LARGE_TOOLS, detailed: DETAIL_TOOLS },
-    },
+    MORPH_TOOL,
   ],
 
   pattern: PATTERN_TOOLS,
@@ -387,7 +265,7 @@ export const DOCK_TOOLS = {
       current: (s) => s.design.layers.seam.position,
       value: (s) => ({ fixed: 'Fixed', followTwist: 'Follows twist', hidden: 'Hidden' })[s.design.layers.seam.position],
       note: (s) => (s.design.layers.seam.position === 'hidden'
-        ? 'In the corner or groove nearest the grip'
+        ? 'In a Pattern’s quietest column, else the corner nearest the grip'
         : 'Drag the grip on the pot to move it'),
       choose: (d, v) => { d.layers.seam.position = v; },
       label: () => 'Seam position',
@@ -397,15 +275,18 @@ export const DOCK_TOOLS = {
       value: (s) => `${Math.round(s.design.layers.seam.angleDeg)}°`,
       dial: (s) => ({
         label: 'Seam angle', unit: '°', min: 0, max: 359, step: 1, decimals: 0, wrap: 360, value: s.design.layers.seam.angleDeg,
-        note: s.design.layers.seam.position === 'hidden' ? 'Hides in the corner or groove nearest this' : 'Or drag the grip on the pot',
+        note: s.design.layers.seam.position === 'hidden' ? 'Hides in a Pattern’s quietest column, else the corner nearest this' : 'Or drag the grip on the pot',
       }),
       set: (d, v) => { d.layers.seam.angleDeg = ((Math.round(v) % 360) + 360) % 360; },
     },
     {
       id: 'ramp', name: 'Ramp', kind: 'dial',
-      value: (s) => `${fmt(s.design.layers.seam.rampLengthMm, 0)} mm`,
-      dial: (s) => ({ label: 'Seam ramp length', unit: 'mm', ...L('rampLengthMm', {}), step: 1, decimals: 1, value: s.design.layers.seam.rampLengthMm }),
-      set: (d, v) => { d.layers.seam.rampLengthMm = v; },
+      value: (s) => `${s.design.layers.seam.rampPoints} pts`,
+      dial: (s) => ({
+        label: 'Seam ramp', unit: 'pts', ...L('rampPoints', {}), step: 1, decimals: 0, value: s.design.layers.seam.rampPoints,
+        note: 'The climb to the next layer; in a Pattern a point is a cell',
+      }),
+      set: (d, v) => { d.layers.seam.rampPoints = Math.round(v); },
     },
     {
       id: 'bead', name: 'Bead', kind: 'dial',
@@ -483,7 +364,7 @@ export function toolsFor(stepId, state) {
   return list.filter(applies(state));
 }
 
-/** A tool's chip name (some say which slot they edit). */
+/** A tool's chip name. */
 export function toolName(tool, state) {
   return typeof tool.name === 'function' ? tool.name(state) : tool.name;
 }
@@ -491,27 +372,14 @@ export function toolName(tool, state) {
 /**
  * The tool to show for a step: the one picked (view.tools; in an open group
  * view.tools['<step>.<group>.<side>']), if it still applies, else the first.
- * The Detailed morph's slot tools follow view.slot.
  * @returns {object | null}
  */
 export function currentTool(stepId, state) {
   const list = toolsFor(stepId, state);
   if (!list.length) return null;
   const g = openGroup(stepId, state);
-  let id = g ? state.view.tools?.[g.key] : state.view.tools?.[stepId];
-  if (g?.mode === 'detailed' && (id === 'a' || id === 'b' || id == null)) id = slotKey(state);
+  const id = g ? state.view.tools?.[g.key] : state.view.tools?.[stepId];
   return list.find((t) => t.id === id) ?? list[0];
-}
-
-/**
- * The chip text of a slot tool: the pattern's name, or "None".
- * @returns {{ name: string, entry: object | null, slot: object | null }}
- */
-export function slotInfo(state, library, s) {
-  const slot = state.design.form.detail[s];
-  if (!slot) return { name: 'None', entry: null, slot: null };
-  const entry = findEntry(library, slot.pattern, state.design.assets);
-  return { name: entry?.name ?? (slot.pattern === PLAIN.id ? 'Plain' : slot.pattern), entry, slot };
 }
 
 /**

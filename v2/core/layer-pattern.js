@@ -7,9 +7,16 @@
 // node, a single toolpath point. Every layer in the range has the same
 // N = repeats × columns nodes at u_j = j / N (u from 0, the outline's own
 // start, so the columns line up from layer to layer and follow the twist);
-// node j uses column j mod columns. Between nodes the Pattern runs straight,
-// so in·out·in·out is a zigzag (D37). It is added radially, after the
-// profile, the Morph and the Detailed morph.
+// node j uses column j mod columns. Crisp (Soften 0), the nodes are the
+// layer's only points (D58): they stand one above the other and the Pattern
+// runs straight between them, so in·out·in·out is a zigzag (D37). With Soften
+// on, every gap gets the same `extra` points, about half a bead apart, on a
+// smooth curve through the softened nodes (D59). It is added radially, after
+// the profile and the Morph.
+//
+// A layer starts where the one below ended, on that layer's row, and changes
+// to its own row over the seam ramp (D60): `at` takes the share of the row
+// below, so the path never steps sideways at the seam.
 //
 // Displacement at a node = depth × softened cell × fade:
 //   Soften (σ 0–2 cells, wrapping both ways) blurs the drawing first;
@@ -21,48 +28,40 @@
 // shown is recomputed from them) or as points per layer (a whole number of
 // tiles). The one set last is kept when the pot changes size.
 
-import { PLAIN, bitmapValues } from './patterns.js';
-import { BLEND_SHAPES, blendShape, softEdgeMm } from './surface.js';
+import { bitmapValues } from './patterns.js';
+import { BLEND_SHAPES, blendShape } from './surface.js';
 import { blurGrid } from './raster.js';
 import { createProfile } from './profile.js';
 import { createPlan } from './plan.js';
 
-/** The Fade's shapes: the Detailed morph's blend words (D42, D54). */
+/** The Fade's shapes (D42, D54). */
 export const FADE_SHAPES = BLEND_SHAPES;
 export const DENSITY_FACES = ['spacing', 'points'];
-/** Node spacing around, in bead widths (D40). */
-export const SPACING_BEADS = Object.freeze({ min: 0.5, max: 3, default: 1 });
-/** Depth as a share of a bead width: the most, and the default (D38, §3.3). */
-export const DEPTH_BEADS = Object.freeze({ max: 0.5, default: 0.25 });
+/** Node spacing around, in bead widths (D40; from a quarter bead since D64, so 2 mm fits the standard 8 mm bead). */
+export const SPACING_BEADS = Object.freeze({ min: 0.25, max: 3 });
+/** The node spacing every drawing starts with: 2 mm (D64), held to the bead's range. */
+export const DEFAULT_SPACING_MM = 2;
+/** The standard node spacing for a bead width, in mm. */
+export function defaultSpacingMm(beadWidthMm) {
+  return Math.min(Math.max(DEFAULT_SPACING_MM, SPACING_BEADS.min * beadWidthMm), SPACING_BEADS.max * beadWidthMm);
+}
+/**
+ * Depth as a share of a bead width: the most, and the standard every drawing
+ * starts with, both two thirds of a bead (D61; D38 had half a bead at most).
+ */
+export const DEPTH_BEADS = Object.freeze({ max: 2 / 3, default: 2 / 3 });
 export const DEFAULT_POINTS = 96;
 /** The most nodes a layer may have: the toolpath's MAX_POINTS_PER_LAYER (a test keeps them equal). */
 export const MAX_NODES = 1600;
 
 /**
- * Where a new Pattern runs (§3.4): over the Detailed morph's range when it
- * has one, else from 8 mm to 10 mm below the rim.
- *
- * Over the Detailed morph it keeps inside the relief's soft start and end,
- * where the relief is whole. The Pattern starts and stops sharply, and
- * starting it on the relief's ramp would put two steps on one layer: on
- * the Classic vase the flutes alone grow 0.67 mm on the layer the Pattern
- * would start on, so no starter Pattern could pass bead support (D43) there.
- * A range too short for that keeps the Detailed morph's own.
+ * Where a new Pattern runs (§3.4): from 8 mm to 10 mm below the rim.
  * @param {object} design normalised
  * @returns {{ fromMm: number, toMm: number }}
  */
 export function defaultPatternRange(design) {
-  const detail = design.form.detail;
   const H = design.form.height;
   const h = design.layers.layerHeightMm;
-  const on = (slot) => !!slot && slot.pattern !== PLAIN.id && slot.depthMm > 0;
-  if (detail && (on(detail.a) || on(detail.b))) {
-    const edge = softEdgeMm(Math.max(detail.a?.depthMm ?? 0, detail.b?.depthMm ?? 0), h);
-    const fromMm = detail.fromMm + edge;
-    const toMm = Math.min(detail.toMm, H) - edge;
-    if (toMm - fromMm >= h) return { fromMm, toMm };
-    return { fromMm: detail.fromMm, toMm: Math.min(detail.toMm, H) };
-  }
   const toMm = Math.max(H - 10, h);
   return { fromMm: Math.min(8, Math.max(toMm - h, 0)), toMm };
 }
@@ -116,6 +115,22 @@ export function nodesAround(density, columns, perimeterMinMm, maxNodes) {
 }
 
 /**
+ * Points between two nodes (D58, D59): none when crisp, so a layer has its
+ * nodes alone; with Soften on, enough to space the points about half a bead
+ * apart on the widest layer, the same in every gap and on every layer.
+ * @param {number} softenCells
+ * @param {number} nodes
+ * @param {number} perimeterMaxMm the widest layer's perimeter in the range
+ * @param {number} beadWidthMm
+ * @param {number} maxNodes the most points a layer may have
+ */
+export function extraPoints(softenCells, nodes, perimeterMaxMm, beadWidthMm, maxNodes) {
+  if (!(softenCells > 0)) return 0;
+  const want = Math.ceil(perimeterMaxMm / nodes / (beadWidthMm / 2) - 1e-9) - 1;
+  return Math.max(0, Math.min(want, Math.floor(maxNodes / nodes) - 1));
+}
+
+/**
  * Which layers the Pattern prints on and how many nodes each gets (D40, D41):
  * the wall layers whose middle, (i + ½)·h, lies in From–To (never the base),
  * and N = repeats × columns from the density, measured on the narrowest of them.
@@ -127,7 +142,8 @@ export function nodesAround(density, columns, perimeterMinMm, maxNodes) {
 function patternLayout(design, recipe, { profile, unitPerimeter, layerCount, baseLayers, maxNodes }) {
   const p = design.pattern;
   const h = design.layers.layerHeightMm;
-  let first = Math.max(baseLayers, Math.ceil(p.fromMm / h - 0.5 - 1e-9));
+  const w = design.layers.beadWidthMm;
+  let first =Math.max(baseLayers, Math.ceil(p.fromMm / h - 0.5 - 1e-9));
   const last = Math.min(layerCount - 1, Math.floor(p.toMm / h - 0.5 + 1e-9));
   if (first > last) first = last + 1;
   const columns = recipe ? recipe.columns : 1;
@@ -141,8 +157,9 @@ function patternLayout(design, recipe, { profile, unitPerimeter, layerCount, bas
   }
   if (first > last) perimeterMin = perimeterMax = profile.at(design.form.height / 2) * unitPerimeter;
   const { repeats, nodes, clamped } = nodesAround(p.density, columns, perimeterMin, maxNodes);
+  const extra = extraPoints(p.softenCells, nodes, perimeterMax, w, maxNodes);
   return {
-    first, last, columns, rows, repeats, nodes, clamped,
+    first, last, columns, rows, repeats, nodes, clamped, extra, pointsPerLayer: nodes * (extra + 1),
     perimeterMinMm: perimeterMin, spacingMinMm: perimeterMin / nodes, spacingMaxMm: perimeterMax / nodes,
   };
 }
@@ -175,6 +192,8 @@ export function patternReadout(design, library) {
     columns: l.columns, rows: l.rows, repeats: l.repeats, nodes: l.nodes, clamped: l.clamped,
     spacingMinMm: l.spacingMinMm, spacingMaxMm: l.spacingMaxMm, perimeterMinMm: l.perimeterMinMm,
     layers: Math.max(0, l.last - l.first + 1),
+    // The nodes plus Soften's points between them, a layer and over all its layers.
+    extra: l.extra, pointsPerLayer: l.pointsPerLayer, points: l.pointsPerLayer * Math.max(0, l.last - l.first + 1),
   };
 }
 
@@ -188,7 +207,9 @@ export function patternReadout(design, library) {
  *   drawing: string, missing: boolean, active: boolean, recipe: object | null,
  *   columns: number, rows: number, repeats: number, nodes: number, clamped: boolean,
  *   first: number, last: number, depthMm: number, spacingMinMm: number, spacingMaxMm: number,
- *   inRange(layer: number): boolean, rowOf(layer: number): number, at(layer: number, u: number): number,
+ *   extra: number, pointsPerLayer: number,
+ *   inRange(layer: number): boolean, rowOf(layer: number): number, at(layer: number, u: number, below?: number): number,
+ *   seamColumn(rampCells: number): number,
  * }} null when the design has no Pattern
  */
 export function createLayerPattern(design, library, wall) {
@@ -196,7 +217,8 @@ export function createLayerPattern(design, library, wall) {
   if (!p) return null;
   const recipe = findDrawing(design, library);
   // The Pattern starts and stops sharply at its first and last layer.
-  const { first, last, columns, rows, repeats, nodes: N, clamped, spacingMinMm, spacingMaxMm } = patternLayout(design, recipe, wall);
+  const { first, last, columns, rows, repeats, nodes: N, clamped, extra, pointsPerLayer, spacingMinMm, spacingMaxMm } = patternLayout(design, recipe, wall);
+  const smooth = p.softenCells > 0;
   const active = !!recipe && p.depthMm > 0 && first <= last;
 
   const grid = recipe
@@ -227,8 +249,10 @@ export function createLayerPattern(design, library, wall) {
     return entry.values;
   }
 
-  /** The Pattern's radial push in mm on wall layer i at outline position u. */
-  function at(i, u) {
+  // Layer i's own row at u: on a node its value; between nodes a straight
+  // line when crisp, and with Soften a smooth curve through the nodes
+  // (Catmull-Rom, wrapping round the pot).
+  function own(i, u) {
     if (!inRange(i)) return 0;
     const v = nodesOf(i);
     const x = (u - Math.floor(u)) * N;
@@ -239,33 +263,84 @@ export function createLayerPattern(design, library, wall) {
     if (j >= N) j -= N;
     if (f === 0) return v[j];
     const next = j + 1 === N ? 0 : j + 1;
-    return v[j] + f * (v[next] - v[j]);
+    const a = v[j];
+    const b = v[next];
+    if (!smooth) return a + f * (b - a);
+    const before = v[j === 0 ? N - 1 : j - 1];
+    const after = v[next + 1 === N ? 0 : next + 1];
+    return a + 0.5 * f * (b - before + f * (2 * before - 5 * a + 4 * b - after + f * (3 * (a - b) + after - before)));
+  }
+
+  /**
+   * The Pattern's radial push in mm on wall layer i at outline position u.
+   * `below` (0–1) is the share still on the row of the layer below: a layer
+   * starts on that row and changes to its own over the seam ramp (D60). It
+   * also carries the last row onto the layer above the range, and a plain
+   * wall into the first.
+   */
+  function at(i, u, below = 0) {
+    if (below <= 0) return own(i, u);
+    if (below >= 1) return own(i - 1, u);
+    return (1 - below) * own(i, u) + below * own(i - 1, u);
+  }
+
+  /**
+   * The quietest column of the drawing for a hidden seam (D66): a layer
+   * starts on the row below and changes to its own over `rampCells` cells
+   * from the seam column c (D60, D67), so cell c + k shows a share
+   * 1 − k / rampCells of the row below. The column whose rows change least
+   * there, over every row against the one below it (the tile repeats
+   * upwards), wins; then the deepest (a groove), then the lowest c.
+   * @param {number} rampCells
+   * @returns {number} a column, 0 … columns − 1
+   */
+  function seamColumn(rampCells) {
+    if (!recipe) return 0;
+    const n = Math.max(1, Math.min(Math.round(rampCells), columns));
+    let best = 0;
+    let bestScore = Infinity;
+    let bestDepth = Infinity;
+    for (let c = 0; c < columns; c++) {
+      let score = 0;
+      let depth = 0;
+      for (let r = 0; r < rows; r++) {
+        const row = r * columns;
+        const below = (r === 0 ? rows - 1 : r - 1) * columns;
+        for (let k = 0; k < n; k++) {
+          const col = (c + k) % columns;
+          score += (1 - k / n) * Math.abs(grid[row + col] - grid[below + col]);
+        }
+        depth += grid[row + c];
+      }
+      if (score < bestScore - 1e-6 || (score < bestScore + 1e-6 && depth < bestDepth - 1e-6)) {
+        best = c;
+        bestScore = score;
+        bestDepth = depth;
+      }
+    }
+    return best;
   }
 
   return {
     drawing: p.drawing, missing: !recipe, active, recipe,
     columns, rows, repeats, nodes: N, clamped, first, last, depthMm: p.depthMm,
-    spacingMinMm, spacingMaxMm,
-    inRange, rowOf, at,
+    extra, pointsPerLayer, spacingMinMm, spacingMaxMm,
+    inRange, rowOf, at, seamColumn,
   };
 }
 
 /**
- * The depth and density a drawing starts with, in mm for this design's bead:
- * the drawing's own defaults (in bead widths, as the starter library gives
- * them) or else a quarter bead deep and nodes one bead apart (D38, D40).
+ * The depth and density every drawing starts with, in mm for this design's
+ * bead: two thirds of a bead deep (D61) and nodes 2 mm apart (D64).
  * @param {object} design normalised
- * @param {{ depthBeads?: number, spacingBeads?: number }} [defaults]
  * @returns {{ depthMm: number, density: { by: 'spacing', spacingMm: number, points: number } }}
  */
-export function drawingDefaults(design, defaults = {}) {
+export function drawingDefaults(design) {
   const w = design.layers.beadWidthMm;
-  const depth = Math.min(Math.max(defaults.depthBeads ?? DEPTH_BEADS.default, 0), DEPTH_BEADS.max);
-  const spacing = Math.min(Math.max(defaults.spacingBeads ?? SPACING_BEADS.default, SPACING_BEADS.min), SPACING_BEADS.max);
   return {
-    // A whole hundredth of a mm, never past half a bead.
-    depthMm: Math.min(Math.round(depth * w * 100) / 100, Math.floor(DEPTH_BEADS.max * w * 100) / 100),
-    density: { by: 'spacing', spacingMm: Math.round(spacing * w * 100) / 100, points: DEFAULT_POINTS },
+    // A whole hundredth of a mm, never past the most.
+    depthMm: Math.min(Math.round(DEPTH_BEADS.default * w * 100) / 100, Math.floor(DEPTH_BEADS.max * w * 100) / 100),
+    density: { by: 'spacing', spacingMm: Math.round(defaultSpacingMm(w) * 100) / 100, points: DEFAULT_POINTS },
   };
 }
 
@@ -274,12 +349,11 @@ export function drawingDefaults(design, defaults = {}) {
  * (drawingDefaults), crisp, no fade, over defaultPatternRange.
  * @param {object} design normalised
  * @param {string} drawing
- * @param {{ depthBeads?: number, spacingBeads?: number }} [defaults]
  */
-export function newPattern(design, drawing, defaults) {
+export function newPattern(design, drawing) {
   return {
     drawing,
-    ...drawingDefaults(design, defaults),
+    ...drawingDefaults(design),
     ...defaultPatternRange(design),
     fade: { shape: 'even', amount: 1 },
     softenCells: 0,

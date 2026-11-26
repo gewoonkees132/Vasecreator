@@ -4,12 +4,12 @@
   "presets": [
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 5,
       "units": "mm",
       "meta": {
         "id": "preset:classic-vase@1",
         "name": "Classic vase",
-        "description": "A rounded body with a slim neck; flutes on the belly fade into a smooth neck."
+        "description": "A rounded body with a slim neck."
       },
       "form": {
         "height": 170,
@@ -23,33 +23,44 @@
             { "z": 170, "r": 39 }
           ]
         },
-        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
-        "twist": { "degrees": 0 },
-        "detail": {
-          "fromMm": 10,
-          "toMm": 150,
-          "a": { "pattern": "lib:flutes@1", "depthMm": 2, "repeats": 20, "tileHeightMm": 19.5 },
-          "b": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 19.5 },
-          "blend": { "shape": "fadesUp", "amount": 1 }
+        "plan": {
+          "footprint": "circle",
+          "depthRatio": 1,
+          "cornerRounding": 0
+        },
+        "twist": {
+          "degrees": 0
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
-        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
+        "seam": {
+          "rampPoints": 4,
+          "position": "hidden",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
+      "base": { "layers": 2, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     },
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 5,
       "units": "mm",
       "meta": {
         "id": "preset:twisted-column@1",
         "name": "Twisted column",
-        "description": "A gently swelling column with pleats that wind a sixth of a turn."
+        "description": "A gently swelling square column that winds a sixth of a turn."
       },
       "form": {
         "height": 150,
@@ -62,33 +73,44 @@
             { "z": 150, "r": 40 }
           ]
         },
-        "plan": { "footprint": "rectangle", "depthRatio": 1, "cornerRounding": 0.3 },
-        "twist": { "degrees": 60 },
-        "detail": {
-          "fromMm": 6,
-          "toMm": 144,
-          "a": { "pattern": "lib:pleats@1", "depthMm": 1.5, "repeats": 16, "tileHeightMm": 19.5 },
-          "b": null,
-          "blend": { "shape": "fadesUp", "amount": 1 }
+        "plan": {
+          "footprint": "rectangle",
+          "depthRatio": 1,
+          "cornerRounding": 0.3
+        },
+        "twist": {
+          "degrees": 60
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
-        "seam": { "rampLengthMm": 15, "position": "followTwist", "angleDeg": 0 }
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
+        "seam": {
+          "rampPoints": 4,
+          "position": "followTwist",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
+      "base": { "layers": 2, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     },
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 5,
       "units": "mm",
       "meta": {
         "id": "preset:square-planter@1",
         "name": "Square planter",
-        "description": "A flaring square planter with a basket weave and a drainage hole."
+        "description": "A flaring square planter with a drainage hole."
       },
       "form": {
         "height": 110,
@@ -100,33 +122,44 @@
             { "z": 110, "r": 62, "corner": 0 }
           ]
         },
-        "plan": { "footprint": "rectangle", "depthRatio": 1, "cornerRounding": 0.3 },
-        "twist": { "degrees": 0 },
-        "detail": {
-          "fromMm": 8,
-          "toMm": 102,
-          "a": { "pattern": "lib:basket@1", "depthMm": 1, "repeats": 8, "tileHeightMm": 40.5 },
-          "b": null,
-          "blend": { "shape": "fadesUp", "amount": 1 }
+        "plan": {
+          "footprint": "rectangle",
+          "depthRatio": 1,
+          "cornerRounding": 0.3
+        },
+        "twist": {
+          "degrees": 0
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
-        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
+        "seam": {
+          "rampPoints": 4,
+          "position": "hidden",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 4, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 14 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
+      "base": { "layers": 2, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 20 } },
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     },
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 5,
       "units": "mm",
       "meta": {
         "id": "preset:bud-vase@1",
         "name": "Bud vase",
-        "description": "A small round bulb under a long, slim neck, with a band of rings on the neck."
+        "description": "A small round bulb under a long, slim neck that flares at the lip."
       },
       "form": {
         "height": 210,
@@ -136,38 +169,57 @@
           "knots": [
             { "z": 0, "r": 30 },
             { "z": 40, "r": 44 },
-            { "z": 118, "r": 20 },
-            { "z": 188, "r": 19 },
-            { "z": 210, "r": 25 }
+            { "z": 118, "r": 24 },
+            { "z": 188, "r": 23 },
+            { "z": 210, "r": 28 }
           ]
         },
-        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
-        "twist": { "degrees": 0 },
-        "detail": {
-          "fromMm": 60,
-          "toMm": 196,
-          "a": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 18 },
-          "b": { "pattern": "lib:ribs@1", "depthMm": 1, "repeats": 1, "tileHeightMm": 15 },
-          "blend": { "shape": "middle", "amount": 1 }
+        "plan": {
+          "footprint": "circle",
+          "depthRatio": 1,
+          "cornerRounding": 0
+        },
+        "twist": {
+          "degrees": 0
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
-        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
+        "seam": {
+          "rampPoints": 4,
+          "position": "hidden",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
+      "base": {
+        "layers": 2,
+        "pattern": "spiral",
+        "spacingRatio": 0.9,
+        "outline": true,
+        "hole": {
+          "diameter": 0
+        }
+      },
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     },
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 5,
       "units": "mm",
       "meta": {
         "id": "preset:petal-bowl@1",
         "name": "Petal bowl",
-        "description": "A wide, fluted bowl on a low foot; its rim opens into six soft petals."
+        "description": "A wide bowl on a low foot; its rim opens into six soft petals."
       },
       "form": {
         "height": 90,
@@ -181,34 +233,59 @@
             { "z": 90, "r": 86 }
           ]
         },
-        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
-        "twist": { "degrees": 0 },
-        "morph": { "map": "lib:lean@1", "softnessMm": 24, "strengthMm": 8, "repeats": 6, "blend": 1 },
-        "detail": {
-          "fromMm": 6,
-          "toMm": 86,
-          "a": { "pattern": "lib:flutes@1", "depthMm": 1.5, "repeats": 30, "tileHeightMm": 19.5 },
-          "b": null,
-          "blend": { "shape": "fadesUp", "amount": 1 }
+        "plan": {
+          "footprint": "circle",
+          "depthRatio": 1,
+          "cornerRounding": 0
+        },
+        "twist": {
+          "degrees": 0
+        },
+        "morph": {
+          "map": "lib:lean@1",
+          "softnessMm": 24,
+          "strengthMm": 8,
+          "repeats": 6,
+          "blend": 1
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
-        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
+        "seam": {
+          "rampPoints": 4,
+          "position": "hidden",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
+      "base": {
+        "layers": 2,
+        "pattern": "spiral",
+        "spacingRatio": 0.9,
+        "outline": true,
+        "hole": {
+          "diameter": 0
+        }
+      },
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     },
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 5,
       "units": "mm",
       "meta": {
         "id": "preset:double-gourd@1",
         "name": "Double gourd",
-        "description": "Two round bulbs meet at a crisp waist; a smooth band winds once round through the flutes."
+        "description": "Two round bulbs, a wide one under a smaller one, meeting at a crisp waist."
       },
       "form": {
         "height": 200,
@@ -225,33 +302,52 @@
             { "z": 200, "r": 29 }
           ]
         },
-        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
-        "twist": { "degrees": 0 },
-        "detail": {
-          "fromMm": 6,
-          "toMm": 194,
-          "a": { "pattern": "lib:flutes@1", "depthMm": 1.5, "repeats": 16, "tileHeightMm": 19.5 },
-          "b": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 19.5 },
-          "blend": { "shape": "diagonal", "amount": 1 }
+        "plan": {
+          "footprint": "circle",
+          "depthRatio": 1,
+          "cornerRounding": 0
+        },
+        "twist": {
+          "degrees": 0
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
-        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
+        "seam": {
+          "rampPoints": 4,
+          "position": "hidden",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
+      "base": {
+        "layers": 2,
+        "pattern": "spiral",
+        "spacingRatio": 0.9,
+        "outline": true,
+        "hole": {
+          "diameter": 0
+        }
+      },
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     },
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 5,
       "units": "mm",
       "meta": {
-        "id": "preset:faceted-flask@1",
-        "name": "Faceted flask",
-        "description": "A flat oval flask cut into ten facets, with a sharp shoulder and a short neck."
+        "id": "preset:oval-flask@1",
+        "name": "Oval flask",
+        "description": "A flat oval flask with straight sides, a sharp shoulder and a short neck."
       },
       "form": {
         "height": 180,
@@ -261,32 +357,51 @@
           "knots": [
             { "z": 0, "r": 40 },
             { "z": 95, "r": 58 },
-            { "z": 158, "r": 33 },
-            { "z": 180, "r": 36 }
+            { "z": 158, "r": 37 },
+            { "z": 180, "r": 40 }
           ]
         },
-        "plan": { "footprint": "circle", "depthRatio": 0.6, "cornerRounding": 0 },
-        "twist": { "degrees": 0 },
-        "detail": {
-          "fromMm": 10,
-          "toMm": 168,
-          "a": { "pattern": "lib:pleats@1", "depthMm": 1.5, "repeats": 10, "tileHeightMm": 19.5 },
-          "b": null,
-          "blend": { "shape": "fadesUp", "amount": 1 }
+        "plan": {
+          "footprint": "circle",
+          "depthRatio": 0.6,
+          "cornerRounding": 0
+        },
+        "twist": {
+          "degrees": 0
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
-        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
+        "seam": {
+          "rampPoints": 4,
+          "position": "hidden",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
+      "base": {
+        "layers": 2,
+        "pattern": "spiral",
+        "spacingRatio": 0.9,
+        "outline": true,
+        "hole": {
+          "diameter": 0
+        }
+      },
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     },
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 5,
       "units": "mm",
       "meta": {
         "id": "preset:drape-vase@1",
@@ -305,25 +420,50 @@
             { "z": 175, "r": 32 }
           ]
         },
-        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
-        "twist": { "degrees": 0 },
-        "morph": { "map": "lib:swirl@1", "softnessMm": 24, "strengthMm": 6, "repeats": 5, "blend": 1 },
-        "detail": {
-          "fromMm": 8,
-          "toMm": 165,
-          "a": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 18 },
-          "b": null,
-          "blend": { "shape": "fadesUp", "amount": 1 }
+        "plan": {
+          "footprint": "circle",
+          "depthRatio": 1,
+          "cornerRounding": 0
+        },
+        "twist": {
+          "degrees": 0
+        },
+        "morph": {
+          "map": "lib:swirl@1",
+          "softnessMm": 24,
+          "strengthMm": 6,
+          "repeats": 5,
+          "blend": 1
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
-        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
+        "seam": {
+          "rampPoints": 4,
+          "position": "hidden",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
+      "base": {
+        "layers": 2,
+        "pattern": "spiral",
+        "spacingRatio": 0.9,
+        "outline": true,
+        "hole": {
+          "diameter": 0
+        }
+      },
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     }
   ]
 }

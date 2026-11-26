@@ -128,7 +128,7 @@ const section = {
     imageTile.btn.hidden = true;
     let imageDrawn = '';
     const fileInput = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', hidden: true });
-    // + Image: the image icon where a map would be, like the Detailed morph's tile.
+    // + Image: the image icon where a map would be.
     const addMark = h('span', { class: 'swatch-add', 'aria-hidden': 'true' });
     addMark.innerHTML = ICONS.image;
     const addBtn = labelIcon(h('button', { type: 'button', class: 'swatch swatch-action' }, [

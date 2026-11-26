@@ -41,9 +41,9 @@ export function gridOf(recipe) {
   return { columns: recipe.columns, rows: recipe.rows, cells: Int8Array.from(bitmapValues(recipe)) };
 }
 
-/** The bitmap recipe a grid stands for, with optional edges (a Detailed morph grid, D53). */
-export function recipeOf(grid, edges) {
-  return makeBitmap(grid.columns, grid.rows, grid.cells, edges);
+/** The bitmap recipe a grid stands for. */
+export function recipeOf(grid) {
+  return makeBitmap(grid.columns, grid.rows, grid.cells);
 }
 
 export function sameGrid(a, b) {

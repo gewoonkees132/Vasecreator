@@ -239,3 +239,18 @@ Findings:
 5. **Things that may look like problems but are by design:**
    - A starter Pattern on the Bud vase covers only the neck (63–193 mm), because a new Pattern runs over the Detailed morph's range (§3.4). Drag *From* down to cover the bulb.
    - On a phone, the foot and neck handles of the bowl and the gourd overlap (§4).
+
+## 8. Into main: plain shapes at 8 × 5 mm (2026-11-26)
+
+The five were tuned on the pattern studio's 0403f10 (slice 6): a 3 × 1.5 mm layer, with a Detailed morph on four of them. Since then the standard layer became 8 × 5 mm (D62), the Detailed morph was removed (D63) and the seam ramp became a number of points (D67). The owner asked for them to be brought into `main` after the pattern studio was merged there.
+
+- **What changed, for all five.** Design version 5. Bead 8 mm, layer 5 mm, wall spacing 7.2 mm and 2 base layers, as the first three. Seam: Hidden, 4 points. Rules: the defaults (45°, 70 % support, a curve of half a bead).
+- **The Detailed morph went (D63), as it did for the first three, and nothing replaces it.** That removed the Bud vase's neck rings, the Petal bowl's flutes, the Double gourd's flutes and its winding plain band, and the flask's ten facets. The Petal bowl keeps its Lean ×6 Morph (the petals), and the Drape vase keeps its Swirl ×5, which was already its only relief. The descriptions now say only what the shape shows.
+- **Faceted flask is now Oval flask** (`preset:oval-flask@1`). Without the facets the old name described something that isn't there. This is the builder's call.
+- **Two necks were widened, so every starter Pattern fits at the standard depth.** A ⅔-bead Pattern (5.33 mm) cut into a 19–20 mm neck went under the 16 mm least radius (two beads) and warned "narrow".
+  - Bud vase: neck knots 20 → 24 mm and 19 → 23 mm, lip 25 → 28 mm.
+  - Oval flask: neck 33 → 37 mm and rim 36 → 40 mm (on the 0.6 oval, the short side is now 22 mm at the neck).
+- **Checks.** All eight warn about nothing as shapes, export on the generic gantry, and take every starter with only bead support and fineness speaking up (`test/starters.test.js`). A contact sheet of all eight was rendered in the app and looked as intended.
+- **Tests.** 357 pass. `test/presets.test.js` is `main`'s, with the eight-preset checks from §6 on top (names in order, ids from names, one-line plain descriptions, no warnings, export). The cad test of an inner wall that follows the pattern now puts Knit on the Square planter, which no longer has relief of its own. There are five new golden files; the first four are unchanged.
+- **Open for the owner.** Whether any of the four that lost their relief should get some back, as a Morph (Lobes would give the Double gourd or the flask soft flutes) or a Pattern. Today presets open without a Pattern (D30).
+

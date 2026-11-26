@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Owner decisions D35–D57. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`), 5 (the *Next* and icon sweep, `2391041`) and 6 (saved patterns) are built on `t3/pattern-studio` (all pushed for the owner's review, up to slice 6, `e056938`). All six slices are built (§11, notes in §11.1–§11.6).
+- **Status:** Owner decisions D35–D64 (D58–D64 on 2026-11-26, after the owner saw the seam in Rhino; built, §11.7–§11.9; D58–D62 pushed up to `85c7578`). **The Detailed morph was removed by D63:** §4, D35/D36's split, D45's soft grids, D52–D54 and everything else below about the Detailed morph is history, kept for the record. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`), 5 (the *Next* and icon sweep, `2391041`) and 6 (saved patterns) are built on `t3/pattern-studio` (all pushed for the owner's review, up to slice 6, `e056938`). All six slices are built (§11, notes in §11.1–§11.6).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -102,6 +102,17 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 | D55 | **The editor has no *Cancel*.** *Done* (or Esc) keeps the edits; the design's undo takes a whole session back in one step, and the editor's own undo goes back edit by edit. | Owner (after slice 3, 2026-11-25) |
 | D56 | **Cells stay easy to hit.** A Detailed morph grid's cells keep their size on the wall, so adding columns widens the tile and lowers the repeats, which is allowed. On screen a cell is never smaller than a finger or a pointer hits easily (22 px on touch, 16 px with a mouse, on its short side); a tile that then runs past the grid's area moves instead. | Owner (after slice 3); sizes are the builder's |
 | D57 | **Pinch to zoom, and a cap that stays clickable.** Two fingers pinch and move the grid (Ctrl+wheel and the wheel on desktop). The editor draws a Pattern up to 24 × 24 cells and a Detailed morph grid up to 16 × 16; the `bitmap` format still holds 64 × 64 (D48), so a larger drawing from a file opens but can't grow. | Owner (after slice 3); the cap of 24 is the builder's |
+| D58 | **Crisp, a layer has only its cell points.** With Soften at 0 a layer in the Pattern's range has exactly `columns × repeats` points, one a cell, so the points stand one above the other from layer to layer. The outline, the Morph and the Detailed morph are followed at those points only; rectangle corners and fine relief get coarser there, and nothing is added to make up for it. | Owner (2026-11-26) |
+| D59 | **Soften adds points, and the readout counts them.** With Soften on, every gap between two cells gets the same number of extra points (the same on every layer, so they still line up), on a smooth curve through the softened cells. The Density readout shows the points per layer and the total over the Pattern's layers, and the whole pot's points under it; Soften says how many it adds. | Owner (2026-11-26); the smooth curve, "about half a bead apart" and the wording are the builder's |
+| D60 | **The seam never steps sideways, and is spread over whole points.** A layer starts on the point where the layer below ended. Its climb of one layer height is shared out evenly over a whole number of cells (the seam ramp length, rounded to cells: 15 mm at 3 mm cells is 5 points), and over the same points it changes from the row below to its own. | Owner (2026-11-26): "spread over multiple points, e.g. Z-height distributed over 4 points"; changing rows over the same points is the builder's |
+| D61 | **The standard depth is two thirds of a layer width.** Every drawing starts with Depth at ⅔ of the bead width (5.33 mm on the standard bead), whatever the starter; the most is ⅔ too (D38 had ½). No starter flips from out to in between rows, so a layer sits at most ⅔ of a bead off the one below. | Owner (2026-11-26). The bead-support rule's default going from 50 % to 70 %, so a straight wall passes, is the builder's |
+| D62 | **The standard layer is 8 mm wide and 5 mm high,** for a new design and for the three presets. | Owner (2026-11-26). The presets' retuned relief, base and hole (§11.8) and the wider layer-ratio band are the builder's |
+| D63 | **The Detailed morph is removed completely.** "It's no longer required." The mm-scale relief, its slots A and B, their blend, its swatch library, image swatches on the wall, its saved swatches and its mode in the 2D editor all go. The Pattern is the only surface detail; the Morph stays. No backwards compatibility: an older design opens without its relief. | Owner (2026-11-26) |
+| D64 | **The standard pattern width is 2 mm.** Every drawing starts with its points 2 mm apart around the pot (the Density spacing), whatever the starter. | Owner (2026-11-26): "set the default pattern width to 2mm". Reading "pattern width" as the cell width, and lowering the least spacing from half a bead to a quarter so 2 mm fits the 8 mm bead, are the builder's |
+| D65 | **Around the pot, every lap ends on the same column of the drawing.** In the Pattern's range every layer's seam sits on one column of the drawing, the *seam column*, so each lap starts and ends at the same place in the drawing and the seam is one straight line that turns with the columns. Up the pot nothing changes: the range stays in mm and may stop partway through the drawing. | Owner (2026-11-26): "around the pot, so it ends consistently at the seam. not up the pot" |
+| D66 | **Hidden picks the quietest column.** A hidden seam takes the column where the rows change least across the seam ramp, all the way up the drawing, preferring grooves; *fixed angle* and *follows twist* take the drawing's left edge (column 0). | Builder's proposal, agreed by the owner (2026-11-26) |
+| D67 | **The seam ramp is a number of points, not a distance.** The climb of one layer height and the change of row (D60) are shared out over *n* points, 4 by default. In the Pattern's range a point is a cell, so the climb ends on a node; outside it a point is one of the layer's own points, about half a bead apart. | Owner (2026-11-26): "spread the Z over number of points, vs distance" |
+| D68 | **The rim is level.** The last wall layers shrink their climb to nothing, as the first wall layers grow it (`RAMP_IN_LAYERS`), so the top layer is flat and the rim has no notch at the seam. | Builder's proposal (2026-11-26), part of the approach the owner agreed |
 
 **What this revises:**
 - D16 (swatches from a bitmap generator) is now carried by D45 and D47.
@@ -123,15 +134,16 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 - **Rows are layers.** Row *k* of the tile prints on wall layer `(L − L₀ + k) mod rows`, where `L₀` is the first layer in the Pattern's range. In other words the tile starts at *From*, as drawn, and repeats upwards. Whether row 0 sits at the top or the bottom of the drawing is the builder's call; the drawing must read the same way up as the pot.
 - **Columns are nodes.** On a layer in the range there are `N = repeats × columns` nodes, evenly spaced by `u` (the same around-the-outline parameter the patterns use today, so the Pattern follows the twist). Node *j* uses column `j mod columns`.
 - **Displacement** at a node = `depth × value × fade × (soften applied)`, added radially like today's patterns.
-- **Between nodes the Pattern is linear.** If another term (the outline, Morph or Detailed morph) needs more points, the engine puts `k` extra points in each gap, so a layer has `N × (k + 1)` points. The Pattern's value at those points is interpolated in a straight line, so its zigzag is unchanged (D37).
+- **Crisp, the nodes are the layer's only points (D58).** The Pattern runs straight from node to node, so its zigzag is as drawn (D37), and the outline, the Morph and the Detailed morph are followed at the nodes.
+- **With Soften on, every gap gets the same `k` extra points (D59),** so a layer has `N × (k + 1)` points. `k` brings the points to about half a bead apart on the widest layer in the range. Those points sit on a smooth curve through the softened nodes (Catmull-Rom, wrapping round the pot).
 
 ### 3.2 Density (D40)
 
 - **What it sets:** the node spacing around, from **½ to 3 bead widths**. The default is 1 bead width.
 - **Snapping:** the spacing is measured on the **narrowest layer in the Pattern's From–To**. `repeats = floor(perimeterMin / (columns × spacing))`, at least 1, and the spacing shown is then recomputed from that whole number.
-- **Readout:** for example "96 points per layer · 3.8–6.1 mm". It shows the range from the narrowest to the widest layer.
+- **Readout:** for example "96 points per layer · 3.8–6.1 mm · 8,064 in all". It shows the points a layer has, the cell spacing from the narrowest to the widest layer, and the points over all the Pattern's layers (D58). With Soften on it names both: "60 cells, 300 points per layer · …" (D59). Under it, in the panel, "The whole pot: 35,020 points", from the preview.
 - **Two faces of one slider:** *Spacing* (mm) or *Points per layer* (a multiple of `columns`). Whichever face you set last is the one stored, and it stays fixed when the pot changes size.
-- **The point cap:** `N × (k + 1)` must stay within `MAX_POINTS_PER_LAYER` (1600, `core/toolpath.js`). If it doesn't, cut `k` first; if `N` alone is over the cap, clamp the density and show it in the readout.
+- **The point cap:** `N × (k + 1)` must stay within `MAX_POINTS_PER_LAYER` (1600, `core/toolpath.js`). If it doesn't, cut `k` first; if `N` alone is over the cap, clamp the density and show it in the readout. Crisp, `k` is 0 (D58).
 - **Rows never scale.** To make a drawing taller, the editor has a *Double rows* tool that repeats every row.
 
 ### 3.3 Depth (D38)
@@ -159,7 +171,8 @@ They are applied in this order to the drawn values, and they never change the dr
 
 ### 3.6 The toolpath (where the engine changes)
 
-- **`core/toolpath.js` `pointsAround`:** inside the Pattern's range a layer has exactly `N × (k + 1)` points, the same `N` on every layer. Outside it, today's rule applies.
+- **`core/toolpath.js` `pointsAround`:** inside the Pattern's range a layer has exactly `N × (k + 1)` points, the same `N` on every layer; `k` is 0 when crisp (D58, D59). Outside it, today's rule applies.
+- **The seam (D60).** A layer's first point is the last point of the layer below, on that layer's row. In the range the ramp runs over a whole number of cells, and over them the height and the row both change over evenly. The layer above the range leaves the last row over its own ramp, and the first layer comes in from the plain wall the same way.
 - **The node positions need a fixed starting point in `u`.** They can't start at the seam, because the seam moves (`seamPositions`), and that would shift the columns. The seam should snap to a node, so the ramp doesn't cut a cell in half. Builder's call.
 - **The wall evaluation** (around line 207–223 today: `surfaceWeights` × `evaluate`) gains the Pattern term per point, with the layer index known at every point. Layers are planar with a seam ramp, so the layer index is clear even on the ramp.
 - **The "deepest groove" calculations** that place the smooth inner wall (D27) and the hidden seam must include the Pattern's depth.
@@ -696,6 +709,118 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
   - The dock deletes nothing; deleting is in the sheet, as it was for the Detailed morph.
   - Design §9.3 still lists the overhang limit under *Layers & seam*. Slice 4 moved it to the warnings card, and only §9.2 and §9.6 were rewritten here.
 
+### 11.7 After the review: cell points, Soften's points and the seam (D58–D60)
+
+The owner exported a softened Pattern to Rhino and saw a sideways step at the seam on every layer where the row changed, and more points than the Density readout named.
+
+- **What was wrong.** A layer ended at the seam on its own row and the next began there on the next row: two points at one place, up to the full depth apart. Ribs (one row) never showed it. And a layer had `N × (k + 1)` points whatever Soften was, with `k` set by the outline, the Morph and the Detailed morph.
+- **`core/layer-pattern.js`.**
+  - `extraPoints(softenCells, nodes, perimeterMaxMm, beadWidthMm, maxNodes)` gives `k`: 0 when crisp, else enough for half a bead on the widest layer, within the cap.
+  - `patternLayout`, `patternReadout` and the Pattern itself report `extra` and `pointsPerLayer`; the readout also `points`, over all its layers.
+  - `at(layer, u, below = 0)` takes the share still on the row of the layer below. Between nodes it is straight when crisp and a Catmull-Rom curve with Soften on.
+- **`core/toolpath.js`.**
+  - `patternPoints` is the Pattern's `pointsPerLayer`; the loop over `pointsNeeded` is gone.
+  - `centrePoint(u, z, layer, below)` and `wallPoint` pass `below` on. `outerLoop` works out how far up the ramp a point is (in the range over `round(ramp length / cell spacing)` cells, at least 1) and uses it for the height and, with `changeRow`, for the row.
+  - `stepOnto` and the seam marker sit on the row below, so the path is already there and no bead is added.
+- **UI.** `densityText(r, { compact })`, `softenText(softenCells, r, { compact })` and `wholeText` in `ui/pattern-actions.js`. The Pattern step shows the whole pot's points under the readout once the preview is of this design (`ctx.resultDesign`); the dock's one-line notes use the compact texts, which fit a 390 px phone.
+- **Builder's calls.**
+  - With Soften on, the points between cells follow a smooth curve; on straight lines they would add nothing.
+  - The seam ramp keeps its length in mm (Layers & seam) and is rounded to whole cells in the range; there is no separate "points" setting.
+  - The rows change over across the ramp's points, so the first cells of a layer are a mix of two rows.
+  - Crisp, beads run from node to node, up to 3 bead widths apart on a wide belly (the bead-jump test allows the Pattern's own spacing).
+- **Tests.** 368 pass. `test/layer-pattern.test.js` gains the seam test and the Soften points test; the zigzag, taper, Fade and Soften tests look past the ramp.
+
+### 11.8 The standard depth and the standard layer (D61, D62)
+
+- **Depth (D61).** `DEPTH_BEADS` is `{ max: 2/3, default: 2/3 }`. `drawingDefaults` no longer reads a drawing's own depth: `depthBeads` is gone from `library/layer-patterns.json` and from `OWN_PATTERN_DEFAULTS`. `LIMITS.patternDepthMm` goes up to 8 mm. The Depth notes say "up to ⅔ of a bead".
+- **Bead support.** `rules.supportRatio` starts at 0.7 (was 0.5), so the standard depth passes on a straight wall. On a leaning wall the lean adds to the step, so **every starter warns "Bead not supported" on all three presets** at the standard depth, and Knit and the ribs also trip the curve check at the top of the Classic vase. The owner chose the depth knowing the warning would show; lowering the Depth or raising the rule in the warnings card clears it.
+- **Layer (D62).** `defaultDesign` and the presets: bead 8 mm, layer 5 mm, wall spacing 7.2 mm (0.9 bead), tile heights in whole layers (20 and 40 mm).
+- **The presets, retuned for the 8 mm bead** so each still opens without a warning:
+  - Classic vase (and `defaultDesign`): flutes 20 → 12 repeats; base 3 → 2 layers.
+  - Twisted column: pleats 16 × 1.5 mm → 8 × 2 mm; relief from 5 to 145 mm; base 3 → 2 layers.
+  - Square planter: basket 8 × 1 mm → 4 × 2 mm; relief from 10 to 100 mm; base 4 → 2 layers; drain hole 14 → 20 mm (two beads at least).
+- **Layer ratio.** "Layer height is unusual for this bead" now starts above 0.65 × the bead width (was 0.6), since 5 / 8 is 0.625.
+- **Tests.** The `cylinder` fixture pins its own 3 mm by 1.5 mm layer, so the engine tests keep their numbers; tests on the presets and the defaults moved to the new values, and the golden G-code files were regenerated (the presets are now 34, 30 and 22 layers).
+
+### 11.9 The Detailed morph removed, and the 2 mm standard spacing (D63, D64)
+
+- **What went (D63).** `form.detail` and everything that read it: `ui/sections/detail.js`, `library/patterns.json` (the twelve shapes), the analytic shapes and soft grids in `core/patterns.js`, `detailGate` / `detailWeights` / `softEdgeMm` in `core/surface.js`, the slots in `core/toolpath.js`, `rules.layersPerBump` and its rule in the warnings card, the dock's slot carousel and Morph's Large · Detailed group, the gizmos' dark bracket in Shape, image swatches on the wall, the editor's Edges control and soft preview, and My patterns' `kind: 'detail'`. The design version is 4.
+- **What stayed.** The Pattern, the Morph (with its image maps), the 2D editor for the Pattern, My patterns for Patterns, and the Fade's five shapes (`core/surface.js` `blendShape`).
+- **What an old design does.** It opens; its relief is dropped without a word (no migration, D50's rule). A stored Detailed morph swatch stays in the browser's storage but no longer lists.
+- **The presets are plain shapes now**: Classic vase, Twisted column (a twisted rounded square) and Square planter, with new descriptions. Nothing replaces their flutes, pleats and basket weave.
+- **A new Pattern's range** is always 8 mm to 10 mm below the rim (it used to sit inside the relief's soft edges).
+- **The hidden seam** follows the Pattern's groove alone.
+- **Spacing (D64).** `DEFAULT_SPACING_MM = 2` and `defaultSpacingMm(beadWidthMm)` in `core/layer-pattern.js`; `SPACING_BEADS` is `{ min: 0.25, max: 3 }`. The starters carry no defaults of their own any more (`defaults` is gone from `library/layer-patterns.json`), and `drawingDefaults(design)` / `newPattern(design, drawing)` lost their third argument. Picking a starter over a Pattern of your own resets depth and spacing to the standards; a drawing of your own keeps yours.
+- **Known, and told to the owner.** At 2 mm apart and 5.33 mm deep on an 8 mm bead, every starter warns on the presets: "Bead not supported" where the wall leans, and "Pattern finer than the bead can print" where a single out or in cell makes a corner tighter than half a bead (4 mm).
+- **Tests.** 298 pass. The tests of the Detailed morph went with it (the shape library, slots, blend weights, the dock's group, the saved swatches); the fine-pattern and narrow-wall checks are now driven by a Pattern.
+
+### 11.10 The seam: column, points and a level rim (D65–D68)
+
+**Why.** The owner's render (2026-11-26) showed three marks at the seam:
+- a chevron line down the Pattern;
+- a mark where the Pattern starts;
+- a notch in the rim.
+
+The look of a seam comes from two things on top of each other: the XY push, where the row below and the new row don't line up, and the Z climb. At d92ad7e both are spread over the 15 mm ramp. At 2 mm cells that is about 7 cells where *in* and *out* are averaged, so each layer starts with a sloped, smeared patch. The hidden seam lands on whatever node is nearest the deepest groove, often mid-drawing, and drifts. The top layer starts one layer height below where it ends.
+
+**Goal.** A seam that reads as part of the drawing: each lap is whole drawings from seam to seam, and the climb and the change of row are one short mark in a quiet place. **Non-goals:** snapping the range to whole tiles up the pot (the owner said no); a continuous spiral (D10 stands). **Anti-goal:** a seam that drifts or jumps across the wall.
+
+**Approaches considered.**
+1. *Smarter Hidden only*: a matched or groove column, a level rim, a clean start. No new controls.
+2. *Smarter Hidden plus a seam strip*: everything in 1, plus a plain, channel or rib strip down the seam where the climb and the change of row happen, like a garment's side seam.
+3. *Reopen D10 and spiral*: the climb spread over the whole turn.
+
+The owner wants both hiding and designing the seam: 2, built as 1 first (this section), with the strip later (§12, item 20). The owner then reshaped 1 into D65–D67. 3 stays out.
+
+**The design.**
+- **Seam column (D65, D66).** `seamPositions` puts every layer in the range on a node of the seam column `c`: u = (t·columns + c) / N for a whole tile t. It keeps the same t up the range, so the line follows the columns (and the twist).
+  - *Hidden:* `c` is chosen once per Pattern. Its score is the sum, over every row r against the row below (wrapping from the top row to row 0), of |cell(r) − cell(r − 1)| over the ramp's cells `c … c + n − 1`. Ties go to a groove (both rows *in*), then the lowest c.
+  - *Fixed angle / follows twist:* `c` = 0, and t is the tile whose column-0 node is nearest the angle on the range's first layer.
+  - Below the range the seam walks towards that node by at most a bead width a layer (as Hidden does today), so it doesn't jump where the Pattern starts. Above the range it holds.
+- **Ramp in points (D67).** `layers.seam.rampPoints` (whole, 1–40, default 4) replaces `rampLengthMm`.
+  - *In the range:* the climb and the change of row run over `n` nodes; with Soften, the extra points between them come along.
+  - *Outside the range:* over `n` of the layer's own points.
+  - As today, the ramp is capped at half a lap.
+  - The Layers & seam control and the dock's *Ramp* read in points.
+  - The design version goes to 5. An older design gets 4 points without a word (D50).
+- **Level rim (D68).** `RAMP_IN_LAYERS` gets a mirror. The last 4 wall layers climb ¾, ½, ¼ and 0 of a layer, with the rest as a step up at the seam with no bead, so the top layer is flat. The gap to the bead below stays between h and 1.25 h, the mirror of the ramp-in's 0.75 h.
+- **The start and end of the range** keep D60's blend from the plain wall, and to it at the top, now over `n` points on the seam column, so their mark shrinks with the ramp.
+
+**Left to the builder.**
+- *Fixed angle on a twisting pot:* in the range the seam follows the columns (D65 wins over the angle), and outside the range it keeps the angle.
+- *Rectangle footprint:* in the range the seam column wins over the corner, and outside the range the corner stays.
+- There is no control to pick the seam column by hand for now.
+- Whether the ramp-out takes 4 layers or follows `RAMP_IN_LAYERS` (one constant for both).
+
+**Tests to add.**
+- Every lap in the range starts and ends on the seam column.
+- Hidden's column choice on a drawing with an obvious quiet column.
+- The ramp spans exactly `n` nodes in the range and `n` points outside it.
+- The top layer is flat.
+- Gaps stay within 0.75 h – 1.25 h.
+- The golden G-code files are regenerated.
+
+**As built (2026-11-26).**
+- **`core/design.js`.** `layers.seam.rampPoints` (whole, 1–40, default 4) replaces `rampLengthMm`, in `LIMITS` too. The presets carry 4 points. `DESIGN_VERSION` is 5.
+- **`core/layer-pattern.js`.** `seamColumn(rampCells)` scores each column as designed, on the softened cells. Cell c + k weighs 1 − k / n, since it shows that share of the row below.
+- **`core/toolpath.js`.**
+  - `seamPositions` puts the range on the seam column. It chooses the tile once, on the range's first layer, and holds that u up the range.
+  - Below the range a backward pass walks the seam to that u, a bead width a layer at most. Above it the seam walks back to its own place the same way.
+  - A bead width is measured on the wider of the two layers, so a widening pot never moves it further.
+  - `patternRampCells(m)` is the ramp in cells (at most half the nodes). `outerLoop` climbs over those cells in the range and over `rampPoints` of the layer's own points elsewhere.
+  - The rise is `h · min(grow, shrink)`. `shrink` is (L − 1 − i) / `RAMP_IN_LAYERS`, so one constant serves both ends.
+- **UI.** *Seam ramp* is in points in the Layers & seam section and in the dock's *Ramp* dial, with the note "in a Pattern a point is a cell". The Hidden notes now read "a Pattern's quietest column, else the corner nearest this angle".
+- **Checked in the browser** (headless Chrome, a Classic vase with Diamond and Herringbone, 4 mm bead, before at d92ad7e and after):
+  - The hidden seam no longer wanders through the drawing. It is one straight line, and the drawing runs on across it.
+  - The rim is level. The ramp-out layers show the same small no-bead step at the seam as the ramp-in layers above the base.
+- **Tests.** 300 pass.
+  - New: every layer in the range is on the seam column, for all three positions on all three presets, and the seam moves at most a bead a layer all the way up. Hidden's choice (a groove before a flat column; Knit's quiet column 1). The top layer is flat.
+  - The ramp test counts points. The Pattern seam test ends its range under the ramp-out layers. The DXF check allows for the 3-decimal rounding of the new ramp heights (z = 14.0625 writes as 14.063).
+  - The four golden files were regenerated.
+    - The path has 4 more points: the no-bead step-ups of the ramp-out.
+    - The ramp heights changed on every layer.
+    - The plain cylinder's top layer now gets a minimum-layer-time dwell (`G4 P240`) before the end moves.
+
 ---
 
 ## 12. Later (parked; drafted in [`v2-later-issues.md`](v2-later-issues.md), issues 17–19)
@@ -703,6 +828,7 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
 - **17. Pattern mask:** apply the Pattern *everywhere*, *only on raised parts* or *only on sunken parts* of the Detailed morph (Q12).
 - **18. One-off edits on the whole wall:** a layer of single edits over the repeating tile, such as a band, a signature or a single motif (Q10 c).
 - **19. Image to Pattern:** turn an uploaded image into an in / flat / out drawing at node scale (Q21 b).
+- **20. Seam strip (§11.10, approach 2):** a designed seam, a narrow vertical strip on the seam column (plain, a channel or a raised rib) where the climb and the change of row happen.
 
 ---
 

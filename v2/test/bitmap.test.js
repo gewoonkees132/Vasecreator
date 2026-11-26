@@ -37,13 +37,12 @@ function maskRows(g, mask) {
 
 // ---------- The grid ----------
 
-test('a grid round-trips through its recipe, edges and all', () => {
-  const recipe = { kind: 'bitmap', columns: 3, rows: 2, cells: '+0--+0', edges: 'round' };
+test('a grid round-trips through its recipe', () => {
+  const recipe = { kind: 'bitmap', columns: 3, rows: 2, cells: '+0--+0' };
   const g = gridOf(recipe);
   assert.deepEqual([...g.cells], [1, 0, -1, -1, 1, 0]);
-  assert.deepEqual(recipeOf(g, 'round'), recipe);
-  assert.deepEqual(recipeOf(g), { kind: 'bitmap', columns: 3, rows: 2, cells: '+0--+0' });
-  validateRecipe(recipeOf(g, 'sharp'));
+  assert.deepEqual(recipeOf(g), recipe);
+  validateRecipe(recipeOf(g));
   assert.equal(recipeOf(emptyGrid(4, 2)).cells, '00000000');
 });
 

@@ -153,7 +153,7 @@ function markBed(tp, printer, w) {
  */
 export function designChecks(tp, design, printer) {
   const { beadWidthMm: w, layerHeightMm: h } = design.layers;
-  const { overhangLimitDeg, curveRatio, layersPerBump } = design.rules;
+  const { overhangLimitDeg, curveRatio } = design.rules;
   markCurvature(tp, curveRatio * w);
   const offBed = markBed(tp, printer, w);
   const warnings = [];
@@ -176,19 +176,11 @@ export function designChecks(tp, design, printer) {
     });
   }
 
-  // Vertical fineness (V5): a Detailed morph needs at least
-  // rules.layersPerBump layers per bump (two by default). The Pattern is
-  // exempt: one row is one layer by design (D43).
-  let rowsTooFine = false;
-  for (const s of tp.model.active) {
-    if (s.features.up > 0 && s.tileHeightMm / s.features.up < layersPerBump * h - 1e-9) rowsTooFine = true;
-  }
   const fine = flaggedLayers(tp, ISSUE.finePattern);
-  if (fine || rowsTooFine) {
-    const where = fine ? ` ${describeHeights(heightRanges(fine, tp.layerZ), 'dash')}` : '';
+  if (fine) {
     warnings.push({
-      id: 'finePattern', severity: 'warning', bit: fine ? ISSUE.finePattern : 0,
-      message: `Pattern finer than the bead can print${where}`,
+      id: 'finePattern', severity: 'warning', bit: ISSUE.finePattern,
+      message: `Pattern finer than the bead can print ${describeHeights(heightRanges(fine, tp.layerZ), 'dash')}`,
     });
   }
 
@@ -203,7 +195,7 @@ export function designChecks(tp, design, printer) {
   if (offBed) warnings.push({ id: 'bed', severity: 'error', bit: ISSUE.bed, message: "Doesn't fit the printer bed" });
 
   const ratio = h / w;
-  if (ratio < 0.3 - 1e-9 || ratio > 0.6 + 1e-9) {
+  if (ratio < 0.3 - 1e-9 || ratio > 0.65 + 1e-9) {
     warnings.push({ id: 'layerRatio', severity: 'warning', bit: 0, message: 'Layer height is unusual for this bead' });
   }
 

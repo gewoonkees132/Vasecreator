@@ -23,9 +23,9 @@ test('the header names the design, the draft printer, the profile hash and the d
   assert.match(lines[3], /^; Printer profile hash: [0-9a-f]{8}$/);
   const design = lines.find((l) => l.startsWith('; design: '));
   assert.equal(JSON.parse(design.slice(10)).meta.name, 'Classic vase');
-  assert.ok(lines.includes(';LAYER_COUNT:113'));
+  assert.ok(lines.includes(';LAYER_COUNT:34'));
   assert.ok(lines.includes('M83'));
-  assert.ok(lines.includes(';LAYER:0') && lines.includes(';LAYER:112') && lines.includes(';Z:169.500'));
+  assert.ok(lines.includes(';LAYER:0') && lines.includes(';LAYER:33') && lines.includes(';Z:170.000'));
   for (const t of ['WALL-OUTER', 'BASE', 'SKIRT', 'PRIME']) assert.ok(lines.includes(`;TYPE:${t}`), t);
 });
 
@@ -120,7 +120,8 @@ test('a refill pause goes in at a layer start with the firmware pause command', 
 });
 
 test('the reservoir is never drawn past its usable share between refills', () => {
-  for (const ml of [40, 60, 150]) {
+  // An 8 mm by 5 mm bead takes about 40 ml a layer of this pot.
+  for (const ml of [100, 150, 250]) {
     const printer = defaultPrinter();
     printer.reservoirMl = ml;
     const text = gcode(presets[0], printer);
@@ -216,8 +217,8 @@ test('the profile hash is FNV-1a and ignores key order', () => {
 // Golden files (research §8.5): a change to the output needs UPDATE_GOLDEN=1
 // and a look at the diff. Every preset has one, named by its id
 // ('preset:classic-vase@1' → classic-vase.gcode), so between them they guard
-// the Morph, the Gentle and Angular curves, a sharp point, an oval and the
-// Middle and Diagonal blends as well as the first three's features.
+// the Morph, the Gentle and Angular curves, a sharp point and an oval as
+// well as the first three's features.
 const goldens = [
   ['plain-cylinder', cylinder()],
   ...presets.map((p) => [p.meta.id.replace(/^preset:|@\d+$/g, ''), p]),

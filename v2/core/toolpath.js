@@ -3,44 +3,43 @@
 //
 // The path is one continuous line of beads. Layer i has its top at
 // z_i = (i + 1)·h. A wall layer starts at its seam on the layer below's height
-// and climbs one layer height over the seam ramp, then runs flat back to the
-// seam, where the next layer starts. Every bead therefore sits one layer
+// and climbs one layer height over the seam ramp (a number of points, D67),
+// then runs flat back to the seam, where the next layer starts. Every bead therefore sits one layer
 // height above the bead below it, with no travel between layers (D10). The
 // exceptions are bounded: base layers are flat (rings included) and climb
 // with a short step at the seam; the first RAMP_IN_LAYERS wall layers grow
-// the ramp (gap ≥ 0.75 h); a seam that moves along the wall by up to a bead
+// the ramp (gap ≥ 0.75 h) and the last as many shrink it, so the rim is level
+// (gap ≤ 1.25 h, D68); a seam that moves along the wall by up to a bead
 // width changes the gap over the ramp by at most that width / ramp length.
 //
 // The wall point is P = B(z, u) + D(z, u)·d̂: B the footprint outline scaled
 // by the profile radius and turned by the twist, d̂ its radial direction in
-// XY, and D the displacement in mm: the Detailed morph (form.detail, D35)
-// plus the Pattern (design.pattern, core/layer-pattern.js). Detailed morph
-// coordinates are x = repeats·u and y = z / tile height, with u riding on the
-// outline, so whole repeats meet without a seam and the relief follows the
+// XY, and D the displacement in mm: the Pattern (design.pattern,
+// core/layer-pattern.js), with u riding on the outline, so it follows the
 // twist.
 //
 // The Pattern is per layer and per node (D37, D39): inside its range every
-// layer has the same N nodes at u = j / N, plus the same k points in every
-// gap, so a layer has N·(k + 1) points and every (k + 1)-th is a node. The
-// seam sits on a node there, so the ramp never cuts a cell in half. It is
+// layer has the same N nodes at u = j / N and, crisp, no other points (D58):
+// the outline and the Morph are followed at the nodes.
+// With Soften on, the same k points sit in every gap (D59), so a layer has
+// N·(k + 1) points and every (k + 1)-th is a node. The seam sits on one
+// column of the drawing there, the same on every layer (D65, D66), and the
+// ramp runs over whole cells: the climb is shared out evenly
+// over those points, and so is the change from the row below to the layer's
+// own, so the path never steps sideways at the seam (D60). It is
 // exempt from the overhang and the two-layers-per-bump rules and has its own
 // bead-support rule (D43).
 //
 // Phase 2: the geometry morph M(z, u) (core/morph.js) is added to the profile
 // radius before the footprint, D and the minimum-radius clamp, so the walls,
-// the base, the checks and the size all see the morphed form. Slots may also
-// name a recipe from design.assets ('user:…') or an image ('img:…', sampled
-// from the Raster passed in `images`, prefiltered for the bead grid).
+// the base, the checks and the size all see the morphed form. A morph map may
+// be an image ('img:…', sampled from the Raster passed in `images`).
 
 import { TAU, dcos, dsin, radians } from './math.js';
-import { PLAIN, evaluatePattern, findPattern } from './patterns.js';
-import { blendShape, detailGate, detailWeights } from './surface.js';
 import { createLayerPattern } from './layer-pattern.js';
 import { createProfile } from './profile.js';
-import { snapTileHeight } from './design.js';
 import { createPlan } from './plan.js';
 import { ISSUE } from './checks.js';
-import { preparedRaster } from './raster.js';
 import { createMorph } from './morph.js';
 
 /** What the move ending at a point is (ARCHITECTURE.md, PreviewResult.kinds). */
@@ -61,109 +60,6 @@ export const MAX_PREVIEW_POINTS = 2_000_000;
 /** Wall layers over which the seam ramp grows to a full layer height above a flat layer. */
 export const RAMP_IN_LAYERS = 4;
 
-// Features per tile of each named shape, around and up: how many bumps one
-// repeat puts in a row and in a column. Drives the points per layer (8 per
-// feature) and the vertical fineness check.
-const SHAPE_FEATURES = {
-  flutes: [1, 0], pleats: [1, 0], ribs: [0, 1], ripple: [1, 1], spiral: [1, 1], chevron: [1, 1],
-  diamonds: [1, 1], scales: [1, 2], dots: [1, 2], honeycomb: [1, 2], basket: [4, 4],
-};
-
-/**
- * Bumps per tile of a pattern recipe.
- * @param {object} recipe
- * @returns {{ around: number, up: number }}
- */
-export function patternFeatures(recipe) {
-  if (recipe.kind === 'shape') {
-    const [around, up] = SHAPE_FEATURES[recipe.shape] ?? [1, 1];
-    return { around, up };
-  }
-  if (recipe.kind === 'bitmap') {
-    // A grid whose rows are all the same has no bumps up; one whose columns
-    // are all the same has none around.
-    const { columns, rows, cells } = recipe;
-    let around = 0;
-    let up = 0;
-    for (let r = 0; r < rows && !around; r++) {
-      for (let c = 1; c < columns; c++) if (cells[r * columns + c] !== cells[r * columns]) { around = columns; break; }
-    }
-    for (let i = columns; i < cells.length; i++) if (cells[i] !== cells[i % columns]) { up = rows; break; }
-    return { around, up };
-  }
-  return { around: 0, up: 0 };
-}
-
-/**
- * Resolves the Detailed morph's slots: library ids against the pattern library,
- * 'user:…' against the recipes in design.assets, 'img:…' against the rasters
- * in `images` (by the asset's hash). A pattern that can't be found prints
- * plain and is reported (missing, or missingImages for an image this device
- * doesn't have), so an old design still opens.
- * @param {object} design
- * @param {{ patterns: object[] }} library
- * @param {{ images?: Map<string, object>, perimeterMm?: number }} [options] perimeterMm at the widest
- *   radius, for an image's prefilter
- */
-export function resolveSlots(design, library, { images, perimeterMm = 0 } = {}) {
-  const slots = [];
-  const missing = [];
-  const missingImages = [];
-  const assets = design.assets ?? {};
-  const h = design.layers.layerHeightMm;
-  const w = design.layers.beadWidthMm;
-  for (const key of ['a', 'b']) {
-    const slot = design.form.detail[key];
-    if (!slot) continue;
-    let recipe = PLAIN.recipe;
-    let evaluate = null;
-    let features = null;
-    // Snapped here too, so a design edited without normalising still lines up.
-    const tileHeightMm = snapTileHeight(slot.tileHeightMm, h);
-    const id = slot.pattern;
-    if (typeof id === 'string' && id.startsWith('img:')) {
-      const asset = assets[id];
-      const hash = asset?.kind === 'image' ? asset.hash : id.slice(4);
-      const raster = images?.get?.(hash);
-      if (raster) {
-        // Prefilter for the bead grid (research §6.3): σ of half a sample,
-        // the bead spacing w/2 around and the layer height up, in texels.
-        const tileWidthMm = Math.max(perimeterMm / slot.repeats, 1e-6);
-        const spacingU = ((w / 2) * raster.width) / tileWidthMm;
-        const spacingV = (h * raster.height) / tileHeightMm;
-        const image = preparedRaster(raster, spacingU > 1 ? spacingU / 2 : 0, spacingV > 1 ? spacingV / 2 : 0, true);
-        recipe = { kind: 'image', hash };
-        evaluate = image.sample;
-        features = image.features;
-      } else {
-        missingImages.push(id);
-      }
-    } else if (typeof id === 'string' && id.startsWith('user:')) {
-      const asset = assets[id];
-      if (asset?.kind === 'recipe') recipe = asset.recipe;
-      else missing.push(id);
-    } else {
-      try {
-        recipe = findPattern(library ?? { patterns: [] }, id).recipe;
-      } catch {
-        missing.push(id);
-      }
-    }
-    const r = recipe;
-    slots.push({
-      key,
-      recipe,
-      depthMm: slot.depthMm,
-      repeats: slot.repeats,
-      tileHeightMm,
-      features: features ?? patternFeatures(recipe),
-      active: slot.depthMm > 0 && recipe.kind !== 'plain',
-      evaluate: evaluate ?? ((x, y) => evaluatePattern(r, x, y)),
-    });
-  }
-  return { slots, missing, missingImages };
-}
-
 // Widest radius of the profile curve over the layer tops (and the ends).
 function widestProfileRadius(profile, H, h) {
   let widest = Math.max(profile.at(0), profile.at(H));
@@ -174,12 +70,11 @@ function widestProfileRadius(profile, H, h) {
 /**
  * Everything needed to evaluate wall points for one design, precomputed once.
  * @param {object} design a normalised design
- * @param {{ patterns: object[] }} library
+ * @param {{ layerPatterns?: object[] }} library
  * @param {{ images?: Map<string, object> }} [options]
  */
 export function createWallModel(design, library, { images } = {}) {
   const { form, layers, base } = design;
-  const detail = form.detail;
   const h = layers.layerHeightMm;
   const w = layers.beadWidthMm;
   const H = form.height;
@@ -190,11 +85,12 @@ export function createWallModel(design, library, { images } = {}) {
   const plan = createPlan(form.plan);
   const twistPerMm = radians(form.twist.degrees) / H;
   const rMin = 2 * w;
-  const needsWidest = form.morph || ['a', 'b'].some((k) => String(detail[k]?.pattern ?? '').startsWith('img:'));
-  const widestMm = needsWidest ? widestProfileRadius(profile, H, h) * plan.unitPerimeter : 0;
+  const widestMm = form.morph ? widestProfileRadius(profile, H, h) * plan.unitPerimeter : 0;
   const morph = createMorph(design, { images, perimeterMm: widestMm });
-  const { slots, missing, missingImages } = resolveSlots(design, library, { images, perimeterMm: widestMm });
-  if (morph?.missingImage) missingImages.push(design.form.morph.map);
+  /** A Pattern whose drawing can't be found prints plain and is reported, so an old design still opens. */
+  const missing = [];
+  /** The morph's image map when this device doesn't have it. */
+  const missingImages = morph?.missingImage ? [design.form.morph.map] : [];
   const pattern = createLayerPattern(design, library, {
     profile, unitPerimeter: plan.unitPerimeter, layerCount, baseLayers, maxNodes: MAX_POINTS_PER_LAYER,
   });
@@ -216,58 +112,9 @@ export function createWallModel(design, library, { images } = {}) {
     }
     return { lo, hi };
   }
-  const active = slots.filter((s) => s.active);
   const limit = radians(design.rules.overhangLimitDeg);
   const stepLimit = (h * dsin(limit)) / dcos(limit);
   const supportLimit = design.rules.supportRatio * w;
-
-  // A Diagonal blend (D54) gives B a share that also depends on u, so the
-  // weights cached per height are the most each slot can reach there (A the
-  // soft edges alone, B those times the amount) and detailAt splits them per point.
-  const diagonal = !!detail.b && detail.blend.shape === 'diagonal';
-  const span = Math.max(detail.toMm - detail.fromMm, 1e-9);
-
-  // Two-entry weight cache: wall points alternate between their own height
-  // and the height one layer below (for the overhang check).
-  let zA = NaN, aA = 0, bA = 0, zB = NaN, aB = 0, bB = 0, flip = false;
-  const weight = { a: 0, b: 0 };
-  function weightsAt(z) {
-    if (z === zA) { weight.a = aA; weight.b = bA; return weight; }
-    if (z === zB) { weight.a = aB; weight.b = bB; return weight; }
-    let a;
-    let b;
-    if (diagonal) {
-      a = detailGate(detail, z, h);
-      b = a * detail.blend.amount;
-    } else {
-      ({ a, b } = detailWeights(detail, z, h));
-    }
-    if (flip) { zA = z; aA = a; bA = b; } else { zB = z; aB = a; bB = b; }
-    flip = !flip;
-    weight.a = a;
-    weight.b = b;
-    return weight;
-  }
-
-  /** The Detailed morph's displacement in mm at height z, position u. Never on the base. */
-  function detailAt(z, u) {
-    if (z <= baseTop || active.length === 0) return 0;
-    const wt = weightsAt(z);
-    let wa = wt.a;
-    let wb = wt.b;
-    if (diagonal && wa > 0) {
-      const share = detail.blend.amount * blendShape('diagonal', (z - detail.fromMm) / span, u);
-      wb = wa * share;
-      wa *= 1 - share;
-    }
-    let d = 0;
-    for (let k = 0; k < active.length; k++) {
-      const s = active[k];
-      const ws = s.key === 'a' ? wa : wb;
-      if (ws > 0) d += ws * s.depthMm * s.evaluate(s.repeats * u, z / s.tileHeightMm);
-    }
-    return d;
-  }
 
   /** The wall layer a height lies on: layer i runs from i·h up to its top at (i + 1)·h. */
   const layerAt = (z) => Math.max(0, Math.ceil(z / h - 1e-6) - 1);
@@ -275,12 +122,12 @@ export function createWallModel(design, library, { images } = {}) {
   const patternAt = lp ? lp.at : () => 0;
 
   /**
-   * All the displacement D in mm at height z, position u: the Detailed
-   * morph plus the Pattern of `layer` (by default the layer z lies on; the
-   * toolpath passes it, as the first point of a ramp sits on the layer below's top).
+   * The displacement D in mm at height z, position u: the Pattern of
+   * `layer` (by default the layer z lies on; the toolpath passes it, as the
+   * first point of a ramp sits on the layer below's top).
    */
   function displacement(z, u, layer = layerAt(z)) {
-    return detailAt(z, u) + (lp ? lp.at(layer, u) : 0);
+    return lp ? lp.at(layer, u) : 0;
   }
 
   let tz = NaN, tc = 1, ts = 0;
@@ -305,15 +152,17 @@ export function createWallModel(design, library, { images } = {}) {
    * layer `layer`, by default the one z lies on): the toolpath's wall point
    * and the CAD solid's skeleton (core/cad.js). The returned object is
    * reused; copy what you need before the next call. D is the displacement
-   * (the Detailed morph plus P, the Pattern), radius the distance along the
+   * (P, the Pattern), radius the distance along the
    * unit outline (|unit| = unitLength), bare that radius without the Pattern
    * (for the overhang check, D43), narrow whether the minimum radius clamped it.
+   * `below` is the share of the Pattern still on the row of the layer below
+   * (the start of a layer, D60).
    */
-  function centrePoint(u, z, layer = layerAt(z)) {
+  function centrePoint(u, z, layer = layerAt(z), below = 0) {
     plan.unitPoint(u, unitXY);
     const unitLength = Math.sqrt(unitXY[0] * unitXY[0] + unitXY[1] * unitXY[1]);
-    const P = lp ? lp.at(layer, u) : 0;
-    const D = detailAt(z, u) + P;
+    const P = lp ? lp.at(layer, u, below) : 0;
+    const D = P;
     let narrow = false;
     let base = profile.at(z);
     if (morphOn) {
@@ -343,23 +192,16 @@ export function createWallModel(design, library, { images } = {}) {
 
   const model = {
     design, h, w, H, layerCount, baseLayers, baseTop, profile, plan, twistPerMm, rMin,
-    slots, active, missing, missingImages, stepLimit, supportLimit,
-    detailAt, patternAt, displacement, layerAt, weightsAt, twistAt, centrePoint,
+    missing, missingImages, stepLimit, supportLimit,
+    patternAt, displacement, layerAt, twistAt, centrePoint,
     morph: morphOn ? morph : null, morphAmp, morphAt, morphRange,
     /** The Pattern (core/layer-pattern.js) when it prints, else null. */
     pattern: lp,
     /** Points per layer in the Pattern's range: N·(k + 1), the same on every layer there. */
     patternPoints: 0,
   };
-  if (lp) {
-    // k extra points in each gap, enough for the outline, the Morph and the
-    // Detailed morph on the layer that needs the most (§3.1, §3.2).
-    const N = lp.nodes;
-    let need = 0;
-    for (let i = lp.first; i <= lp.last; i++) need = Math.max(need, pointsNeeded(model, i * h, (i + 1) * h));
-    const k = Math.max(0, Math.min(Math.ceil(need / N) - 1, Math.floor(MAX_POINTS_PER_LAYER / N) - 1));
-    model.patternPoints = N * (k + 1);
-  }
+  // The nodes alone when crisp; with Soften the same extra points in each gap (D58, D59).
+  if (lp) model.patternPoints = lp.pointsPerLayer;
   return model;
 }
 
@@ -417,7 +259,7 @@ class PathBuffer {
  * Seam position u for every layer (design §9.3).
  *   fixed: the outline point at a world angle; it does not turn with the twist.
  *   followTwist: the angle in outline coordinates, turning with the twist.
- *   hidden: the rectangle corner nearest the angle, or else the deepest pattern
+ *   hidden: the rectangle corner nearest the angle, or else the deepest Pattern
  *   groove near the seam of the layer below. Tracking the groove from layer to
  *   layer (rather than re-searching around the angle every time) keeps the
  *   seam from jumping across the wall where a groove drifts, as on a spiral;
@@ -439,7 +281,17 @@ function seamPositions(m) {
       if (d < best) { best = d; corner = u; }
     }
   }
+  // The most the seam moves between layer i and the one above it: a bead
+  // width on the wider of the two, in u.
+  const most = (i) => w / (Math.max(m.profile.at((i + 1) * h), m.profile.at((i + 2) * h)) * plan.unitPerimeter);
+  // u moved towards `from` until it is at most `limit` away (round the pot).
+  const toward = (u, from, limit) => {
+    let d = u - from;
+    d -= Math.round(d);
+    return Math.abs(d) <= limit ? u : from + Math.sign(d) * limit;
+  };
   let previous = follow;
+  let column = NaN;
   for (let i = 0; i < layerCount; i++) {
     const zStart = i === 0 ? h : i * h;
     let u = follow;
@@ -451,33 +303,47 @@ function seamPositions(m) {
     if (position === 'fixed') u = plan.uAtAngle(angle - m.twistPerMm * zSeam);
     else if (position === 'hidden') u = plan.footprint === 'rectangle' ? corner : groove(m, i, previous, w);
     if (lp?.inRange(i)) {
-      // On a node, so the ramp never cuts a cell in half. A hidden seam
-      // still moves at most a bead width a layer, in whole nodes.
-      const N = lp.nodes;
-      u = Math.round(u * N) / N;
-      if (position === 'hidden' && lp.inRange(i - 1)) {
-        const most = Math.floor((w / (m.profile.at((i + 1) * h) * plan.unitPerimeter)) * N + 1e-9);
-        const steps = Math.round((u - previous) * N);
-        u = previous + Math.max(-most, Math.min(most, steps)) / N;
+      // The seam column (D65, D66): every layer in the range starts on the
+      // same column of the drawing, so each lap is whole tiles from seam to
+      // seam and the seam is one line that turns with the columns. Hidden
+      // takes the quietest column, the others the drawing's left edge, on
+      // the tile nearest where the seam would be on the range's first layer.
+      if (Number.isNaN(column)) {
+        const c = position === 'hidden' ? lp.seamColumn(patternRampCells(m)) : 0;
+        const t = Math.round((u * lp.nodes - c) / lp.columns);
+        column = (t * lp.columns + c) / lp.nodes;
+        column -= Math.floor(column);
       }
+      u = column;
+    } else if (!Number.isNaN(column)) {
+      // Above the range the seam goes back to its own place a bead width a
+      // layer at most (a hidden seam on a plain wall holds).
+      u = toward(u, previous, most(i - 1));
     }
     seams[i] = u;
     previous = u;
   }
+  // Below the range the seam walks to the seam column a bead width a layer
+  // at most, so it doesn't jump where the Pattern starts.
+  if (lp && !Number.isNaN(column)) {
+    for (let i = lp.first - 1; i >= 0; i--) seams[i] = toward(seams[i], seams[i + 1], most(i));
+  }
   return seams;
 }
 
-// The deepest groove of layer i near u = centre, over the widest tile in
-// play there (the Detailed morph's or the Pattern's).
+/**
+ * Cells the seam ramp runs over in the Pattern's range (D67): the ramp's
+ * points, at most half a lap, at least one.
+ */
+function patternRampCells(m) {
+  return Math.max(1, Math.min(m.design.layers.seam.rampPoints, Math.floor(m.pattern.nodes / 2)));
+}
+
+// The deepest groove of layer i near u = centre, over one tile of the Pattern.
 function groove(m, i, centre, w) {
   const z = (i + 1) * m.h;
-  const wt = m.weightsAt(z);
-  let repeats = 0;
-  for (const s of m.active) {
-    if ((s.key === 'a' ? wt.a : wt.b) > 0 && (repeats === 0 || s.repeats < repeats)) repeats = s.repeats;
-  }
-  if (m.pattern?.inRange(i) && (repeats === 0 || m.pattern.repeats < repeats)) repeats = m.pattern.repeats;
-  if (repeats === 0) return centre;
+  if (!m.pattern?.inRange(i)) return centre;
+  const repeats = m.pattern.repeats;
   const half = 0.5 / repeats;
   const samples = 64;
   let lo = Infinity;
@@ -494,21 +360,13 @@ function groove(m, i, centre, w) {
   return centre + Math.min(Math.max(best - centre, -maxStep), maxStep);
 }
 
-// Points the outline, the Morph and the Detailed morph need on the layer
-// from zStart to zTop (lead decision 5): a bead spacing of w/2 and at least
-// 8 points per feature, before any clamp.
-function pointsNeeded(m, zStart, zTop) {
+// Points the outline and the Morph need on the layer up to zTop (lead
+// decision 5): a bead spacing of w/2 and at least 8 points per feature,
+// before any clamp.
+function pointsNeeded(m, zTop) {
   const perimeter = (m.profile.at(zTop) + m.morphAmp) * m.plan.unitPerimeter;
   let need = Math.max(Math.ceil(perimeter / (m.w / 2)), MIN_POINTS_PER_LAYER);
   if (m.morph) need = Math.max(need, 8 * m.morph.repeats * m.morph.featuresAround);
-  const lo = m.weightsAt(zStart);
-  const loA = lo.a;
-  const loB = lo.b;
-  const hi = m.weightsAt(zTop);
-  for (const s of m.active) {
-    const on = s.key === 'a' ? loA > 0 || hi.a > 0 : loB > 0 || hi.b > 0;
-    if (on) need = Math.max(need, 8 * s.repeats * s.features.around);
-  }
   return need;
 }
 
@@ -520,7 +378,7 @@ function pointsNeeded(m, zStart, zTop) {
  * @returns {{ n: number, capped: boolean, simplified: boolean }}
  */
 export function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
-  const need = pointsNeeded(m, zStart, zTop);
+  const need = pointsNeeded(m, zTop);
   const capped = need > MAX_POINTS_PER_LAYER;
   if (m.pattern?.inRange(Math.round(zTop / m.h) - 1)) {
     const N = m.pattern.nodes;
@@ -535,17 +393,17 @@ export function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
 /**
  * Builds the full toolpath for a design.
  * @param {object} design a normalised design
- * @param {{ patterns: object[] }} library
+ * @param {{ layerPatterns?: object[] }} library
  * @param {{ walls?: 1 | 2, maxPoints?: number, images?: Map<string, object> }} [options] walls defaults
  *   to 1 (the design view's centreline wall); maxPoints is the point budget (MAX_TOOLPATH_POINTS);
- *   images are the Rasters by hash for 'img:' patterns and morph maps
+ *   images are the Rasters by hash for 'img:' morph maps
  */
 export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOLPATH_POINTS, images } = {}) {
   const m = createWallModel(design, library, { images });
   const { h, w, layerCount: L, baseLayers: nb, profile, plan, rMin, stepLimit, supportLimit, pattern: lp } = m;
   const spacing = design.finish.wallSpacingMm;
   const innerWall = design.finish.innerWall;
-  const rampMm = design.layers.seam.rampLengthMm;
+  const rampPoints = design.layers.seam.rampPoints;
   const seams = seamPositions(m);
 
   // The point budget (MAX_TOOLPATH_POINTS): a cap on points per wall layer,
@@ -585,8 +443,8 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   // layers and the layer on top of them.
   let wx = 0, wy = 0, wIssue = 0, wNode = 0;
   const morphed = !!m.morph;
-  function wallPoint(u, z, checkOverhang, i) {
-    const c = m.centrePoint(u, z, i);
+  function wallPoint(u, z, checkOverhang, i, below = 0) {
+    const c = m.centrePoint(u, z, i, below);
     const { D, radius, bare, unitLength } = c;
     if (D < minD) minD = D;
     if (D > maxD) maxD = D;
@@ -595,7 +453,7 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       const zb = z - h;
       let baseBelow = profile.at(zb);
       if (morphed) baseBelow = Math.max(baseBelow + m.morphAt(zb, u), rMin);
-      const bareBelow = baseBelow * unitLength + m.detailAt(zb, u);
+      const bareBelow = baseBelow * unitLength;
       let below = bareBelow;
       if (below < rMin - 1e-9) below = rMin;
       if (Math.abs(bare - below) > stepLimit) issue |= ISSUE.overhang;
@@ -628,23 +486,29 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   // per full turn. It starts `rise` below the layer top and climbs that much
   // over the seam ramp (rise 0: flat at the top). The first point is not
   // repeated when the path is already there; otherwise the move to it is
-  // `firstKind`.
-  function outerLoop(i, u0, u1, n, rise, kind, firstKind, checkOverhang) {
+  // `firstKind`. With `changeRow` the Pattern starts on the row of the layer
+  // below and changes to this layer's own over the same ramp (D60).
+  function outerLoop(i, u0, u1, n, rise, kind, firstKind, checkOverhang, changeRow = false) {
     const zTop = (i + 1) * h;
     const zLow = zTop - rise;
-    const perimeter = profile.at(zTop) * plan.unitPerimeter;
-    const rampLength = Math.min(rampMm, perimeter / 2);
     const span = u1 - u0;
     const onGrid = !!lp && lp.inRange(i) && n <= MAX_POINTS_PER_LAYER;
     const count = onGrid ? gridPoints(u0, u1, n) : Math.max(1, Math.round(n * span));
+    // The ramp is a number of points (D67), at most half a lap: in the
+    // Pattern's range whole cells, so the climb ends on a node and Soften's
+    // points between them come along; elsewhere the layer's own points.
+    const rampCells = onGrid ? patternRampCells(m) : 0;
+    const rampSteps = Math.max(1, Math.min(rampPoints, Math.floor(n / 2)));
+    const blend = changeRow && !!lp && (lp.inRange(i) || lp.inRange(i - 1));
     for (let j = 0; j <= count; j++) {
       const u = onGrid ? grid[j] : j === count ? u1 : u0 + (span * j) / count;
-      let z = zTop;
-      if (rise > 0) {
-        if (j === 0) z = zLow;
-        else if (rampLength > 0) z = zLow + rise * Math.min((onGrid ? u - u0 : (span * j) / count) * perimeter / rampLength, 1);
-      }
-      wallPoint(u, z, checkOverhang, i);
+      // How far up the ramp this point is: 0 at the start, 1 from its end on.
+      let ramp = 1;
+      if (j === 0) ramp = 0;
+      else if (rampCells > 0) ramp = Math.min(((u - u0) * lp.nodes) / rampCells, 1);
+      else ramp = Math.min(j / rampSteps, 1);
+      const z = rise > 0 ? zLow + rise * ramp : zTop;
+      wallPoint(u, z, checkOverhang, i, blend ? 1 - ramp : 0);
       if (j === 0) {
         if (buf.at(wx, wy, z)) continue;
         buf.push(wx, wy, z, buf.n === 0 ? KIND.none : firstKind, wIssue, i, wNode);
@@ -658,13 +522,13 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   // of `kind` when the path is elsewhere (a seam that moved on, or a
   // connector out from the inner wall), nothing when it is already there.
   function stepOnto(i, u, z, kind, checkOverhang) {
-    wallPoint(u, z, checkOverhang, i);
+    wallPoint(u, z, checkOverhang, i, 1);
     if (buf.n > 0 && !buf.at(wx, wy, z)) buf.push(wx, wy, z, kind, wIssue, i, wNode);
   }
 
   // The seam marker of wall layer i: where the layer starts.
-  function markSeam(i, u, z) {
-    wallPoint(u, z, false, i);
+  function markSeam(i, u, z, below = 0) {
+    wallPoint(u, z, false, i, below);
     const k = 3 * (i - nb);
     seamLine[k] = wx;
     seamLine[k + 1] = wy;
@@ -779,6 +643,9 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   //   start on the bead below with no gap. The climb grows over RAMP_IN_LAYERS
   //   layers instead, with the rest as a step up at the seam, so the gap to
   //   the bead below never drops under (1 − 1/RAMP_IN_LAYERS) of a layer.
+  //   Ramp out: the last RAMP_IN_LAYERS wall layers shrink the climb the same
+  //   way, so the top layer is flat and the rim level (D68); the gap never
+  //   rises over (1 + 1/RAMP_IN_LAYERS) of a layer.
   //   Seam moved back: starting the layer behind where the one below ended
   //   would run over that layer's last beads at their own height. The layer
   //   starts where the one below ended and stops at its own seam, a little
@@ -797,13 +664,17 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       markSeam(0, uS, h);
       outerLoop(0, uS, uS + 1, n, 0, KIND.outer, KIND.none, false);
     } else {
-      const rise = i < firstRamped ? 0 : h * Math.min((i - firstRamped + 1) / RAMP_IN_LAYERS, 1);
+      // The climb grows over the first RAMP_IN_LAYERS wall layers and shrinks
+      // over the last as many, so the top layer is flat (D68).
+      const grow = i < firstRamped ? 0 : Math.min((i - firstRamped + 1) / RAMP_IN_LAYERS, 1);
+      const shrink = Math.min((L - 1 - i) / RAMP_IN_LAYERS, 1);
+      const rise = h * Math.min(grow, shrink);
       let ahead = uS - seams[i - 1];
       ahead -= Math.round(ahead);
       const u0 = ahead < 0 ? uS - ahead : uS;
-      markSeam(i, u0, i * h);
+      markSeam(i, u0, i * h, 1);
       stepOnto(i, u0, i * h, buf.lastKind() === KIND.inner ? KIND.connector : KIND.outer, true);
-      outerLoop(i, u0, uS + 1, n, rise, KIND.outer, KIND.none, true);
+      outerLoop(i, u0, uS + 1, n, rise, KIND.outer, KIND.none, true, true);
     }
     if (maxD - minD > maxGapMm) maxGapMm = maxD - minD;
     if (walls === 2) innerLoop(i, uS, n, minD, KIND.connector);

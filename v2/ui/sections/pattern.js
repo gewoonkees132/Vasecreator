@@ -5,7 +5,7 @@
 //             the drawing of your own on the pot, Make (the 2D editor on an
 //             empty grid), Edit (on the drawing on the pot: a starter as a
 //             copy, your own in place) and Save (to My patterns, named)
-//   Depth     out = +depth, in = −depth, up to half a bead (D38)
+//   Depth     out = +depth, in = −depth, up to two thirds of a bead (D38, D61)
 //   Density   the node spacing around, as mm or as points per layer, with the
 //             readout "96 points per layer · 3.8–6.1 mm" (D40)
 //   From / to its own range (D41); the blue bracket on the pot sets it too
@@ -18,7 +18,7 @@ import { h, slider, numberField, segmented } from '../controls.js';
 import { DEPTH_BEADS, SPACING_BEADS } from '../../core/layer-pattern.js';
 import { BLEND_OPTIONS } from '../dock-tools.js';
 import {
-  findLayerEntry, layerMineEntries, pickLayerPattern, drawLayerEntry, readoutOf, densityText, densityLimits, setDensityFace,
+  findLayerEntry, layerMineEntries, pickLayerPattern, drawLayerEntry, readoutOf, densityText, softenText, wholeText, densityLimits, setDensityFace,
   openEditor, editableEntry, savableEntry, saveEntry, pickSavedPattern, targetKey, savedSpacingMm, drawsWith,
 } from '../pattern-actions.js';
 import { listPatterns, deletePattern, onPatternsChanged } from '../../store/assets.js';
@@ -30,7 +30,7 @@ const SWATCH = 52;
 const TARGET = { kind: 'pattern' };
 const PARTS = ['drawing', 'depth', 'density', 'range', 'fade', 'soften'];
 const FADE_WHERE = { fadesUp: 'At the top: ', fadesDown: 'At the bottom: ', middle: 'Halfway up: ', diagonal: 'In the band: ' };
-const halfBead = (d) => Math.floor(DEPTH_BEADS.max * d.layers.beadWidthMm * 100) / 100;
+const deepest = (d) => Math.floor(DEPTH_BEADS.max * d.layers.beadWidthMm * 100) / 100;
 const fmt = (v, decimals = 2) => String(Math.round(v * 10 ** decimals) / 10 ** decimals);
 
 const section = {
@@ -152,7 +152,7 @@ const section = {
     // ---- Depth ----
     const depth = slider({
       label: 'Depth', unit: 'mm', min: 0, max: 1.5, step: 0.01, snap: 0.05, decimals: 2, value: 0, info: '',
-      onInput: edit('Pattern depth', (p, v, d) => { p.depthMm = Math.min(Math.max(0, v), halfBead(d)); }),
+      onInput: edit('Pattern depth', (p, v, d) => { p.depthMm = Math.min(Math.max(0, v), deepest(d)); }),
       onCommit: commit,
     });
 
@@ -180,7 +180,15 @@ const section = {
       onCommit: commit,
     });
     const readout = h('p', { class: 'panel-note density-readout', role: 'status' });
-    const densityBox = h('div', { class: 'pattern-density' }, [face.el, spacing.el, points.el, readout]);
+    // The whole pot's points, from the preview once it is of this design (D58).
+    const potPoints = h('p', { class: 'panel-note density-readout density-pot' });
+    const densityBox = h('div', { class: 'pattern-density' }, [face.el, spacing.el, points.el, readout, potPoints]);
+    const showPotPoints = (state) => {
+      const known = !!state.design.pattern && !!state.result && ctx.resultDesign?.() === state.design && !ctx.resultIsPlain?.();
+      potPoints.textContent = known ? `The whole pot: ${wholeText(state.result.pointCount)} points` : '';
+      potPoints.hidden = !known;
+    };
+    const offResult = store.subscribe((state, what) => { if (what.has('result') || what.has('design')) showPotPoints(state); });
 
     // ---- From / to ----
     const from = numberField({
@@ -283,9 +291,9 @@ const section = {
       if (!p) return;
 
       const w = d.layers.beadWidthMm;
-      depth.setLimits({ max: Math.max(halfBead(d), p.depthMm) });
+      depth.setLimits({ max: Math.max(deepest(d), p.depthMm) });
       depth.set(p.depthMm);
-      depth.setInfo(p.depthMm > 0 ? `Out +${fmt(p.depthMm)} mm, in −${fmt(p.depthMm)} mm · up to half a bead (${fmt(halfBead(d))} mm)` : 'Flat: the drawing doesn’t print');
+      depth.setInfo(p.depthMm > 0 ? `Out +${fmt(p.depthMm)} mm, in −${fmt(p.depthMm)} mm · up to ⅔ of a bead (${fmt(deepest(d))} mm)` : 'Flat: the drawing doesn’t print');
 
       const by = p.density.by;
       face.set(by);
@@ -299,6 +307,7 @@ const section = {
         points.set(r.nodes);
       }
       readout.textContent = r ? densityText(r) : '';
+      showPotPoints(state);
 
       from.set(p.fromMm);
       to.set(p.toMm);
@@ -319,7 +328,7 @@ const section = {
       }[p.fade.shape] ?? '';
 
       soften.set(p.softenCells);
-      soften.setInfo(p.softenCells > 0 ? 'Blurs each point into its neighbours; the drawing stays in, flat or out' : 'Crisp: what you draw is what prints');
+      soften.setInfo(softenText(p.softenCells, r));
     };
     update(store.state);
     refreshSaved();
@@ -329,6 +338,7 @@ const section = {
       update,
       destroy() {
         offPatterns?.();
+        offResult?.();
         for (const c of [depth, spacing, points, from, to, amount, soften]) c.destroy?.();
         el.replaceChildren();
       },
