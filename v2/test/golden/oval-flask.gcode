@@ -5,7 +5,7 @@
 ; Bead width 8.000 mm, layer height 5.000 mm
 ;FLAVOR:Marlin
 ;LAYER_COUNT:36
-; design: {"schema":"vasecreator/design","version":5,"units":"mm","meta":{"id":"preset:oval-flask@1","name":"Oval flask","description":"A flat oval flask with straight sides, a sharp shoulder and a short neck."},"form":{"height":180,"profile":{"interp":"linear","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":40},{"z":95,"r":58},{"z":158,"r":37},{"z":180,"r":40}]},"plan":{"footprint":"circle","depthRatio":0.6,"cornerRounding":0},"twist":{"degrees":0}},"layers":{"beadWidthMm":8,"layerHeightMm":5,"seam":{"rampPoints":4,"position":"hidden","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.7,"curveRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":0}},"finish":{"walls":1,"wallSpacingMm":7.2,"innerWall":"smooth"}}
+; design: {"schema":"vasecreator/design","version":6,"units":"mm","meta":{"id":"preset:oval-flask@1","name":"Oval flask","description":"A flat oval flask with straight sides, a sharp shoulder and a short neck."},"form":{"height":180,"profile":{"interp":"linear","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":40},{"z":95,"r":58},{"z":158,"r":37},{"z":180,"r":40}]},"plan":{"footprint":"circle","depthRatio":0.6,"cornerRounding":0},"twist":{"degrees":0}},"layers":{"beadWidthMm":8,"layerHeightMm":5,"seam":{"rampPoints":4,"position":"hidden","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.7,"curveRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":0}},"finish":{"walls":1,"wallSpacingMm":7.2,"innerWall":"smooth"}}
 G21
 G90
 M83

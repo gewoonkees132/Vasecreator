@@ -4,7 +4,7 @@
   "presets": [
     {
       "schema": "vasecreator/design",
-      "version": 5,
+      "version": 6,
       "units": "mm",
       "meta": {
         "id": "preset:classic-vase@1",
@@ -55,7 +55,7 @@
     },
     {
       "schema": "vasecreator/design",
-      "version": 5,
+      "version": 6,
       "units": "mm",
       "meta": {
         "id": "preset:twisted-column@1",
@@ -105,7 +105,7 @@
     },
     {
       "schema": "vasecreator/design",
-      "version": 5,
+      "version": 6,
       "units": "mm",
       "meta": {
         "id": "preset:square-planter@1",
@@ -154,7 +154,7 @@
     },
     {
       "schema": "vasecreator/design",
-      "version": 5,
+      "version": 6,
       "units": "mm",
       "meta": {
         "id": "preset:bud-vase@1",
@@ -214,7 +214,7 @@
     },
     {
       "schema": "vasecreator/design",
-      "version": 5,
+      "version": 6,
       "units": "mm",
       "meta": {
         "id": "preset:petal-bowl@1",
@@ -280,7 +280,7 @@
     },
     {
       "schema": "vasecreator/design",
-      "version": 5,
+      "version": 6,
       "units": "mm",
       "meta": {
         "id": "preset:double-gourd@1",
@@ -342,7 +342,7 @@
     },
     {
       "schema": "vasecreator/design",
-      "version": 5,
+      "version": 6,
       "units": "mm",
       "meta": {
         "id": "preset:oval-flask@1",
@@ -401,7 +401,7 @@
     },
     {
       "schema": "vasecreator/design",
-      "version": 5,
+      "version": 6,
       "units": "mm",
       "meta": {
         "id": "preset:drape-vase@1",

@@ -5,7 +5,7 @@
 ; Bead width 8.000 mm, layer height 5.000 mm
 ;FLAVOR:Marlin
 ;LAYER_COUNT:30
-; design: {"schema":"vasecreator/design","version":5,"units":"mm","meta":{"id":"preset:twisted-column@1","name":"Twisted column","description":"A gently swelling square column that winds a sixth of a turn."},"form":{"height":150,"profile":{"interp":"catmullRomCentripetal","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":40},{"z":75,"r":45},{"z":150,"r":40}]},"plan":{"footprint":"rectangle","depthRatio":1,"cornerRounding":0.3},"twist":{"degrees":60}},"layers":{"beadWidthMm":8,"layerHeightMm":5,"seam":{"rampPoints":4,"position":"followTwist","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.7,"curveRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":0}},"finish":{"walls":1,"wallSpacingMm":7.2,"innerWall":"smooth"}}
+; design: {"schema":"vasecreator/design","version":6,"units":"mm","meta":{"id":"preset:twisted-column@1","name":"Twisted column","description":"A gently swelling square column that winds a sixth of a turn."},"form":{"height":150,"profile":{"interp":"catmullRomCentripetal","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":40},{"z":75,"r":45},{"z":150,"r":40}]},"plan":{"footprint":"rectangle","depthRatio":1,"cornerRounding":0.3},"twist":{"degrees":60}},"layers":{"beadWidthMm":8,"layerHeightMm":5,"seam":{"rampPoints":4,"position":"followTwist","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.7,"curveRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":0}},"finish":{"walls":1,"wallSpacingMm":7.2,"innerWall":"smooth"}}
 G21
 G90
 M83

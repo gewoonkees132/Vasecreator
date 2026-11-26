@@ -33,6 +33,33 @@ function patternInfo(m) {
   };
 }
 
+/** The wall grid's size (design §6): steps round the pot and up it. */
+export const WALL_GRID = Object.freeze({ around: 96, up: 64 });
+
+// The plain wall as a coarse grid, for painting on the pot (D86, D87): the
+// centreline without the Pattern at regular steps of u and height, row 0 at
+// the bottom, plus how far the beads reach out of it (half a bead and the
+// Pattern's most), so the renderer can lay a surface over them to pick on
+// and to tint.
+function wallGrid(m) {
+  const { around, up } = WALL_GRID;
+  const positions = new Float32Array((up + 1) * around * 3);
+  let o = 0;
+  for (let r = 0; r <= up; r++) {
+    const z = (m.H * r) / up;
+    for (let c = 0; c < around; c++) {
+      const p = m.centrePoint(c / around, z);
+      const s = p.radius > 0 ? p.bare / p.radius : 1;
+      positions[o++] = p.x * s;
+      positions[o++] = p.y * s;
+      positions[o++] = z;
+    }
+  }
+  const pattern = m.design.pattern;
+  const out = !m.pattern ? 0 : pattern.sits === 'inset' ? 0 : pattern.sits === 'offset' ? 2 : 1;
+  return { around, up, heightMm: m.H, reachMm: m.w / 2 + out * (m.pattern ? m.pattern.depthMm : 0), positions };
+}
+
 function summarise(tp, design, warnings, started) {
   const { path, pointCount } = tp;
   const w = design.layers.beadWidthMm;
@@ -62,6 +89,7 @@ function summarise(tp, design, warnings, started) {
     bounds: { min, max },
     profileLine: evaluateProfileLine(tp.model.profile),
     seamLine: tp.seamLine,
+    wallGrid: wallGrid(tp.model),
     pattern: patternInfo(tp.model),
     pointCount,
     computeMs: now() - started,

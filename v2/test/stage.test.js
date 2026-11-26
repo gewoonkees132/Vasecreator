@@ -53,7 +53,7 @@ test('dock: every step but Print has tools; Print is the sheet', () => {
   assert.deepEqual(toolsFor('print', s), []);
 });
 
-test('dock: Shape\'s Morph is a plain tool that opens the sheet; no step has a group since the Detailed morph went (D63)', () => {
+test('dock: Shape\'s Morph is a plain tool that opens the sheet; the one group is the Pattern\'s Paint (D85)', () => {
   const s = state(normaliseDesign(presets[0]), { tools: { shape: 'morph' } });
   const morph = DOCK_TOOLS.shape.find((t) => t.id === 'morph');
   assert.equal(morph.kind, 'sheet');
@@ -61,7 +61,7 @@ test('dock: Shape\'s Morph is a plain tool that opens the sheet; no step has a g
   assert.equal(morph.value(s), 'Off');
   assert.equal(currentTool('shape', s).id, 'morph');
   for (const step of Object.keys(DOCK_TOOLS)) {
-    assert.ok(DOCK_TOOLS[step].every((t) => t.kind !== 'group' && t.kind !== 'patterns'), step);
+    assert.deepEqual(ids(DOCK_TOOLS[step].filter((t) => t.kind === 'group' || t.kind === 'patterns')), step === 'pattern' ? ['paint'] : [], step);
     assert.equal(openGroup(step, s), null);
   }
 });
@@ -79,11 +79,11 @@ test('dock: the Pattern step shows the drawings, and every tool once there is a 
   assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing']);
   assert.equal(drawingInfo(s(), library).name, 'None');
   setLayerPattern(d, findLayerEntry(library, 'lib:knit@1'));
-  assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing', 'depth', 'sits', 'density', 'from', 'to', 'fade', 'soften', 'slant']);
+  assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing', 'depth', 'sits', 'density', 'from', 'to', 'fade', 'paint', 'soften', 'slant']);
   assert.equal(drawingInfo(s(), library).name, 'Knit');
   // The fade's amount once it fades.
   d.pattern.fade.shape = 'diagonal';
-  assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing', 'depth', 'sits', 'density', 'from', 'to', 'fade', 'fadeAmount', 'soften', 'slant']);
+  assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing', 'depth', 'sits', 'density', 'from', 'to', 'fade', 'fadeAmount', 'paint', 'soften', 'slant']);
   const density = DOCK_TOOLS.pattern.find((t) => t.id === 'density');
   assert.match(density.dial(s(), env).note, /^\d+ points per layer · \d+\.\d–\d+\.\d mm · [\d,]+ in all$/);
   assert.equal(density.dial(s(), env).label, 'Spacing');
@@ -180,4 +180,52 @@ test('shapeOnly keeps the whole form, the Morph included, and leaves out only th
   assert.deepEqual(shape.form, d.form);
   assert.equal(shape.form.morph.map, 'lib:lobes@1');
   assert.equal(d.pattern.drawing, 'lib:knit@1', 'the design given is not changed');
+});
+
+// ---------- Paint (D79–D87, docs/design/v2-paint-brush.md) ----------
+
+test('dock: Paint opens a row of brush tools that set the view, never the design', async () => {
+  const { brushOf, paintActive, hasPaint, normaliseBrush, wallOf } = await import('../ui/paint.js');
+  const d = normaliseDesign(presets[0]);
+  const paint = DOCK_TOOLS.pattern.find((t) => t.id === 'paint');
+  assert.equal(paint.kind, 'group');
+  // Nothing to paint without a Pattern.
+  assert.ok(!ids(toolsFor('pattern', state(d, { step: 'pattern' }))).includes('paint'));
+  setLayerPattern(d, findLayerEntry(library, 'lib:knit@1'));
+  const brush = normaliseBrush(null);
+  const s = (view) => state(d, { step: 'pattern', mode: 'design', brush, tools: { pattern: 'paint' }, ...paint.open, ...view });
+  assert.deepEqual(paint.open, { paint: true, paintTurn: false });
+  assert.deepEqual(paint.close, { paint: false, paintTurn: false });
+  assert.ok(paintActive(s()));
+  assert.ok(!paintActive(s({ step: 'layers' })));
+  assert.ok(!paintActive(s({ editor: 'pattern' })));
+  // One row for Paint and for Turn, so the tool picked stays picked.
+  const g = openGroup('pattern', s());
+  assert.equal(g.mode, 'paint');
+  assert.equal(openGroup('pattern', s({ paintTurn: true })).mode, 'turn');
+  assert.equal(openGroup('pattern', s({ paintTurn: true })).key, g.key);
+  assert.deepEqual(paint.setMode('turn'), { paintTurn: true });
+  assert.deepEqual(ids(toolsFor('pattern', s())), ['paintMore', 'paintStroke', 'paintSize', 'paintSoft', 'paintStrength', 'paintReset']);
+  // A fade has no brush to size.
+  assert.deepEqual(ids(toolsFor('pattern', s({ brush: { ...brush, stroke: 'fade' } }))), ['paintMore', 'paintStroke', 'paintStrength', 'paintReset']);
+  const tool = (id) => toolsFor('pattern', s()).find((t) => t.id === id);
+  assert.ok(toolsFor('pattern', s()).every((t) => t.view || t.kind === 'action'));
+  assert.equal(tool('paintSize').value(s()), '30 mm');
+  assert.equal(tool('paintSize').setView(52, s()).brush.sizeMm, 52);
+  assert.equal(tool('paintSize').setView(500, s()).brush.sizeMm, 120);
+  assert.equal(tool('paintSoft').setView(25, s()).brush.soft, 0.25);
+  assert.equal(tool('paintStrength').setView(1, s()).brush.strength, 0.05);
+  assert.equal(tool('paintMore').chooseView('more', s()).brush.more, true);
+  assert.equal(tool('paintStroke').chooseView('around', s()).brush.stroke, 'around');
+  assert.equal(brushOf(s({ brush: { ...brush, stroke: 'line' } })).stroke, 'line');
+  // The brush on a short pot is never more than half its height.
+  const short = normaliseDesign({ ...d, form: { ...d.form, height: 40 } });
+  assert.equal(tool('paintSize').dial(state(short, { step: 'pattern', brush })).max, 20);
+  // Reset has something to do only once something is painted.
+  assert.equal(tool('paintReset').enabled(s()), false);
+  assert.equal(hasPaint(d), false);
+  const wall = wallOf(d);
+  assert.equal(wall.before, null);
+  assert.equal(wall.heightMm, d.form.height);
+  assert.ok(wall.perimeterAt(0.5) > 100);
 });

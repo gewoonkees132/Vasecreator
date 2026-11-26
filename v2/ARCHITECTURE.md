@@ -31,6 +31,8 @@ Still open:
 - **Printer profile (D4).** The generic gantry values are a draft that hasn't been tested on a printer. The app labels it that way.
 - **Deploy routine (§14).** Decided: deploys run automatically from `main` (owner, 2026-11-24). Merging into `main` publishes; the swap waits on branch `t3/v2-swap` by the owner's choice until a real Android phone check (D3).
 
+**Painting the Pattern on the pot (D79–D87) is built**, not yet checked on a real phone: a black-and-white overlay over the whole wall that says how strongly the Pattern shows at each spot, painted in the 3D view with a brush. The design is in [`docs/design/v2-paint-brush.md`](../docs/design/v2-paint-brush.md); the contracts are under "Paint" below.
+
 ## Rules for every module
 
 - Plain JavaScript ES modules, no build step, no framework. JSDoc types where they help. Two-space indent, single quotes, semicolons, `const` by default. Comments explain why, not what.
@@ -50,15 +52,17 @@ v2/
     math.js patterns.js surface.js      deterministic maths, the Pattern's bitmap recipe, the Fade's shapes
     bitmap.js                           the 2D editor's operations on a bitmap tile (D45, D46)
     layer-pattern.js                    the Pattern: a bead-scale bitmap, one row per layer, one cell per node (D35–D43)
+    paint.js                            the paint: the overlay's cells and text, and the brush's strokes (D79–D87)
     design.js profile.js plan.js        the design document, r(z) of the profile curve, footprint outlines
     toolpath.js checks.js               buildToolpath, buildSkirt, KIND, RAMP_IN_LAYERS; ISSUE, designChecks, printChecks
     printer.js gcode.js engine.js       the gantry profile; writeGcode, planRefills, GcodeError; the facade
     cad.js                              CAD export: writeDxf, buildSolid, writeStl (issue #7)
-  worker/ render/ store/                engine.worker.js client.js · beads.js handles.js gizmos.js · store.js db.js assets.js
+  worker/ render/ store/                engine.worker.js client.js · beads.js handles.js gizmos.js paint.js · store.js db.js assets.js
   ui/                   controls.js steps.js swatch.js topbar.js chips.js size-fit.js history.js designs.js designs-tip.js print.js
                         pattern-editor.js (the 2D editor) press-label.js icons.js (icon buttons, D49) image-swatch.js design-file.js pattern-actions.js
                         my-patterns.js (Save's name form and the delete confirmation, D48)
                         rules.js (the warning rules the warnings card sets, D44)
+                        paint.js (Paint mode and the brush, shared by the Pattern section, the dock and main.js)
                         dock.js dock-tools.js dial.js   (the phone dock, mobile stage)
   ui/sections/          shape, curve, points, morph (Shape) · pattern (Pattern) · layers · base
   library/              layer-patterns.json (the starter Patterns), presets.json
@@ -71,7 +75,7 @@ v2/
 The shape is the one in `library/presets.json` (design §13). `core/design.js` owns it:
 
 ```js
-export const DESIGN_SCHEMA = 'vasecreator/design', DESIGN_VERSION = 5, MIN_KNOTS = 2, MAX_KNOTS = 12, INTERPS, FOOTPRINTS, SEAM_POSITIONS, INNER_WALLS;
+export const DESIGN_SCHEMA = 'vasecreator/design', DESIGN_VERSION = 6, MIN_KNOTS = 2, MAX_KNOTS = 12, INTERPS, FOOTPRINTS, SEAM_POSITIONS, INNER_WALLS;
 export const LIMITS = { … }                    // { min, max, step } per field, keyed by JSON field name (below)
 export function defaultDesign(): Design        // a copy of the "Classic vase" preset named 'Design 1' (a test keeps them equal)
 export function normaliseDesign(json): Design  // new object: fills defaults, clamps, sorts knots, snaps tile heights, migrates;
@@ -153,6 +157,11 @@ PreviewResult = {            // the typed arrays are transferred, never copied
   bounds: { min: [x,y,z], max: [x,y,z] },  // centreline
   profileLine: Float32Array, // r,z pairs of the evaluated profile, about 1 mm apart plus every knot (handle overlay)
   seamLine: Float32Array,    // x,y,z per wall layer at its start point (seam marker)
+  wallGrid: {                // the plain wall (no Pattern) as a coarse grid, for painting on the pot (see "Paint")
+    around, up,              // WALL_GRID: 96 steps round, 64 up; positions holds (up + 1) × around points, row 0 at z 0
+    heightMm, reachMm,       // the pot's height; how far the beads reach out of the centreline (half a bead + the Pattern's most)
+    positions: Float32Array, // x,y,z of the centreline at u = c / around, z = heightMm · r / up
+  },
   pattern: null | {          // the Pattern's density readout (D40), null without a Pattern that prints
     nodes, columns, rows, repeats, pointsPerLayer,   // nodes per layer, and the points per layer in its range
     spacingMinMm, spacingMaxMm, clamped,             // node spacing on the narrowest and widest layer; density held at the cap
@@ -412,6 +421,23 @@ Design JSON additions (made in version 2; both fields are optional and `normalis
   - The Pattern step has a Slant part: Slant, plus *Different on each facet* and To when the Morph is Facets. On the phone it is the dock tools `slant`, `slantFacets` and `slantTo`.
   - `slantText` and `slantAngle` in `ui/pattern-actions.js` write the readout.
 - **Sits (D78).** `pattern.sits` is one of `PATTERN_SITS` (`'centre'`, `'inset'`, `'offset'`; anything else is `'centre'`). `createLayerPattern` adds minus the drawing's highest cell (inset) or minus its lowest (offset) to every cell before the depth and the Fade, so the plain wall lies on the Pattern's outside or inside. `SITS_OPTIONS` and `SITS_NOTES` in `ui/dock-tools.js` serve the dock's *Sits* tool and the Pattern section's toggle; saved Patterns carry it in their `settings`.
+
+## Paint (docs/design/v2-paint-brush.md, D79–D87)
+
+- **The overlay.** `design.pattern.paint` is `null` (white everywhere: the Pattern in full, the default, left out of files by `compactDesign`) or `{ cells: "<text>" }`. `core/paint.js` owns it:
+  - `PAINT_AROUND` (128) columns round the pot by `PAINT_UP` (96) rows over the full height, a byte a cell, 255 white (the Pattern as set) to 0 black (the plain wall). Cell (c, r) is a sample at u = (c + ½) / PAINT_AROUND, v = (r + ½) / PAINT_UP: u is the outline's own position (it follows the twist), v the height as a share of the pot's, row 0 at the bottom.
+  - The text is the cells run-length packed and then base64. `encodePaint(cells)` → `{ cells } | null` (null when all white), `decodePaint(paint)` → `Uint8Array | null`, `normalisePaint(paint)` (what `normaliseDesign` keeps; anything unreadable, or all white, is null), `paintAt(cells, u, v)` → 0–1, bilinear, wrapping round and held at the ends.
+  - It is fixed to the pot, not to the Pattern's grid: density, drawing, bead, layer height and From / To change under it, a height change stretches it, and it does not follow the Slant. Switching drawings keeps it; *None* drops it with the Pattern; a saved Pattern never carries it.
+- **The engine.** `createLayerPattern` multiplies every node's displacement, the sit included, by `paintAt` at (j / N, the layer's middle height / H). Nothing else changes; a design without paint builds the same toolpath as before.
+- **The brush** (`core/paint.js`, pure, tested). A stroke builds a picture of how much each cell was touched (0–1, the most it got) and the overlay is the one from before the stroke combined with it, so a stroke never goes past its Strength: `composite(before, touched, strength, more)` (Less takes `strength × touched` of what is there, More adds that share of what is missing; a touched cell moves a level at least, so a weak brush reaches black and white).
+  - `stamp(touched, u, v, ru, rv, soft)` (round on the wall, radii as shares of the way round and of the height, `brushRadii(sizeMm, perimeterMm, heightMm)`), `segment` (a drag, the short way round, no gaps), `band` (level, all round), `ramp` (by height, all round).
+  - `createStroke(brush, { before, heightMm, perimeterAt })` → `{ to(u, v), lift(), cells() }` runs one stroke: *free* joins up, *line* is redrawn from the press each move, *around* bands the heights passed, *fade* ramps from the press height to the pointer's.
+  - `BRUSH_LIMITS`, `BRUSH_DEFAULTS` (free, Less, 30 mm, 50 % soft, 100 %), `PAINT_STROKES`, `maxBrushMm(heightMm)` (half the pot's height at most).
+- **The view.** `view.paint` (Paint mode asked for), `view.paintTurn` (the Paint · Turn switch at Turn) and `view.brush` (`{ stroke, more, sizeMm, soft, strength }`) last the session and never reach history; the brush used last is kept in `localStorage` (`vc2.brush`). `ui/paint.js` (no DOM): `paintActive(state)` (asked for, in the Pattern step, with a Pattern, the 2D editor closed), `setPaintMode`, `brushOf`, `brushPatch(state, patch)` → a view patch, `setBrush`, `brushSizeMm`, `hasPaint`, `resetPaint(store)` (one step, *Reset paint*), `wallOf(design)` (the overlay as it is, the height, and the plain form's way round at a height), and the option lists and notes.
+- **The renderer** (`render/beads.js`). From `result.wallGrid` it builds the wall surface: the plain wall's outer face, faces outwards, (u, v) as texture coordinates. Unseen, it is what a pointer hits: `pickWall(clientX, clientY)` → `{ u, v, point } | null` (null beside the pot and on its inside). In Paint mode it shows: `setPaintVisible(on)`, `setPaint(cells | null, { fromV, toV })` (a dark wash, clear where white, fainter outside the Pattern's range; drawn a little nearer in depth so raised beads don't cut into it) and `setBrushMark({ u, v, ru, rv, band? } | null)` (the brush's ring). Thumbnails never show it.
+- **The pointer** (`render/paint.js`). `createPaintInput(renderer, { active, brush, wall, onStroke(cells), onEnd(), onCancel(before) })` → `{ painting, refresh(), dispose() }`. Its listeners sit on the canvas' parent in the capture phase, so a press that starts on the pot is kept from OrbitControls and paints; a press beside the pot, a modifier key, the other buttons and the wheel move the view as always. A second finger takes the stroke back (`onCancel`) and the first finger is handed to OrbitControls as a new press, so two fingers turn and zoom. Strokes use the coalesced pointer positions and reach the store once a frame.
+- **main.js.** `onStroke` is `store.change('Painted pattern', …)` and `onEnd` one `store.commit()`, so a stroke is one history step. `applyPaint()` (on design and view changes) ends Paint mode when it no longer applies (and closes the dock's Paint row), feeds the wash from the design, hides the Pattern's bracket while painting and sets `#scene.is-painting` (the cursor).
+- **UI.** The Pattern step has a *Paint* part after Fade (`ui/sections/pattern.js`): *Paint on the pot*, the Paint · Turn switch, Less · More, the stroke, Size, Soft edge, Strength and *Reset paint*. On the phone it is the dock's `paint` tool, a `group` (`ui/dock-tools.js`): picking it applies its `open` view patch (Paint mode on), Back its `close`; its `modes` are the Paint · Turn switch, pinned beside Back (`pinModes`), and one row of tools serves both (`sharedTools`). Its tools are `view: true` (a dial's `setView(v, state)`, an option's `chooseView(v, state)`, each a view patch) and one `action` (Reset: `run(store)`, `enabled(state)`).
 
 ## CAD export (issue #7)
 

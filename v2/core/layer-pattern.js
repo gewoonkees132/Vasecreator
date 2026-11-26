@@ -30,6 +30,11 @@
 // of it. The Pattern is what moves, by the same share of the depth on every
 // node (and with the Fade); the pot's shape and base stay where they are.
 //
+// The paint (D79, core/paint.js) is a black-and-white overlay over the whole
+// wall, fixed to the pot: every node's displacement, the sit included, is
+// multiplied by it at the node's place round the pot and its layer's middle
+// height. White is the Pattern as set, black the plain wall.
+//
 // Density (D40) is the node spacing around, set as a spacing in mm (measured
 // on the narrowest layer in the range; the repeats are whole, so the spacing
 // shown is recomputed from them) or as points per layer (a whole number of
@@ -48,6 +53,7 @@ import { createProfile } from './profile.js';
 import { createPlan } from './plan.js';
 import { wholePairs } from './base-infill.js';
 import { FACETS_MAP, facetShare } from './morph.js';
+import { decodePaint, paintAt } from './paint.js';
 
 /** The Fade's shapes (D42, D54). */
 export const FADE_SHAPES = BLEND_SHAPES;
@@ -276,6 +282,9 @@ export function createLayerPattern(design, library, wall) {
   const slanted = perFacet ? slant.cells !== 0 || slant.toCells !== 0 : slant.cells !== 0;
   const h = design.layers.layerHeightMm;
   const mod = (a, b) => ((a % b) + b) % b;
+  // The paint (D79): null is white everywhere.
+  const paint = decodePaint(p.paint);
+  const H = design.form.height;
 
   // Node displacements per layer. Wall points alternate between their own
   // layer and the one below (the checks), so two layers are kept.
@@ -306,6 +315,10 @@ export function createLayerPattern(design, library, wall) {
         column = mod(j - shift, columns);
       }
       v[j] = p.depthMm * (grid[offset + column] + sit) * f;
+    }
+    if (paint) {
+      const height = zMid / H;
+      for (let j = 0; j < N; j++) v[j] *= paintAt(paint, j / N, height);
     }
     // Where two facets meet, their drawings, moved by different amounts, can
     // leave a lone cell standing out of or sunk into both neighbours: a spike
@@ -434,6 +447,7 @@ export function newPattern(design, drawing) {
     softenCells: 0,
     slant: { ...NO_SLANT },
     sits: 'centre',
+    paint: null,
   };
 }
 

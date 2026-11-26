@@ -5,7 +5,7 @@
 ; Bead width 8.000 mm, layer height 5.000 mm
 ;FLAVOR:Marlin
 ;LAYER_COUNT:42
-; design: {"schema":"vasecreator/design","version":5,"units":"mm","meta":{"id":"preset:bud-vase@1","name":"Bud vase","description":"A small round bulb under a long, slim neck that flares at the lip."},"form":{"height":210,"profile":{"interp":"catmullRomCentripetal","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":30},{"z":40,"r":44},{"z":118,"r":24},{"z":188,"r":23},{"z":210,"r":28}]},"plan":{"footprint":"circle","depthRatio":1,"cornerRounding":0},"twist":{"degrees":0}},"layers":{"beadWidthMm":8,"layerHeightMm":5,"seam":{"rampPoints":4,"position":"hidden","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.7,"curveRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":0}},"finish":{"walls":1,"wallSpacingMm":7.2,"innerWall":"smooth"}}
+; design: {"schema":"vasecreator/design","version":6,"units":"mm","meta":{"id":"preset:bud-vase@1","name":"Bud vase","description":"A small round bulb under a long, slim neck that flares at the lip."},"form":{"height":210,"profile":{"interp":"catmullRomCentripetal","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":30},{"z":40,"r":44},{"z":118,"r":24},{"z":188,"r":23},{"z":210,"r":28}]},"plan":{"footprint":"circle","depthRatio":1,"cornerRounding":0},"twist":{"degrees":0}},"layers":{"beadWidthMm":8,"layerHeightMm":5,"seam":{"rampPoints":4,"position":"hidden","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.7,"curveRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":0}},"finish":{"walls":1,"wallSpacingMm":7.2,"innerWall":"smooth"}}
 G21
 G90
 M83

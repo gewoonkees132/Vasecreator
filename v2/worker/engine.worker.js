@@ -22,7 +22,7 @@ const images = new Map();
 let pending = null;
 let scheduled = false;
 
-const transfers = (r) => [r.positions.buffer, r.kinds.buffer, r.issues.buffer, r.profileLine.buffer, r.seamLine.buffer];
+const transfers = (r) => [r.positions.buffer, r.kinds.buffer, r.issues.buffer, r.profileLine.buffer, r.seamLine.buffer, r.wallGrid.positions.buffer];
 
 function fail(id, error) {
   self.postMessage({ id, error: error?.message ?? String(error), name: error?.name ?? 'Error' });

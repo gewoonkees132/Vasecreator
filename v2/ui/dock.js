@@ -106,9 +106,11 @@ export function mountDock(el, ctx, frame) {
     onInput: (v) => {
       const t = tool;
       if (t?.kind !== 'dial') return;
-      store.change(dialLabel(t), (d) => t.set(d, v, store.state, env));
+      // A view tool (the brush) sets the view: nothing for history.
+      if (t.view) store.setView(t.setView(v, store.state));
+      else store.change(dialLabel(t), (d) => t.set(d, v, store.state, env));
     },
-    onCommit: () => store.commit(),
+    onCommit: () => { if (!tool?.view) store.commit(); },
   });
   const dialLabel = (t) => t.dial(store.state, env).label;
 
@@ -159,7 +161,18 @@ export function mountDock(el, ctx, frame) {
   const hintBtnLabel = h('span');
   const hintBtn = h('button', { type: 'button', class: 'btn dock-hint-btn' }, [hintBtnLabel]);
   hintBtn.insertAdjacentHTML('beforeend', SHEET_ICON);
-  hintBtn.addEventListener('click', (e) => { if (tool?.part) frame.openSheet(tool.part, { focus: e.detail === 0 }); });
+  hintBtn.addEventListener('click', (e) => {
+    if (tool?.kind === 'action') tool.run(store);
+    else if (tool?.part) frame.openSheet(tool.part, { focus: e.detail === 0 });
+  });
+  // An action's button does its one thing here; a sheet's opens the sheet and says so with the chevron.
+  function showHint(t, state) {
+    setText(hintText, safeText(() => t.hint(state, env)));
+    setText(hintBtnLabel, t.action || 'Open');
+    const action = t.kind === 'action';
+    hintBtn.lastElementChild.style.display = action ? 'none' : '';
+    hintBtn.disabled = action && !!t.enabled && !t.enabled(state);
+  }
   const hintBox = h('div', { class: 'dock-hint' }, [hintText, hintBtn]);
 
   // ---------- The carousel's tiles (M9) ----------
@@ -314,7 +327,8 @@ export function mountDock(el, ctx, frame) {
   back.innerHTML = BACK_ICON;
   back.addEventListener('click', () => {
     const step = store.state.view.step;
-    store.setView({ tools: { ...(store.state.view.tools || {}), [step]: null } });
+    const g = openGroup(step, store.state);
+    store.setView({ ...(g?.tool.close || {}), tools: { ...(store.state.view.tools || {}), [step]: null } });
   });
   const modes = h('div', { class: 'dock-modes', role: 'group' });
   lead.append(modes);
@@ -327,6 +341,9 @@ export function mountDock(el, ctx, frame) {
     labelIcon(back, `Back to the ${t.back} tools`);
     if (modesKey !== t.id) {
       modesKey = t.id;
+      // A switch that must stay in sight (Paint · Turn, D86) sits beside Back; otherwise it scrolls with the tools.
+      if (t.pinModes) back.after(lead);
+      else toolRow.prepend(lead);
       modes.setAttribute('aria-label', t.modesLabel || toolName(t, state));
       modes.replaceChildren(...t.modes.map((m) => {
         const b = h('button', { type: 'button', class: 'dock-mode', text: m.label, 'aria-pressed': 'false' });
@@ -356,7 +373,9 @@ export function mountDock(el, ctx, frame) {
   function pick(t) {
     const step = store.state.view.step;
     const g = openGroup(step, store.state);
-    store.setView({ tools: { ...(store.state.view.tools || {}), [g ? g.key : step]: t.id } });
+    // A group brings its own view state as it opens (Paint mode, D85).
+    const opens = !g && t.kind === 'group' ? t.open : null;
+    store.setView({ ...(opens || {}), tools: { ...(store.state.view.tools || {}), [g ? g.key : step]: t.id } });
   }
 
   tabs.addEventListener('keydown', (e) => {
@@ -452,9 +471,8 @@ export function mountDock(el, ctx, frame) {
       const selected = renderDrawings(state);
       adjust.replaceChildren(drawings);
       requestAnimationFrame(() => keepInView(drawings, selected));
-    } else if (t.kind === 'sheet') {
-      hintText.textContent = safeText(() => t.hint(state, env));
-      hintBtnLabel.textContent = t.action || 'Open';
+    } else if (t.kind === 'sheet' || t.kind === 'action') {
+      showHint(t, state);
       adjust.replaceChildren(hintBox);
     }
     adjust.setAttribute('aria-labelledby', chips.get(t.id)?.btn.id || '');
@@ -482,8 +500,8 @@ export function mountDock(el, ctx, frame) {
       const before = drawings.querySelector('[aria-pressed="true"]');
       const selected = renderDrawings(state);
       if (selected !== before) keepInView(drawings, selected);
-    } else if (t.kind === 'sheet') {
-      setText(hintText, safeText(() => t.hint(state, env)));
+    } else if (t.kind === 'sheet' || t.kind === 'action') {
+      showHint(t, state);
     }
   }
 
@@ -500,7 +518,8 @@ export function mountDock(el, ctx, frame) {
         b.dataset.value = o.value;
         b.addEventListener('click', () => {
           if (t.current(store.state) === o.value) return;
-          store.apply(t.label ? t.label(o.value) : toolName(t, store.state), (d) => t.choose(d, o.value));
+          if (t.view) store.setView(t.chooseView(o.value, store.state));
+          else store.apply(t.label ? t.label(o.value) : toolName(t, store.state), (d) => t.choose(d, o.value));
         });
         return b;
       }));

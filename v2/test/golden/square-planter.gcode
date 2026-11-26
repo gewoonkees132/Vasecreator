@@ -5,7 +5,7 @@
 ; Bead width 8.000 mm, layer height 5.000 mm
 ;FLAVOR:Marlin
 ;LAYER_COUNT:22
-; design: {"schema":"vasecreator/design","version":5,"units":"mm","meta":{"id":"preset:square-planter@1","name":"Square planter","description":"A flaring square planter with a drainage hole."},"form":{"height":110,"profile":{"interp":"linear","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":52,"corner":0},{"z":110,"r":62,"corner":0}]},"plan":{"footprint":"rectangle","depthRatio":1,"cornerRounding":0.3},"twist":{"degrees":0}},"layers":{"beadWidthMm":8,"layerHeightMm":5,"seam":{"rampPoints":4,"position":"hidden","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.7,"curveRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":20}},"finish":{"walls":1,"wallSpacingMm":7.2,"innerWall":"smooth"}}
+; design: {"schema":"vasecreator/design","version":6,"units":"mm","meta":{"id":"preset:square-planter@1","name":"Square planter","description":"A flaring square planter with a drainage hole."},"form":{"height":110,"profile":{"interp":"linear","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":52,"corner":0},{"z":110,"r":62,"corner":0}]},"plan":{"footprint":"rectangle","depthRatio":1,"cornerRounding":0.3},"twist":{"degrees":0}},"layers":{"beadWidthMm":8,"layerHeightMm":5,"seam":{"rampPoints":4,"position":"hidden","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.7,"curveRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":20}},"finish":{"walls":1,"wallSpacingMm":7.2,"innerWall":"smooth"}}
 G21
 G90
 M83

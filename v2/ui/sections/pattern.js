@@ -10,6 +10,8 @@
 //             readout "96 points per layer · 3.8–6.1 mm" (D40)
 //   From / to its own range (D41); the blue bracket on the pot sets it too
 //   Fade      Even, Fades up, Fades down, Middle or Diagonal, and an amount (D42)
+//   Paint     paint on the pot where the Pattern shows, more or less (D79–D87):
+//             Paint mode, the Paint · Turn switch, the brush and Reset
 //   Soften    a blur of 0–2 cells; 0 is crisp (D42)
 //   Slant     whole cells a layer the drawing moves by, so stripes lean (D70);
 //             with the Facets morph, a slant of its own on each facet (D71)
@@ -29,10 +31,14 @@ import { listPatterns, deletePattern, onPatternsChanged } from '../../store/asse
 import { createSaveForm, createDeleteConfirm } from '../my-patterns.js';
 import { labelIcon } from '../press-label.js';
 import { ICONS } from '../icons.js';
+import {
+  BRUSH_LIMITS, MORE_NOTES, MORE_OPTIONS, STROKE_NOTES, STROKE_OPTIONS, TURN_OPTIONS, brushOf, brushSizeMm, hasPaint, maxBrushMm,
+  paintActive, resetPaint, setBrush, setPaintMode,
+} from '../paint.js';
 
 const SWATCH = 52;
 const TARGET = { kind: 'pattern' };
-const PARTS = ['drawing', 'depth', 'density', 'range', 'fade', 'soften', 'slant'];
+const PARTS = ['drawing', 'depth', 'density', 'range', 'fade', 'paint', 'soften', 'slant'];
 const quarter = (v) => Math.round(v * 4) / 4;
 const SLANT = LIMITS.slantCells;
 const FADE_WHERE = { fadesUp: 'At the top: ', fadesDown: 'At the bottom: ', middle: 'Halfway up: ', diagonal: 'In the band: ' };
@@ -235,6 +241,40 @@ const section = {
     const fadeNote = h('p', { class: 'panel-note' });
     const fadeBox = h('div', { class: 'blend-settings' }, [fade.el, fadeNote, amount.el]);
 
+    // ---- Paint (D79–D87): the brush lives in the view, the paint in the design ----
+    const paintOn = toggle({ label: 'Paint on the pot', value: false, onChange: (v) => setPaintMode(store, v) });
+    const paintTurn = segmented({
+      label: 'A drag on the pot', options: TURN_OPTIONS, value: 'paint',
+      onChange: (v) => store.setView({ paintTurn: v === 'turn' }),
+    });
+    const paintMore = segmented({
+      label: 'Brush', options: MORE_OPTIONS, value: 'less',
+      onChange: (v) => setBrush(store, { more: v === 'more' }),
+    });
+    const paintStroke = segmented({
+      label: 'Stroke', options: STROKE_OPTIONS, value: 'free',
+      onChange: (v) => setBrush(store, { stroke: v }),
+    });
+    const strokeNote = h('p', { class: 'panel-note' });
+    const brushSize = slider({
+      label: 'Size', unit: 'mm', ...BRUSH_LIMITS.sizeMm, snap: 2, decimals: 0, value: 30,
+      onInput: (v) => setBrush(store, { sizeMm: v }), onCommit: () => {},
+    });
+    const brushSoft = slider({
+      label: 'Soft edge', unit: '%', min: 0, max: 100, step: 5, snap: 5, decimals: 0, value: 50,
+      onInput: (v) => setBrush(store, { soft: v / 100 }), onCommit: () => {},
+    });
+    const brushStrength = slider({
+      label: 'Strength', unit: '%', min: 5, max: 100, step: 5, snap: 5, decimals: 0, value: 100,
+      onInput: (v) => setBrush(store, { strength: v / 100 }), onCommit: () => {},
+    });
+    const paintReset = h('button', { type: 'button', class: 'btn btn-secondary', text: 'Reset paint' });
+    paintReset.addEventListener('click', () => resetPaint(store));
+    const resetRow = h('div', { class: 'nf' }, [h('span', { class: 'nf-label', text: 'Painted' }), paintReset]);
+    const paintNote = h('p', { class: 'panel-note' });
+    const brushBox = h('div', { class: 'paint-brush' }, [paintTurn.el, paintMore.el, paintStroke.el, strokeNote, brushSize.el, brushSoft.el, brushStrength.el]);
+    const paintBox = h('div', { class: 'slot-settings paint-settings' }, [paintOn.el, paintNote, brushBox, resetRow]);
+
     // ---- Soften ----
     const soften = slider({
       label: 'Soften', unit: 'cells', min: 0, max: 2, step: 0.05, snap: 0.25, decimals: 2, value: 0, info: '',
@@ -267,9 +307,10 @@ const section = {
     densityBox.dataset.part = 'density';
     rangeBox.dataset.part = 'range';
     fadeBox.dataset.part = 'fade';
+    paintBox.dataset.part = 'paint';
     soften.el.dataset.part = 'soften';
     slantBox.dataset.part = 'slant';
-    el.append(strip, saveForm.el, confirm.el, mineMsg, editorMsg, about, depth.el, sitsBox, densityBox, rangeBox, fadeBox, soften.el, slantBox);
+    el.append(strip, saveForm.el, confirm.el, mineMsg, editorMsg, about, depth.el, sitsBox, densityBox, rangeBox, fadeBox, paintBox, soften.el, slantBox);
 
     // A saved Pattern: its tile applies it in one tap (D48), and × on its corner deletes it.
     function mineTile(e) {
@@ -364,6 +405,28 @@ const section = {
         diagonal: 'A band without the Pattern winds once round the pot.',
       }[p.fade.shape] ?? '';
 
+      const painting = paintActive(state);
+      const brush = brushOf(state);
+      const painted = hasPaint(d);
+      paintOn.set(painting);
+      brushBox.hidden = !painting;
+      paintNote.textContent = painting
+        ? 'Drag on the pot to paint. Drag beside it, or use two fingers, to turn it.'
+        : 'Paint on the pot where the Pattern shows: take it away in places, or bring it back.';
+      paintTurn.set(state.view.paintTurn ? 'turn' : 'paint');
+      paintMore.set(brush.more ? 'more' : 'less');
+      paintStroke.set(brush.stroke);
+      strokeNote.textContent = `${STROKE_NOTES[brush.stroke] ?? ''} ${MORE_NOTES[brush.more ? 'more' : 'less']}`;
+      const fadeStroke = brush.stroke === 'fade';
+      brushSize.el.hidden = fadeStroke;
+      brushSoft.el.hidden = fadeStroke;
+      brushSize.setLimits({ max: maxBrushMm(d.form.height) });
+      brushSize.set(brushSizeMm(state));
+      brushSoft.set(Math.round(brush.soft * 100));
+      brushStrength.set(Math.round(brush.strength * 100));
+      paintReset.disabled = !painted;
+      resetRow.firstChild.textContent = painted ? 'Painted' : 'Nothing painted';
+
       soften.set(p.softenCells);
       soften.setInfo(softenText(p.softenCells, r));
 
@@ -388,7 +451,7 @@ const section = {
       destroy() {
         offPatterns?.();
         offResult?.();
-        for (const c of [depth, spacing, points, from, to, amount, soften, slant, perFacet, slantTo]) c.destroy?.();
+        for (const c of [depth, spacing, points, from, to, amount, soften, slant, perFacet, slantTo, brushSize, brushSoft, brushStrength]) c.destroy?.();
         el.replaceChildren();
       },
     };

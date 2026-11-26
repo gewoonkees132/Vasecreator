@@ -27,6 +27,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { PAINT_AROUND, PAINT_UP, PAINT_SIZE } from '../core/paint.js';
 
 /**
  * Geometry level of detail: sides around the bead cross-section and ring
@@ -83,6 +84,54 @@ const COLOR_WARNING = '#e0a100';
 const COLOR_ERROR = '#d64545';
 // Dashed and lighter than the solid profile line, so the two never read as one (C13).
 const COLOR_SEAM = 'rgb(93,138,139)';
+/** The paint's wash over the beads where the Pattern is taken away, and the brush's ring (D87). */
+const COLOR_PAINT_TINT = 'rgb(18,47,45)';
+const COLOR_PAINT_RING = 'rgb(38,120,210)';
+/** How far the wall surface lies outside the plain wall's beads, mm. */
+const WALL_CLEARANCE = 0.3;
+/** How much nearer than the Pattern's reach the wall surface is drawn, mm, so the beads never cut into the wash. */
+const WALL_DEPTH_SLACK = 2;
+
+// The wall surface (paint and brush mark): clear where the overlay is white,
+// darker the blacker it is, and fainter outside the Pattern's range, where
+// the paint is kept but has nothing to act on. It lies on the plain wall's
+// outer face, so it keeps the pot's outline, and is drawn uBias mm nearer in
+// depth only, so the Pattern's raised beads don't poke through the wash.
+const WALL_VERT = /* glsl */`
+uniform float uBias;
+varying vec2 vUv;
+void main() {
+  vUv = uv;
+  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  gl_Position = projectionMatrix * mv;
+  vec4 nearer = projectionMatrix * vec4(mv.xy, mv.z + uBias, 1.0);
+  gl_Position.z = nearer.z / nearer.w * gl_Position.w;
+}`;
+const WALL_FRAG = /* glsl */`
+uniform sampler2D uPaint;
+uniform vec2 uRange;
+uniform vec3 uTint;
+uniform vec3 uRing;
+uniform vec4 uBrush;
+uniform float uBand;
+varying vec2 vUv;
+void main() {
+  float paint = texture2D(uPaint, vUv).r;
+  float inRange = step(uRange.x, vUv.y) * step(vUv.y, uRange.y);
+  float alpha = (1.0 - paint) * mix(0.16, 0.42, inRange);
+  vec3 color = uTint;
+  if (uBrush.z > 0.0) {
+    float du = fract(vUv.x - uBrush.x + 0.5) - 0.5;
+    float dv = (vUv.y - uBrush.y) / uBrush.w;
+    float d = uBand > 0.5 ? abs(dv) : length(vec2(du / uBrush.z, dv));
+    float w = max(fwidth(d) * 1.5, 1e-4);
+    float ring = 1.0 - smoothstep(0.0, w, abs(d - 1.0));
+    color = mix(color, uRing, ring);
+    alpha = max(alpha, ring * 0.95);
+  }
+  if (alpha < 0.004) discard;
+  gl_FragColor = vec4(color, alpha);
+}`;
 
 /**
  * The light rig, by angle around the pot from the camera (degrees, positive
@@ -374,6 +423,35 @@ export class BeadRenderer {
     this._seam.visible = false;
     this._scene.add(this._seam);
 
+    // The plain wall as a surface just outside the beads (result.wallGrid):
+    // unseen, it is what a pointer hits when painting (pickWall); in Paint
+    // mode it shows the paint as a dark wash and the brush as a ring (D86, D87).
+    this._paintData = new Uint8Array(PAINT_SIZE).fill(255);
+    this._paintTexture = new THREE.DataTexture(this._paintData, PAINT_AROUND, PAINT_UP, THREE.RedFormat, THREE.UnsignedByteType);
+    this._paintTexture.wrapS = THREE.RepeatWrapping;
+    this._paintTexture.wrapT = THREE.ClampToEdgeWrapping;
+    this._paintTexture.magFilter = this._paintTexture.minFilter = THREE.LinearFilter;
+    this._paintTexture.needsUpdate = true;
+    this._wallUniforms = {
+      uPaint: { value: this._paintTexture },
+      uRange: { value: new THREE.Vector2(0, 1) },
+      uTint: { value: new THREE.Color(COLOR_PAINT_TINT) },
+      uRing: { value: new THREE.Color(COLOR_PAINT_RING) },
+      uBrush: { value: new THREE.Vector4(0, 0, 0, 0) },
+      uBand: { value: 0 },
+      uBias: { value: WALL_DEPTH_SLACK },
+    };
+    this._wall = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.ShaderMaterial({
+      uniforms: this._wallUniforms, vertexShader: WALL_VERT, fragmentShader: WALL_FRAG,
+      transparent: true, depthWrite: false, side: THREE.FrontSide, toneMapped: false,
+    }));
+    this._wall.frustumCulled = false;
+    this._wall.visible = false;
+    this._wall.renderOrder = 2;
+    this._wallReady = false;
+    this._paintVisible = false;
+    this._scene.add(this._wall);
+
     this._raycaster = new THREE.Raycaster();
     this._ndc = new THREE.Vector2();
     this._v = new THREE.Vector3();
@@ -436,6 +514,7 @@ export class BeadRenderer {
       this._bounds = outerBounds(result);
       placeShadow(this._shadow, this._bounds);
       this._buildSeam(result);
+      this._buildWall(result.wallGrid);
       if (!this._everFitted) {
         this._everFitted = true;
         this.fitCamera();
@@ -444,8 +523,65 @@ export class BeadRenderer {
       this._bounds = null;
       this._shadow.visible = false;
       this._seam.visible = false;
+      this._wallReady = false;
+      this._wall.visible = false;
     }
     this.requestRender();
+  }
+
+  /**
+   * Shows the paint on the pot, or hides it (Paint mode, D87). Hidden, the
+   * wall can still be picked.
+   * @param {boolean} visible
+   */
+  setPaintVisible(visible) {
+    this._paintVisible = !!visible;
+    this._wall.visible = this._paintVisible && this._wallReady;
+    this.requestRender();
+  }
+
+  /**
+   * The overlay to show (core/paint.js): PAINT_AROUND × PAINT_UP cells, row 0
+   * at the bottom; null is white. The cells are copied.
+   * @param {Uint8Array | null} cells
+   * @param {{ fromV?: number, toV?: number }} [range] the Pattern's range as shares of the height; outside it the wash is fainter
+   */
+  setPaint(cells, { fromV = 0, toV = 1 } = {}) {
+    if (cells && cells.length === PAINT_SIZE) this._paintData.set(cells);
+    else this._paintData.fill(255);
+    this._paintTexture.needsUpdate = true;
+    this._wallUniforms.uRange.value.set(fromV, toV);
+    if (this._wall.visible) this.requestRender();
+  }
+
+  /**
+   * The brush's ring on the wall, or none.
+   * @param {{ u: number, v: number, ru: number, rv: number, band?: boolean } | null} mark
+   *   its middle and its radii as shares of the way round and of the height; band: a level band instead of a ring
+   */
+  setBrushMark(mark) {
+    const b = this._wallUniforms.uBrush.value;
+    const had = b.z > 0;
+    if (mark && mark.ru > 0 && mark.rv > 0) b.set(mark.u, mark.v, mark.ru, mark.rv);
+    else b.set(0, 0, 0, 0);
+    this._wallUniforms.uBand.value = mark?.band ? 1 : 0;
+    if (this._wall.visible && (had || b.z > 0)) this.requestRender();
+  }
+
+  /**
+   * The spot on the outside of the wall under a pointer: its place round the
+   * pot and its height as a share of the pot's, or null beside the pot and
+   * on its inside.
+   * @param {number} clientX
+   * @param {number} clientY
+   * @returns {{ u: number, v: number, point: THREE.Vector3 } | null}
+   */
+  pickWall(clientX, clientY) {
+    if (!this._wallReady) return null;
+    this.rayFromClient(clientX, clientY, this._pickRay ||= new THREE.Ray());
+    const hit = this._raycaster.intersectObject(this._wall, false)[0];
+    if (!hit?.uv) return null;
+    return { u: hit.uv.x - Math.floor(hit.uv.x), v: Math.min(Math.max(hit.uv.y, 0), 1), point: hit.point };
   }
 
   /**
@@ -637,7 +773,7 @@ export class BeadRenderer {
     // anything else can draw.
     const saved = {
       geometry: this._mesh.geometry, visible: this._mesh.visible, bead: this._uniforms.uBead.value.clone(),
-      halfPx: this._uniforms.uHalfPx.value.clone(), mask: this._uniforms.uMask.value, seam: this._seam.visible, bed: this._bedGroup.visible,
+      halfPx: this._uniforms.uHalfPx.value.clone(), mask: this._uniforms.uMask.value, seam: this._seam.visible, bed: this._bedGroup.visible, wall: this._wall.visible,
       shadow: { visible: this._shadow.visible, position: this._shadow.position.clone(), scale: this._shadow.scale.clone() },
       target: r.getRenderTarget(),
     };
@@ -650,6 +786,7 @@ export class BeadRenderer {
       this._uniforms.uHalfPx.value.set(size / 2, size / 2);
       this._seam.visible = false;
       this._bedGroup.visible = false;
+      this._wall.visible = false;
       placeShadow(this._shadow, bounds);
       r.setRenderTarget(this._thumbHdr);
       r.clear();
@@ -663,6 +800,7 @@ export class BeadRenderer {
       this._uniforms.uMask.value = saved.mask;
       this._seam.visible = saved.seam;
       this._bedGroup.visible = saved.bed;
+      this._wall.visible = saved.wall;
       this._shadow.visible = saved.shadow.visible;
       this._shadow.position.copy(saved.shadow.position);
       this._shadow.scale.copy(saved.shadow.scale);
@@ -693,6 +831,9 @@ export class BeadRenderer {
     this._shadow.material.dispose();
     this._seam.geometry.dispose();
     this._seam.material.dispose();
+    this._wall.geometry.dispose();
+    this._wall.material.dispose();
+    this._paintTexture.dispose();
     this._envTexture?.dispose();
     this._pmrem?.dispose();
     this._thumbHdr?.dispose();
@@ -808,6 +949,76 @@ export class BeadRenderer {
     this._seam.geometry.setAttribute('position', new THREE.BufferAttribute(out, 3));
     this._seam.computeLineDistances();
     this._seam.visible = this._seamVisible;
+  }
+
+  /**
+   * The wall surface from the engine's grid of the plain wall: every point
+   * moved out to the plain wall's outer face, a column repeated to close the ring, and (u, v)
+   * as texture coordinates. Faces point outwards, so only the outside of the
+   * wall is hit and drawn.
+   */
+  _buildWall(grid) {
+    const ok = grid && grid.around >= 3 && grid.up >= 1 && grid.positions?.length === (grid.up + 1) * grid.around * 3;
+    this._wallReady = !!ok;
+    this._wall.visible = this._paintVisible && this._wallReady;
+    if (!ok) return;
+    const { around, up, positions } = grid;
+    const cols = around + 1;
+    const count = (up + 1) * cols;
+    let g = this._wall.geometry;
+    if (g.userData.key !== `${around}x${up}`) {
+      g.dispose();
+      g = this._wall.geometry = new THREE.BufferGeometry();
+      g.userData.key = `${around}x${up}`;
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3));
+      const uv = new Float32Array(count * 2);
+      for (let r = 0; r <= up; r++) {
+        for (let c = 0; c < cols; c++) {
+          uv[(r * cols + c) * 2] = c / around;
+          uv[(r * cols + c) * 2 + 1] = r / up;
+        }
+      }
+      g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+      g.userData.ccw = null;
+    }
+    const pos = g.getAttribute('position');
+    const out = pos.array;
+    const half = this._uniforms.uBead.value.x / 2;
+    const push = half + WALL_CLEARANCE;
+    this._wallUniforms.uBias.value = Math.max(0, (grid.reachMm > 0 ? grid.reachMm : 0) - half) + WALL_DEPTH_SLACK;
+    for (let r = 0; r <= up; r++) {
+      for (let c = 0; c < cols; c++) {
+        const s = (r * around + (c % around)) * 3;
+        const d = (r * cols + c) * 3;
+        const x = positions[s], y = positions[s + 1];
+        const len = Math.hypot(x, y) || 1;
+        out[d] = x + (x / len) * push;
+        out[d + 1] = y + (y / len) * push;
+        out[d + 2] = positions[s + 2];
+      }
+    }
+    pos.needsUpdate = true;
+    // Which way round u runs (the bottom ring's signed area) decides the winding.
+    let area = 0;
+    for (let c = 0; c < around; c++) {
+      const a = c * 3, b = ((c + 1) % around) * 3;
+      area += positions[a] * positions[b + 1] - positions[b] * positions[a + 1];
+    }
+    const ccw = area >= 0;
+    if (g.userData.ccw !== ccw) {
+      g.userData.ccw = ccw;
+      const index = new Uint16Array(up * around * 6);
+      let o = 0;
+      for (let r = 0; r < up; r++) {
+        for (let c = 0; c < around; c++) {
+          const p00 = r * cols + c, p01 = p00 + 1, p10 = p00 + cols, p11 = p10 + 1;
+          if (ccw) { index[o++] = p00; index[o++] = p01; index[o++] = p11; index[o++] = p00; index[o++] = p11; index[o++] = p10; }
+          else { index[o++] = p00; index[o++] = p11; index[o++] = p01; index[o++] = p00; index[o++] = p10; index[o++] = p11; }
+        }
+      }
+      g.setIndex(new THREE.BufferAttribute(index, 1));
+    }
+    g.computeBoundingSphere();
   }
 
   _initEnvironment() {

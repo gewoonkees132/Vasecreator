@@ -7,9 +7,18 @@
 //   options   a choice: options, current(state), choose(draft, v)
 //   drawings  the Pattern's carousel: the starter Patterns, None and your own (§3.8)
 //   sheet     a hint and a button that opens the settings sheet at `part`
+//   action    a hint and a button that does one thing: run(store), enabled(state)
 //   group     a tool that opens a row of its own: `modes` (a toggle at the
-//             front of the row), mode(state) and tools per mode. No step has
-//             one since the Detailed morph went (D63).
+//             front of the row), mode(state), setMode(value) → a view patch,
+//             and tools per mode (`sharedTools`: the same row for every
+//             mode; `pinModes`: the toggle stays put beside Back while the
+//             tools scroll). `open` and `close` are view patches applied when the
+//             row opens and when Back leaves it. The Pattern's Paint is one
+//             (D85): its toggle is the Paint · Turn switch.
+//
+// A tool with `view: true` sets the view, not the design (the brush): a dial
+// has setView(v, state) and an options tool chooseView(v, state), each
+// returning a view patch; nothing lands in history.
 //
 // env is { library }: the tools that need the libraries (the Pattern's
 // density readout) read them from it.
@@ -26,6 +35,10 @@ import { curveType } from './sections/curve.js';
 import morph from './sections/morph.js';
 import { findLayerEntry, readoutOf, densityText, softenText, slantText, densityLimits } from './pattern-actions.js';
 import { FACETS_MAP } from '../core/morph.js';
+import {
+  MORE_NOTES, MORE_OPTIONS, STROKE_NOTES, STROKE_OPTIONS, TURN_OPTIONS, brushOf, brushPatch, brushSizeMm, brushText, hasPaint, maxBrushMm,
+  resetPaint,
+} from './paint.js';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 const fmt = (v, decimals = 1) => {
@@ -95,6 +108,71 @@ const deepest = (d) => Math.floor(DEPTH_BEADS.max * d.layers.beadWidthMm * 100) 
 const facetsOn = (s) => s.design.form.morph?.map === FACETS_MAP;
 const eachFacet = (s) => facetsOn(s) && !!pat(s).slant?.perFacet;
 const quarter = (v) => Math.round(Math.min(Math.max(v, LIMITS.slantCells.min), LIMITS.slantCells.max) * 4) / 4;
+
+// ---------- Paint (D79–D87): the brush, set in the view ----------
+
+const brush = (s) => brushOf(s);
+const PAINT_TOOLS = [
+  {
+    id: 'paintMore', name: 'Brush', kind: 'options', view: true,
+    options: MORE_OPTIONS,
+    current: (s) => (brush(s).more ? 'more' : 'less'),
+    value: (s) => (brush(s).more ? 'More' : 'Less'),
+    note: (s) => MORE_NOTES[brush(s).more ? 'more' : 'less'],
+    chooseView: (v, s) => brushPatch(s, { more: v === 'more' }),
+  },
+  {
+    id: 'paintStroke', name: 'Stroke', kind: 'options', view: true,
+    options: STROKE_OPTIONS,
+    current: (s) => brush(s).stroke,
+    value: (s) => STROKE_OPTIONS.find((o) => o.value === brush(s).stroke)?.label ?? 'Free',
+    note: (s) => STROKE_NOTES[brush(s).stroke],
+    chooseView: (v, s) => brushPatch(s, { stroke: v }),
+  },
+  {
+    id: 'paintSize', name: 'Size', kind: 'dial', view: true,
+    applies: (s) => brush(s).stroke !== 'fade',
+    value: (s) => brushText.size(s),
+    dial: (s) => ({ label: 'Brush size', unit: 'mm', min: 4, max: maxBrushMm(s.design.form.height), step: 1, decimals: 0, value: brushSizeMm(s), note: 'The brush’s width on the wall' }),
+    setView: (v, s) => brushPatch(s, { sizeMm: v }),
+  },
+  {
+    id: 'paintSoft', name: 'Soft edge', kind: 'dial', view: true,
+    applies: (s) => brush(s).stroke !== 'fade',
+    value: (s) => brushText.soft(s),
+    dial: (s) => ({ label: 'Soft edge', unit: '%', min: 0, max: 100, step: 5, decimals: 0, value: Math.round(brush(s).soft * 100), note: '0 % is a hard edge' }),
+    setView: (v, s) => brushPatch(s, { soft: v / 100 }),
+  },
+  {
+    id: 'paintStrength', name: 'Strength', kind: 'dial', view: true,
+    value: (s) => brushText.strength(s),
+    dial: (s) => ({ label: 'Strength', unit: '%', min: 5, max: 100, step: 5, decimals: 0, value: Math.round(brush(s).strength * 100), note: 'The most one stroke changes' }),
+    setView: (v, s) => brushPatch(s, { strength: v / 100 }),
+  },
+  {
+    id: 'paintReset', name: 'Reset', kind: 'action',
+    value: (s) => (hasPaint(s.design) ? 'Painted' : 'Nothing'),
+    hint: (s) => (hasPaint(s.design) ? 'Puts the Pattern back in full everywhere.' : 'Nothing is painted yet.'),
+    action: 'Reset paint',
+    enabled: (s) => hasPaint(s.design),
+    run: (store) => resetPaint(store),
+  },
+];
+
+const PAINT_TOOL = {
+  id: 'paint', name: 'Paint', kind: 'group', back: 'Pattern',
+  applies: (s) => !!s.design.pattern,
+  value: (s) => (hasPaint(s.design) ? 'Painted' : 'On the pot'),
+  modes: TURN_OPTIONS, modesLabel: 'A drag on the pot',
+  mode: (s) => (s.view.paintTurn ? 'turn' : 'paint'),
+  setMode: (v) => ({ paintTurn: v === 'turn' }),
+  // The switch stays in sight while the tools scroll (D86).
+  pinModes: true,
+  sharedTools: true,
+  tools: { paint: PAINT_TOOLS, turn: PAINT_TOOLS },
+  open: { paint: true, paintTurn: false },
+  close: { paint: false, paintTurn: false },
+};
 
 const PATTERN_TOOLS = [
   { id: 'drawing', name: 'Pattern', kind: 'drawings' },
@@ -197,6 +275,7 @@ const PATTERN_TOOLS = [
     },
     set: (d, v) => { if (d.pattern) d.pattern.fade.amount = Math.min(1, Math.max(0, v / 100)); },
   },
+  PAINT_TOOL,
   {
     id: 'soften', name: 'Soften', kind: 'dial',
     applies: hasPattern,
@@ -411,7 +490,7 @@ export function openGroup(stepId, state) {
   const tool = (DOCK_TOOLS[stepId] || []).find((t) => t.id === id && t.kind === 'group');
   if (!tool || !applies(state)(tool)) return null;
   const mode = tool.mode(state);
-  return { tool, mode, key: `${stepId}.${tool.id}.${mode}` };
+  return { tool, mode, key: `${stepId}.${tool.id}.${tool.sharedTools ? 'all' : mode}` };
 }
 
 /**

@@ -349,14 +349,14 @@ test('normalising a Pattern clamps it to the bead and the pot', () => {
   assert.deepEqual(n.pattern, {
     // The standard 8 mm bead (D62): two thirds of it deep at most (D61), a quarter of it apart at least (D64).
     drawing: 'lib:knit@1', depthMm: (2 / 3) * 8, density: { by: 'spacing', spacingMm: 2, points: 1600 },
-    fromMm: 0, toMm: 170, fade: { shape: 'even', amount: 1 }, softenCells: 0, slant: { cells: 0, perFacet: false, toCells: 0 }, sits: 'centre',
+    fromMm: 0, toMm: 170, fade: { shape: 'even', amount: 1 }, softenCells: 0, slant: { cells: 0, perFacet: false, toCells: 0 }, sits: 'centre', paint: null,
   });
   // Missing fields get the defaults: two thirds of a bead deep (D61), 2 mm
   // apart (D64), from 8 mm to 10 mm below the rim.
   const bare = normaliseDesign({ ...d, pattern: { drawing: 'lib:knit@1' } }).pattern;
   assert.deepEqual(bare, {
     drawing: 'lib:knit@1', depthMm: (2 / 3) * 8, density: { by: 'spacing', spacingMm: 2, points: 96 },
-    fromMm: 8, toMm: 160, fade: { shape: 'even', amount: 1 }, softenCells: 0, slant: { cells: 0, perFacet: false, toCells: 0 }, sits: 'centre',
+    fromMm: 8, toMm: 160, fade: { shape: 'even', amount: 1 }, softenCells: 0, slant: { cells: 0, perFacet: false, toCells: 0 }, sits: 'centre', paint: null,
   });
   const plain = normaliseDesign(cylinder({ height: 80 }));
   assert.deepEqual(defaultPatternRange(plain), { fromMm: 8, toMm: 70 });

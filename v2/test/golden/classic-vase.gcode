@@ -5,7 +5,7 @@
 ; Bead width 8.000 mm, layer height 5.000 mm
 ;FLAVOR:Marlin
 ;LAYER_COUNT:34
-; design: {"schema":"vasecreator/design","version":5,"units":"mm","meta":{"id":"preset:classic-vase@1","name":"Classic vase","description":"A rounded body with a slim neck."},"form":{"height":170,"profile":{"interp":"catmullRomCentripetal","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":42},{"z":55,"r":62},{"z":128,"r":31},{"z":170,"r":39}]},"plan":{"footprint":"circle","depthRatio":1,"cornerRounding":0},"twist":{"degrees":0}},"layers":{"beadWidthMm":8,"layerHeightMm":5,"seam":{"rampPoints":4,"position":"hidden","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.7,"curveRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":0}},"finish":{"walls":1,"wallSpacingMm":7.2,"innerWall":"smooth"}}
+; design: {"schema":"vasecreator/design","version":6,"units":"mm","meta":{"id":"preset:classic-vase@1","name":"Classic vase","description":"A rounded body with a slim neck."},"form":{"height":170,"profile":{"interp":"catmullRomCentripetal","tension":0.5,"cornerMm":0,"knots":[{"z":0,"r":42},{"z":55,"r":62},{"z":128,"r":31},{"z":170,"r":39}]},"plan":{"footprint":"circle","depthRatio":1,"cornerRounding":0},"twist":{"degrees":0}},"layers":{"beadWidthMm":8,"layerHeightMm":5,"seam":{"rampPoints":4,"position":"hidden","angleDeg":0}},"rules":{"overhangLimitDeg":45,"supportRatio":0.7,"curveRatio":0.5},"base":{"layers":2,"pattern":"spiral","spacingRatio":0.9,"outline":true,"hole":{"diameter":0}},"finish":{"walls":1,"wallSpacingMm":7.2,"innerWall":"smooth"}}
 G21
 G90
 M83
