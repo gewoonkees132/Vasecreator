@@ -20,9 +20,13 @@
 // twist.
 //
 // The Pattern is per layer and per node (D37, D39): inside its range every
-// layer has the same N nodes at u = j / N, plus the same k points in every
-// gap, so a layer has N·(k + 1) points and every (k + 1)-th is a node. The
-// seam sits on a node there, so the ramp never cuts a cell in half. It is
+// layer has the same N nodes at u = j / N and, crisp, no other points (D58):
+// the outline, the Morph and the Detailed morph are followed at the nodes.
+// With Soften on, the same k points sit in every gap (D59), so a layer has
+// N·(k + 1) points and every (k + 1)-th is a node. The seam sits on a node
+// there and the ramp runs over whole cells: the climb is shared out evenly
+// over those points, and so is the change from the row below to the layer's
+// own, so the path never steps sideways at the seam (D60). It is
 // exempt from the overhang and the two-layers-per-bump rules and has its own
 // bead-support rule (D43).
 //
@@ -308,11 +312,13 @@ export function createWallModel(design, library, { images } = {}) {
    * (the Detailed morph plus P, the Pattern), radius the distance along the
    * unit outline (|unit| = unitLength), bare that radius without the Pattern
    * (for the overhang check, D43), narrow whether the minimum radius clamped it.
+   * `below` is the share of the Pattern still on the row of the layer below
+   * (the start of a layer, D60).
    */
-  function centrePoint(u, z, layer = layerAt(z)) {
+  function centrePoint(u, z, layer = layerAt(z), below = 0) {
     plan.unitPoint(u, unitXY);
     const unitLength = Math.sqrt(unitXY[0] * unitXY[0] + unitXY[1] * unitXY[1]);
-    const P = lp ? lp.at(layer, u) : 0;
+    const P = lp ? lp.at(layer, u, below) : 0;
     const D = detailAt(z, u) + P;
     let narrow = false;
     let base = profile.at(z);
@@ -351,15 +357,8 @@ export function createWallModel(design, library, { images } = {}) {
     /** Points per layer in the Pattern's range: N·(k + 1), the same on every layer there. */
     patternPoints: 0,
   };
-  if (lp) {
-    // k extra points in each gap, enough for the outline, the Morph and the
-    // Detailed morph on the layer that needs the most (§3.1, §3.2).
-    const N = lp.nodes;
-    let need = 0;
-    for (let i = lp.first; i <= lp.last; i++) need = Math.max(need, pointsNeeded(model, i * h, (i + 1) * h));
-    const k = Math.max(0, Math.min(Math.ceil(need / N) - 1, Math.floor(MAX_POINTS_PER_LAYER / N) - 1));
-    model.patternPoints = N * (k + 1);
-  }
+  // The nodes alone when crisp; with Soften the same extra points in each gap (D58, D59).
+  if (lp) model.patternPoints = lp.pointsPerLayer;
   return model;
 }
 
@@ -585,8 +584,8 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   // layers and the layer on top of them.
   let wx = 0, wy = 0, wIssue = 0, wNode = 0;
   const morphed = !!m.morph;
-  function wallPoint(u, z, checkOverhang, i) {
-    const c = m.centrePoint(u, z, i);
+  function wallPoint(u, z, checkOverhang, i, below = 0) {
+    const c = m.centrePoint(u, z, i, below);
     const { D, radius, bare, unitLength } = c;
     if (D < minD) minD = D;
     if (D > maxD) maxD = D;
@@ -628,8 +627,9 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   // per full turn. It starts `rise` below the layer top and climbs that much
   // over the seam ramp (rise 0: flat at the top). The first point is not
   // repeated when the path is already there; otherwise the move to it is
-  // `firstKind`.
-  function outerLoop(i, u0, u1, n, rise, kind, firstKind, checkOverhang) {
+  // `firstKind`. With `changeRow` the Pattern starts on the row of the layer
+  // below and changes to this layer's own over the same ramp (D60).
+  function outerLoop(i, u0, u1, n, rise, kind, firstKind, checkOverhang, changeRow = false) {
     const zTop = (i + 1) * h;
     const zLow = zTop - rise;
     const perimeter = profile.at(zTop) * plan.unitPerimeter;
@@ -637,14 +637,19 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
     const span = u1 - u0;
     const onGrid = !!lp && lp.inRange(i) && n <= MAX_POINTS_PER_LAYER;
     const count = onGrid ? gridPoints(u0, u1, n) : Math.max(1, Math.round(n * span));
+    // In the Pattern's range the ramp runs over whole cells, so the climb is
+    // shared out evenly over its points.
+    const rampCells = onGrid && rampLength > 0 ? Math.max(1, Math.round((rampLength * lp.nodes) / perimeter)) : 0;
+    const blend = changeRow && !!lp && (lp.inRange(i) || lp.inRange(i - 1));
     for (let j = 0; j <= count; j++) {
       const u = onGrid ? grid[j] : j === count ? u1 : u0 + (span * j) / count;
-      let z = zTop;
-      if (rise > 0) {
-        if (j === 0) z = zLow;
-        else if (rampLength > 0) z = zLow + rise * Math.min((onGrid ? u - u0 : (span * j) / count) * perimeter / rampLength, 1);
-      }
-      wallPoint(u, z, checkOverhang, i);
+      // How far up the ramp this point is: 0 at the start, 1 from its end on.
+      let ramp = 1;
+      if (j === 0) ramp = 0;
+      else if (rampCells > 0) ramp = Math.min(((u - u0) * lp.nodes) / rampCells, 1);
+      else if (rampLength > 0) ramp = Math.min((span * j) / count * perimeter / rampLength, 1);
+      const z = rise > 0 ? zLow + rise * ramp : zTop;
+      wallPoint(u, z, checkOverhang, i, blend ? 1 - ramp : 0);
       if (j === 0) {
         if (buf.at(wx, wy, z)) continue;
         buf.push(wx, wy, z, buf.n === 0 ? KIND.none : firstKind, wIssue, i, wNode);
@@ -658,13 +663,13 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   // of `kind` when the path is elsewhere (a seam that moved on, or a
   // connector out from the inner wall), nothing when it is already there.
   function stepOnto(i, u, z, kind, checkOverhang) {
-    wallPoint(u, z, checkOverhang, i);
+    wallPoint(u, z, checkOverhang, i, 1);
     if (buf.n > 0 && !buf.at(wx, wy, z)) buf.push(wx, wy, z, kind, wIssue, i, wNode);
   }
 
   // The seam marker of wall layer i: where the layer starts.
-  function markSeam(i, u, z) {
-    wallPoint(u, z, false, i);
+  function markSeam(i, u, z, below = 0) {
+    wallPoint(u, z, false, i, below);
     const k = 3 * (i - nb);
     seamLine[k] = wx;
     seamLine[k + 1] = wy;
@@ -801,9 +806,9 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       let ahead = uS - seams[i - 1];
       ahead -= Math.round(ahead);
       const u0 = ahead < 0 ? uS - ahead : uS;
-      markSeam(i, u0, i * h);
+      markSeam(i, u0, i * h, 1);
       stepOnto(i, u0, i * h, buf.lastKind() === KIND.inner ? KIND.connector : KIND.outer, true);
-      outerLoop(i, u0, uS + 1, n, rise, KIND.outer, KIND.none, true);
+      outerLoop(i, u0, uS + 1, n, rise, KIND.outer, KIND.none, true, true);
     }
     if (maxD - minD > maxGapMm) maxGapMm = maxD - minD;
     if (walls === 2) innerLoop(i, uS, n, minD, KIND.connector);

@@ -18,7 +18,7 @@ import { h, slider, numberField, segmented } from '../controls.js';
 import { DEPTH_BEADS, SPACING_BEADS } from '../../core/layer-pattern.js';
 import { BLEND_OPTIONS } from '../dock-tools.js';
 import {
-  findLayerEntry, layerMineEntries, pickLayerPattern, drawLayerEntry, readoutOf, densityText, densityLimits, setDensityFace,
+  findLayerEntry, layerMineEntries, pickLayerPattern, drawLayerEntry, readoutOf, densityText, softenText, wholeText, densityLimits, setDensityFace,
   openEditor, editableEntry, savableEntry, saveEntry, pickSavedPattern, targetKey, savedSpacingMm, drawsWith,
 } from '../pattern-actions.js';
 import { listPatterns, deletePattern, onPatternsChanged } from '../../store/assets.js';
@@ -180,7 +180,15 @@ const section = {
       onCommit: commit,
     });
     const readout = h('p', { class: 'panel-note density-readout', role: 'status' });
-    const densityBox = h('div', { class: 'pattern-density' }, [face.el, spacing.el, points.el, readout]);
+    // The whole pot's points, from the preview once it is of this design (D58).
+    const potPoints = h('p', { class: 'panel-note density-readout density-pot' });
+    const densityBox = h('div', { class: 'pattern-density' }, [face.el, spacing.el, points.el, readout, potPoints]);
+    const showPotPoints = (state) => {
+      const known = !!state.design.pattern && !!state.result && ctx.resultDesign?.() === state.design && !ctx.resultIsPlain?.();
+      potPoints.textContent = known ? `The whole pot: ${wholeText(state.result.pointCount)} points` : '';
+      potPoints.hidden = !known;
+    };
+    const offResult = store.subscribe((state, what) => { if (what.has('result') || what.has('design')) showPotPoints(state); });
 
     // ---- From / to ----
     const from = numberField({
@@ -299,6 +307,7 @@ const section = {
         points.set(r.nodes);
       }
       readout.textContent = r ? densityText(r) : '';
+      showPotPoints(state);
 
       from.set(p.fromMm);
       to.set(p.toMm);
@@ -319,7 +328,7 @@ const section = {
       }[p.fade.shape] ?? '';
 
       soften.set(p.softenCells);
-      soften.setInfo(p.softenCells > 0 ? 'Blurs each point into its neighbours; the drawing stays in, flat or out' : 'Crisp: what you draw is what prints');
+      soften.setInfo(softenText(p.softenCells, r));
     };
     update(store.state);
     refreshSaved();
@@ -329,6 +338,7 @@ const section = {
       update,
       destroy() {
         offPatterns?.();
+        offResult?.();
         for (const c of [depth, spacing, points, from, to, amount, soften]) c.destroy?.();
         el.replaceChildren();
       },

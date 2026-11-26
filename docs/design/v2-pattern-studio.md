@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Owner decisions D35–D57. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`), 5 (the *Next* and icon sweep, `2391041`) and 6 (saved patterns) are built on `t3/pattern-studio` (all pushed for the owner's review, up to slice 6, `e056938`). All six slices are built (§11, notes in §11.1–§11.6).
+- **Status:** Owner decisions D35–D60 (D58–D60 on 2026-11-26, after the owner saw the seam in Rhino; built, §11.7, not yet pushed). D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`), 5 (the *Next* and icon sweep, `2391041`) and 6 (saved patterns) are built on `t3/pattern-studio` (all pushed for the owner's review, up to slice 6, `e056938`). All six slices are built (§11, notes in §11.1–§11.6).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -102,6 +102,9 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 | D55 | **The editor has no *Cancel*.** *Done* (or Esc) keeps the edits; the design's undo takes a whole session back in one step, and the editor's own undo goes back edit by edit. | Owner (after slice 3, 2026-11-25) |
 | D56 | **Cells stay easy to hit.** A Detailed morph grid's cells keep their size on the wall, so adding columns widens the tile and lowers the repeats, which is allowed. On screen a cell is never smaller than a finger or a pointer hits easily (22 px on touch, 16 px with a mouse, on its short side); a tile that then runs past the grid's area moves instead. | Owner (after slice 3); sizes are the builder's |
 | D57 | **Pinch to zoom, and a cap that stays clickable.** Two fingers pinch and move the grid (Ctrl+wheel and the wheel on desktop). The editor draws a Pattern up to 24 × 24 cells and a Detailed morph grid up to 16 × 16; the `bitmap` format still holds 64 × 64 (D48), so a larger drawing from a file opens but can't grow. | Owner (after slice 3); the cap of 24 is the builder's |
+| D58 | **Crisp, a layer has only its cell points.** With Soften at 0 a layer in the Pattern's range has exactly `columns × repeats` points, one a cell, so the points stand one above the other from layer to layer. The outline, the Morph and the Detailed morph are followed at those points only; rectangle corners and fine relief get coarser there, and nothing is added to make up for it. | Owner (2026-11-26) |
+| D59 | **Soften adds points, and the readout counts them.** With Soften on, every gap between two cells gets the same number of extra points (the same on every layer, so they still line up), on a smooth curve through the softened cells. The Density readout shows the points per layer and the total over the Pattern's layers, and the whole pot's points under it; Soften says how many it adds. | Owner (2026-11-26); the smooth curve, "about half a bead apart" and the wording are the builder's |
+| D60 | **The seam never steps sideways, and is spread over whole points.** A layer starts on the point where the layer below ended. Its climb of one layer height is shared out evenly over a whole number of cells (the seam ramp length, rounded to cells: 15 mm at 3 mm cells is 5 points), and over the same points it changes from the row below to its own. | Owner (2026-11-26): "spread over multiple points, e.g. Z-height distributed over 4 points"; changing rows over the same points is the builder's |
 
 **What this revises:**
 - D16 (swatches from a bitmap generator) is now carried by D45 and D47.
@@ -123,15 +126,16 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 - **Rows are layers.** Row *k* of the tile prints on wall layer `(L − L₀ + k) mod rows`, where `L₀` is the first layer in the Pattern's range. In other words the tile starts at *From*, as drawn, and repeats upwards. Whether row 0 sits at the top or the bottom of the drawing is the builder's call; the drawing must read the same way up as the pot.
 - **Columns are nodes.** On a layer in the range there are `N = repeats × columns` nodes, evenly spaced by `u` (the same around-the-outline parameter the patterns use today, so the Pattern follows the twist). Node *j* uses column `j mod columns`.
 - **Displacement** at a node = `depth × value × fade × (soften applied)`, added radially like today's patterns.
-- **Between nodes the Pattern is linear.** If another term (the outline, Morph or Detailed morph) needs more points, the engine puts `k` extra points in each gap, so a layer has `N × (k + 1)` points. The Pattern's value at those points is interpolated in a straight line, so its zigzag is unchanged (D37).
+- **Crisp, the nodes are the layer's only points (D58).** The Pattern runs straight from node to node, so its zigzag is as drawn (D37), and the outline, the Morph and the Detailed morph are followed at the nodes.
+- **With Soften on, every gap gets the same `k` extra points (D59),** so a layer has `N × (k + 1)` points. `k` brings the points to about half a bead apart on the widest layer in the range. Those points sit on a smooth curve through the softened nodes (Catmull-Rom, wrapping round the pot).
 
 ### 3.2 Density (D40)
 
 - **What it sets:** the node spacing around, from **½ to 3 bead widths**. The default is 1 bead width.
 - **Snapping:** the spacing is measured on the **narrowest layer in the Pattern's From–To**. `repeats = floor(perimeterMin / (columns × spacing))`, at least 1, and the spacing shown is then recomputed from that whole number.
-- **Readout:** for example "96 points per layer · 3.8–6.1 mm". It shows the range from the narrowest to the widest layer.
+- **Readout:** for example "96 points per layer · 3.8–6.1 mm · 8,064 in all". It shows the points a layer has, the cell spacing from the narrowest to the widest layer, and the points over all the Pattern's layers (D58). With Soften on it names both: "60 cells, 300 points per layer · …" (D59). Under it, in the panel, "The whole pot: 35,020 points", from the preview.
 - **Two faces of one slider:** *Spacing* (mm) or *Points per layer* (a multiple of `columns`). Whichever face you set last is the one stored, and it stays fixed when the pot changes size.
-- **The point cap:** `N × (k + 1)` must stay within `MAX_POINTS_PER_LAYER` (1600, `core/toolpath.js`). If it doesn't, cut `k` first; if `N` alone is over the cap, clamp the density and show it in the readout.
+- **The point cap:** `N × (k + 1)` must stay within `MAX_POINTS_PER_LAYER` (1600, `core/toolpath.js`). If it doesn't, cut `k` first; if `N` alone is over the cap, clamp the density and show it in the readout. Crisp, `k` is 0 (D58).
 - **Rows never scale.** To make a drawing taller, the editor has a *Double rows* tool that repeats every row.
 
 ### 3.3 Depth (D38)
@@ -159,7 +163,8 @@ They are applied in this order to the drawn values, and they never change the dr
 
 ### 3.6 The toolpath (where the engine changes)
 
-- **`core/toolpath.js` `pointsAround`:** inside the Pattern's range a layer has exactly `N × (k + 1)` points, the same `N` on every layer. Outside it, today's rule applies.
+- **`core/toolpath.js` `pointsAround`:** inside the Pattern's range a layer has exactly `N × (k + 1)` points, the same `N` on every layer; `k` is 0 when crisp (D58, D59). Outside it, today's rule applies.
+- **The seam (D60).** A layer's first point is the last point of the layer below, on that layer's row. In the range the ramp runs over a whole number of cells, and over them the height and the row both change over evenly. The layer above the range leaves the last row over its own ramp, and the first layer comes in from the plain wall the same way.
 - **The node positions need a fixed starting point in `u`.** They can't start at the seam, because the seam moves (`seamPositions`), and that would shift the columns. The seam should snap to a node, so the ramp doesn't cut a cell in half. Builder's call.
 - **The wall evaluation** (around line 207–223 today: `surfaceWeights` × `evaluate`) gains the Pattern term per point, with the layer index known at every point. Layers are planar with a seam ramp, so the layer index is clear even on the ramp.
 - **The "deepest groove" calculations** that place the smooth inner wall (D27) and the hidden seam must include the Pattern's depth.
@@ -695,6 +700,27 @@ When all six slices are built, update `ARCHITECTURE.md` (Status and contracts) a
   - My patterns live in this browser, as saved designs do. A design file carries the drawings it uses, but My patterns has no file of its own.
   - The dock deletes nothing; deleting is in the sheet, as it was for the Detailed morph.
   - Design §9.3 still lists the overhang limit under *Layers & seam*. Slice 4 moved it to the warnings card, and only §9.2 and §9.6 were rewritten here.
+
+### 11.7 After the review: cell points, Soften's points and the seam (D58–D60)
+
+The owner exported a softened Pattern to Rhino and saw a sideways step at the seam on every layer where the row changed, and more points than the Density readout named.
+
+- **What was wrong.** A layer ended at the seam on its own row and the next began there on the next row: two points at one place, up to the full depth apart. Ribs (one row) never showed it. And a layer had `N × (k + 1)` points whatever Soften was, with `k` set by the outline, the Morph and the Detailed morph.
+- **`core/layer-pattern.js`.**
+  - `extraPoints(softenCells, nodes, perimeterMaxMm, beadWidthMm, maxNodes)` gives `k`: 0 when crisp, else enough for half a bead on the widest layer, within the cap.
+  - `patternLayout`, `patternReadout` and the Pattern itself report `extra` and `pointsPerLayer`; the readout also `points`, over all its layers.
+  - `at(layer, u, below = 0)` takes the share still on the row of the layer below. Between nodes it is straight when crisp and a Catmull-Rom curve with Soften on.
+- **`core/toolpath.js`.**
+  - `patternPoints` is the Pattern's `pointsPerLayer`; the loop over `pointsNeeded` is gone.
+  - `centrePoint(u, z, layer, below)` and `wallPoint` pass `below` on. `outerLoop` works out how far up the ramp a point is (in the range over `round(ramp length / cell spacing)` cells, at least 1) and uses it for the height and, with `changeRow`, for the row.
+  - `stepOnto` and the seam marker sit on the row below, so the path is already there and no bead is added.
+- **UI.** `densityText(r, { compact })`, `softenText(softenCells, r, { compact })` and `wholeText` in `ui/pattern-actions.js`. The Pattern step shows the whole pot's points under the readout once the preview is of this design (`ctx.resultDesign`); the dock's one-line notes use the compact texts, which fit a 390 px phone.
+- **Builder's calls.**
+  - With Soften on, the points between cells follow a smooth curve; on straight lines they would add nothing.
+  - The seam ramp keeps its length in mm (Layers & seam) and is rounded to whole cells in the range; there is no separate "points" setting.
+  - The rows change over across the ramp's points, so the first cells of a layer are a mix of two rows.
+  - Crisp, beads run from node to node, up to 3 bead widths apart on a wide belly (the bead-jump test allows the Pattern's own spacing).
+- **Tests.** 368 pass. `test/layer-pattern.test.js` gains the seam test and the Soften points test; the zigzag, taper, Fade and Soften tests look past the ramp.
 
 ---
 

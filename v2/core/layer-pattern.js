@@ -7,9 +7,16 @@
 // node, a single toolpath point. Every layer in the range has the same
 // N = repeats × columns nodes at u_j = j / N (u from 0, the outline's own
 // start, so the columns line up from layer to layer and follow the twist);
-// node j uses column j mod columns. Between nodes the Pattern runs straight,
-// so in·out·in·out is a zigzag (D37). It is added radially, after the
-// profile, the Morph and the Detailed morph.
+// node j uses column j mod columns. Crisp (Soften 0), the nodes are the
+// layer's only points (D58): they stand one above the other and the Pattern
+// runs straight between them, so in·out·in·out is a zigzag (D37). With Soften
+// on, every gap gets the same `extra` points, about half a bead apart, on a
+// smooth curve through the softened nodes (D59). It is added radially, after
+// the profile, the Morph and the Detailed morph.
+//
+// A layer starts where the one below ended, on that layer's row, and changes
+// to its own row over the seam ramp (D60): `at` takes the share of the row
+// below, so the path never steps sideways at the seam.
 //
 // Displacement at a node = depth × softened cell × fade:
 //   Soften (σ 0–2 cells, wrapping both ways) blurs the drawing first;
@@ -116,6 +123,22 @@ export function nodesAround(density, columns, perimeterMinMm, maxNodes) {
 }
 
 /**
+ * Points between two nodes (D58, D59): none when crisp, so a layer has its
+ * nodes alone; with Soften on, enough to space the points about half a bead
+ * apart on the widest layer, the same in every gap and on every layer.
+ * @param {number} softenCells
+ * @param {number} nodes
+ * @param {number} perimeterMaxMm the widest layer's perimeter in the range
+ * @param {number} beadWidthMm
+ * @param {number} maxNodes the most points a layer may have
+ */
+export function extraPoints(softenCells, nodes, perimeterMaxMm, beadWidthMm, maxNodes) {
+  if (!(softenCells > 0)) return 0;
+  const want = Math.ceil(perimeterMaxMm / nodes / (beadWidthMm / 2) - 1e-9) - 1;
+  return Math.max(0, Math.min(want, Math.floor(maxNodes / nodes) - 1));
+}
+
+/**
  * Which layers the Pattern prints on and how many nodes each gets (D40, D41):
  * the wall layers whose middle, (i + ½)·h, lies in From–To (never the base),
  * and N = repeats × columns from the density, measured on the narrowest of them.
@@ -127,7 +150,8 @@ export function nodesAround(density, columns, perimeterMinMm, maxNodes) {
 function patternLayout(design, recipe, { profile, unitPerimeter, layerCount, baseLayers, maxNodes }) {
   const p = design.pattern;
   const h = design.layers.layerHeightMm;
-  let first = Math.max(baseLayers, Math.ceil(p.fromMm / h - 0.5 - 1e-9));
+  const w = design.layers.beadWidthMm;
+  let first =Math.max(baseLayers, Math.ceil(p.fromMm / h - 0.5 - 1e-9));
   const last = Math.min(layerCount - 1, Math.floor(p.toMm / h - 0.5 + 1e-9));
   if (first > last) first = last + 1;
   const columns = recipe ? recipe.columns : 1;
@@ -141,8 +165,9 @@ function patternLayout(design, recipe, { profile, unitPerimeter, layerCount, bas
   }
   if (first > last) perimeterMin = perimeterMax = profile.at(design.form.height / 2) * unitPerimeter;
   const { repeats, nodes, clamped } = nodesAround(p.density, columns, perimeterMin, maxNodes);
+  const extra = extraPoints(p.softenCells, nodes, perimeterMax, w, maxNodes);
   return {
-    first, last, columns, rows, repeats, nodes, clamped,
+    first, last, columns, rows, repeats, nodes, clamped, extra, pointsPerLayer: nodes * (extra + 1),
     perimeterMinMm: perimeterMin, spacingMinMm: perimeterMin / nodes, spacingMaxMm: perimeterMax / nodes,
   };
 }
@@ -175,6 +200,8 @@ export function patternReadout(design, library) {
     columns: l.columns, rows: l.rows, repeats: l.repeats, nodes: l.nodes, clamped: l.clamped,
     spacingMinMm: l.spacingMinMm, spacingMaxMm: l.spacingMaxMm, perimeterMinMm: l.perimeterMinMm,
     layers: Math.max(0, l.last - l.first + 1),
+    // The nodes plus Soften's points between them, a layer and over all its layers.
+    extra: l.extra, pointsPerLayer: l.pointsPerLayer, points: l.pointsPerLayer * Math.max(0, l.last - l.first + 1),
   };
 }
 
@@ -188,7 +215,8 @@ export function patternReadout(design, library) {
  *   drawing: string, missing: boolean, active: boolean, recipe: object | null,
  *   columns: number, rows: number, repeats: number, nodes: number, clamped: boolean,
  *   first: number, last: number, depthMm: number, spacingMinMm: number, spacingMaxMm: number,
- *   inRange(layer: number): boolean, rowOf(layer: number): number, at(layer: number, u: number): number,
+ *   extra: number, pointsPerLayer: number,
+ *   inRange(layer: number): boolean, rowOf(layer: number): number, at(layer: number, u: number, below?: number): number,
  * }} null when the design has no Pattern
  */
 export function createLayerPattern(design, library, wall) {
@@ -196,7 +224,8 @@ export function createLayerPattern(design, library, wall) {
   if (!p) return null;
   const recipe = findDrawing(design, library);
   // The Pattern starts and stops sharply at its first and last layer.
-  const { first, last, columns, rows, repeats, nodes: N, clamped, spacingMinMm, spacingMaxMm } = patternLayout(design, recipe, wall);
+  const { first, last, columns, rows, repeats, nodes: N, clamped, extra, pointsPerLayer, spacingMinMm, spacingMaxMm } = patternLayout(design, recipe, wall);
+  const smooth = p.softenCells > 0;
   const active = !!recipe && p.depthMm > 0 && first <= last;
 
   const grid = recipe
@@ -227,8 +256,10 @@ export function createLayerPattern(design, library, wall) {
     return entry.values;
   }
 
-  /** The Pattern's radial push in mm on wall layer i at outline position u. */
-  function at(i, u) {
+  // Layer i's own row at u: on a node its value; between nodes a straight
+  // line when crisp, and with Soften a smooth curve through the nodes
+  // (Catmull-Rom, wrapping round the pot).
+  function own(i, u) {
     if (!inRange(i)) return 0;
     const v = nodesOf(i);
     const x = (u - Math.floor(u)) * N;
@@ -239,13 +270,31 @@ export function createLayerPattern(design, library, wall) {
     if (j >= N) j -= N;
     if (f === 0) return v[j];
     const next = j + 1 === N ? 0 : j + 1;
-    return v[j] + f * (v[next] - v[j]);
+    const a = v[j];
+    const b = v[next];
+    if (!smooth) return a + f * (b - a);
+    const before = v[j === 0 ? N - 1 : j - 1];
+    const after = v[next + 1 === N ? 0 : next + 1];
+    return a + 0.5 * f * (b - before + f * (2 * before - 5 * a + 4 * b - after + f * (3 * (a - b) + after - before)));
+  }
+
+  /**
+   * The Pattern's radial push in mm on wall layer i at outline position u.
+   * `below` (0–1) is the share still on the row of the layer below: a layer
+   * starts on that row and changes to its own over the seam ramp (D60). It
+   * also carries the last row onto the layer above the range, and a plain
+   * wall into the first.
+   */
+  function at(i, u, below = 0) {
+    if (below <= 0) return own(i, u);
+    if (below >= 1) return own(i - 1, u);
+    return (1 - below) * own(i, u) + below * own(i - 1, u);
   }
 
   return {
     drawing: p.drawing, missing: !recipe, active, recipe,
     columns, rows, repeats, nodes: N, clamped, first, last, depthMm: p.depthMm,
-    spacingMinMm, spacingMaxMm,
+    extra, pointsPerLayer, spacingMinMm, spacingMaxMm,
     inRange, rowOf, at,
   };
 }

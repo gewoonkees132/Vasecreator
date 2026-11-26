@@ -40,11 +40,13 @@ for (const [name, d, walls = 1] of variants) {
     for (let p = 0; p < tp.pointCount; p++) {
       for (let a = 0; a < 3; a++) assert.ok(Number.isFinite(tp.path[3 * p + a]));
     }
+    // A crisp Pattern's beads run from node to node (D58), further apart where the pot is wider.
+    const most = Math.max(2 * w, 1.2 * (tp.model.pattern?.spacingMaxMm ?? 0));
     for (let p = 1; p < tp.pointCount; p++) {
       assert.ok(tp.path[3 * p + 2] >= tp.path[3 * p - 1] - 1e-12, `z drops at point ${p}`);
       if (tp.kinds[p] !== KIND.none) {
         const d = distance(tp.path, p, p - 1);
-        assert.ok(d <= 2 * w, `bead ${p} (kind ${tp.kinds[p]}) jumps ${d.toFixed(2)} mm`);
+        assert.ok(d <= most, `bead ${p} (kind ${tp.kinds[p]}) jumps ${d.toFixed(2)} mm`);
       }
     }
     for (let k = 0; k < L; k++) {

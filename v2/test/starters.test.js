@@ -16,7 +16,7 @@ import { detailGate, detailWeights } from '../core/surface.js';
 import { createStore } from '../store/store.js';
 import { DOCK_TOOLS } from '../ui/dock-tools.js';
 import {
-  densityLimits, densityText, findLayerEntry, pickLayerPattern, setDensityFace, setLayerPattern,
+  densityLimits, densityText, softenText, findLayerEntry, pickLayerPattern, setDensityFace, setLayerPattern,
 } from '../ui/pattern-actions.js';
 import { shapeOnly } from '../ui/steps.js';
 import { cylinder, library, presets } from './support/fixtures.js';
@@ -123,16 +123,23 @@ test('the density readout shows the points per layer and the mm range, the same 
       const preview = computePreview(d, { library, printer }).pattern;
       for (const k of ['nodes', 'columns', 'rows', 'repeats', 'clamped']) assert.equal(r[k], preview[k], `${preset.meta.name} ${p.name} ${k}`);
       assert.ok(Math.abs(r.spacingMinMm - preview.spacingMinMm) < 1e-9 && Math.abs(r.spacingMaxMm - preview.spacingMaxMm) < 1e-9);
-      assert.match(densityText(r), /^\d+ points per layer · \d+\.\d–\d+\.\d mm$/);
+      assert.match(densityText(r), /^\d+ points per layer · \d+\.\d–\d+\.\d mm · [\d,]+ in all$/);
     }
   }
   // The Classic vase: the narrow neck sets the spacing, the belly is widest.
   const knit = patternReadout(withStarter(defaultPot(), 'lib:knit@1'), library);
-  assert.equal(densityText(knit), `${knit.nodes} points per layer · ${knit.spacingMinMm.toFixed(1)}–${knit.spacingMaxMm.toFixed(1)} mm`);
+  assert.equal(densityText(knit), `${knit.nodes} points per layer · ${knit.spacingMinMm.toFixed(1)}–${knit.spacingMaxMm.toFixed(1)} mm · ${(knit.nodes * knit.layers).toLocaleString('en-US')} in all`);
   assert.ok(knit.spacingMinMm >= 3 && knit.spacingMaxMm > 2 * knit.spacingMinMm - 1);
   // A cylinder has one spacing; the cap says so.
   const can = withStarter(cylinder({ height: 40, radius: 30 }), 'lib:seed@1');
-  assert.match(densityText(patternReadout(can, library)), /^\d+ points per layer · \d+\.\d mm apart$/);
+  assert.match(densityText(patternReadout(can, library)), /^\d+ points per layer · \d+\.\d mm apart · [\d,]+ in all$/);
+  // Soften adds points between the cells (D59): the readout names both, the dock's line the points.
+  const soft = patternReadout(normaliseDesign({ ...can, pattern: { ...can.pattern, softenCells: 0.5 } }), library);
+  assert.ok(soft.extra >= 1);
+  assert.equal(densityText(soft).split(' · ')[0], `${soft.nodes} cells, ${soft.pointsPerLayer} points per layer`);
+  assert.equal(densityText(soft, { compact: true }).split(' · ')[0], `${soft.pointsPerLayer} points per layer`);
+  assert.match(softenText(0.5, soft), /adds \d+ points? between cells: [\d,]+ more points/);
+  assert.match(softenText(0, patternReadout(can, library)), /^Crisp/);
   assert.match(densityText({ ...patternReadout(can, library), clamped: true }), / · the most a layer takes$/);
   assert.equal(MAX_NODES, MAX_POINTS_PER_LAYER);
   assert.equal(patternReadout(defaultPot(), library), null);

@@ -128,7 +128,7 @@ test('dock: the Pattern step shows the drawings, and every tool once there is a 
   d.pattern.fade.shape = 'diagonal';
   assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing', 'depth', 'density', 'from', 'to', 'fade', 'fadeAmount', 'soften']);
   const density = DOCK_TOOLS.pattern.find((t) => t.id === 'density');
-  assert.match(density.dial(s(), env).note, /^\d+ points per layer · \d+\.\d–\d+\.\d mm$/);
+  assert.match(density.dial(s(), env).note, /^\d+ points per layer · \d+\.\d–\d+\.\d mm · [\d,]+ in all$/);
   assert.equal(density.dial(s(), env).label, 'Spacing');
   d.pattern.density.by = 'points';
   const spec = density.dial(s(), env);

@@ -26,7 +26,7 @@ import { footprintAt, depthLocked } from './sections/shape.js';
 import { curveType } from './sections/curve.js';
 import morph from './sections/morph.js';
 import {
-  findEntry, textured, snapToLayers, findLayerEntry, readoutOf, densityText, densityLimits,
+  findEntry, textured, snapToLayers, findLayerEntry, readoutOf, densityText, softenText, densityLimits,
 } from './pattern-actions.js';
 
 const round1 = (v) => Math.round(v * 10) / 10;
@@ -215,7 +215,7 @@ const PATTERN_TOOLS = [
       const r = readoutOf(s.design, env?.library);
       if (!r) return { label: 'Density', unit: '', min: 0, max: 1, step: 1, decimals: 0, value: 0, disabled: true, note: 'The drawing isn’t available' };
       const lim = densityLimits(s.design, r);
-      const note = densityText(r);
+      const note = densityText(r, { compact: true });
       if (p.density.by === 'points') {
         return { label: 'Points per layer', unit: 'pts', ...lim.points, decimals: 0, value: r.nodes, note };
       }
@@ -281,9 +281,9 @@ const PATTERN_TOOLS = [
     id: 'soften', name: 'Soften', kind: 'dial',
     applies: hasPattern,
     value: (s) => (pat(s).softenCells > 0 ? fmt(pat(s).softenCells, 2) : 'Crisp'),
-    dial: (s) => ({
+    dial: (s, env) => ({
       label: 'Soften', unit: 'cells', ...L('softenCells', {}), step: 0.05, decimals: 2, value: pat(s).softenCells,
-      note: pat(s).softenCells > 0 ? 'Blurs each point into its neighbours; the drawing stays as it is' : 'Crisp: what you draw is what prints',
+      note: softenText(pat(s).softenCells, readoutOf(s.design, env?.library), { compact: true }),
     }),
     set: (d, v) => { if (d.pattern) d.pattern.softenCells = Math.min(2, Math.max(0, v)); },
   },

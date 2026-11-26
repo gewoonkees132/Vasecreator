@@ -9,7 +9,7 @@ import { designChecks } from '../core/checks.js';
 import { normalisePrinter } from '../core/printer.js';
 import { computePreview } from '../core/engine.js';
 import { createProfile } from '../core/profile.js';
-import { defaultPatternRange, fadeAt, nodesAround } from '../core/layer-pattern.js';
+import { defaultPatternRange, fadeAt, nodesAround, patternReadout } from '../core/layer-pattern.js';
 import { detailWeights } from '../core/surface.js';
 import { TILES, cylinder, library, linearDesign, presets, withPattern } from './support/fixtures.js';
 
@@ -39,8 +39,12 @@ function layerPoints(design, tp, i) {
   return out;
 }
 
-/** Checks a layer against a zigzag of ±depth: exact at every node, straight between. */
-function assertZigzag(points, N, depth, label) {
+/**
+ * Checks a layer against a zigzag of ±depth: exact at every node, straight
+ * between. Points before `fromU` only count as printed: the layer's start,
+ * where it changes over from the row below (D60).
+ */
+function assertZigzag(points, N, depth, label, fromU = 0) {
   const nodes = new Set();
   for (const { u, off } of points) {
     const x = u * N;
@@ -48,8 +52,9 @@ function assertZigzag(points, N, depth, label) {
     if (Math.abs(x - j) < 1e-6) {
       const node = j % N;
       nodes.add(node);
+      if (u < fromU - 1e-9) continue;
       assert.ok(Math.abs(off - (node % 2 ? -depth : depth)) < 1e-9, `${label}: node ${node} at ${off}`);
-    } else {
+    } else if (u >= fromU - 1e-9) {
       const j0 = Math.floor(x);
       const f = x - j0;
       const a = j0 % 2 ? -depth : depth;
@@ -68,12 +73,80 @@ test('a 2-column in/out tile prints as an exact zigzag at ± depth, node for nod
   assert.ok(Math.abs(lp.spacingMinMm - (TAU * 30) / 62) < 1e-9);
   // From 6 mm to 24 mm: the layers whose middles lie in between.
   assert.deepEqual([lp.first, lp.last], [4, 15]);
-  for (let i = lp.first; i <= lp.last; i++) assertZigzag(layerPoints(design, tp, i), 62, 0.75, `layer ${i}`);
+  // Crisp, a layer has its nodes and nothing else (D58).
+  assert.equal(tp.model.patternPoints, 62);
+  // The first layer comes in from the plain wall over the seam ramp: 15 mm, 5 whole cells.
+  for (let i = lp.first; i <= lp.last; i++) {
+    assertZigzag(layerPoints(design, tp, i), 62, 0.75, `layer ${i}`, i === lp.first ? 5 / 62 : 0);
+  }
   // Outside the range the wall is plain, and the base never has the Pattern.
   for (const i of [0, 1, 2, 3, 16, 19]) {
-    // Layer 16 starts with the step back in from the last row.
-    for (const { off } of layerPoints(design, tp, i).slice(i === 16 ? 1 : 0)) assert.ok(Math.abs(off) < 1e-9, `layer ${i}: ${off}`);
+    // Layer 16 leaves the last row over its seam ramp.
+    for (const { u, off } of layerPoints(design, tp, i)) {
+      if (i === 16 && u < 0.1) continue;
+      assert.ok(Math.abs(off) < 1e-9, `layer ${i}: ${off}`);
+    }
   }
+});
+
+test('the seam never steps sideways: a layer starts on the row below and changes over on the ramp', () => {
+  // The knit changes row every layer; the seam is fixed at u = 0, on a node.
+  // From above the ramp-in layers, which step up at the seam with no bead.
+  const { design, tp } = build(withPattern(cylinder({ height: 30, radius: 30 }), TILES.knit, { fromMm: 12, toMm: 27 }));
+  const lp = tp.model.pattern;
+  const h = design.layers.layerHeightMm;
+  const P = tp.path;
+  const cells = Math.round((design.layers.seam.rampLengthMm * lp.nodes) / (TAU * 30));
+  assert.ok(cells >= 2, 'the ramp spans several cells');
+  for (let i = lp.first; i <= lp.last + 1; i++) {
+    const p = tp.layerStarts[i];
+    // No bead goes sideways at the seam (it would be up to the 0.75 mm depth): the first move runs along the wall.
+    const step = Math.hypot(P[3 * p] - P[3 * p - 3], P[3 * p + 1] - P[3 * p - 2]);
+    assert.ok(step > 1, `layer ${i} starts with a step of ${step}`);
+    if (i > lp.last) continue;
+    // The climb is shared out evenly over the ramp's cells, then the layer runs flat.
+    for (let c = 1; c <= cells + 1; c++) {
+      const want = i * h + h * Math.min(c / cells, 1);
+      assert.ok(Math.abs(P[3 * (p + c - 1) + 2] - want) < 1e-9, `layer ${i}, cell ${c}`);
+    }
+    // Past the ramp the nodes are the layer's own row.
+    for (const { u, off } of layerPoints(design, tp, i)) {
+      const j = Math.round(u * lp.nodes) % lp.nodes;
+      if (j < cells) continue;
+      assert.ok(Math.abs(off - lp.at(i, j / lp.nodes)) < 1e-9, `layer ${i}, node ${j}`);
+    }
+  }
+});
+
+test('Soften adds the same points to every gap, on a smooth curve, and counts them', () => {
+  const crisp = build(withPattern(cylinder({ height: 30, radius: 30 }), TILES.knit));
+  const soft = build(withPattern(cylinder({ height: 30, radius: 30 }), TILES.knit, { softenCells: 0.5 }));
+  const lp = soft.tp.model.pattern;
+  assert.equal(crisp.tp.model.pattern.extra, 0);
+  assert.equal(lp.nodes, crisp.tp.model.pattern.nodes, 'Soften keeps the nodes');
+  // About 3 mm between nodes and a 3 mm bead: a point in between brings it to half a bead.
+  assert.ok(lp.extra >= 1);
+  assert.equal(soft.tp.model.patternPoints, lp.nodes * (lp.extra + 1));
+  for (let i = lp.first + 1; i <= lp.last; i++) {
+    assert.equal(soft.tp.layerStarts[i + 1] - soft.tp.layerStarts[i], lp.nodes * (lp.extra + 1), `layer ${i}`);
+  }
+  // The readout counts them, a layer and over the Pattern's layers.
+  const r = patternReadout(soft.design, library);
+  assert.equal(r.pointsPerLayer, lp.nodes * (lp.extra + 1));
+  assert.equal(r.points, r.pointsPerLayer * (lp.last - lp.first + 1));
+  assert.equal(patternReadout(crisp.design, library).pointsPerLayer, lp.nodes);
+  // The curve passes through the nodes and runs smoothly in between: halfway
+  // between two nodes it leaves the straight line where the wall turns.
+  const i = lp.first + 3;
+  let bent = 0;
+  for (let j = 0; j < lp.nodes; j++) {
+    const a = lp.at(i, j / lp.nodes);
+    const b = lp.at(i, (j + 1) / lp.nodes);
+    const mid = lp.at(i, (j + 0.5) / lp.nodes);
+    assert.ok(Math.abs(mid) <= lp.depthMm + 1e-9);
+    if (Math.abs(mid - (a + b) / 2) > 1e-4) bent++;
+  }
+  assert.ok(bent > 0, 'the points in between leave the straight line');
 });
 
 test('columns line up on a tapered pot, with the same point count on every layer', () => {
@@ -84,18 +157,16 @@ test('columns line up on a tapered pot, with the same point count on every layer
   // The spacing is measured on the narrowest layer in the range.
   const narrowest = createProfile(design.form.profile).at((lp.first + 1) * design.layers.layerHeightMm);
   assert.equal(lp.repeats, Math.floor((TAU * narrowest) / (2 * 3)));
+  // Crisp, the nodes are the only points, also where the pot is wider (D58).
   const n = tp.model.patternPoints;
-  assert.equal(n % lp.nodes, 0, 'every gap gets the same number of extra points');
-  // Enough points for the widest layer's bead spacing.
-  const widest = createProfile(design.form.profile).at((lp.last + 1) * design.layers.layerHeightMm);
-  assert.ok(n >= Math.ceil((TAU * widest) / (design.layers.beadWidthMm / 2)));
+  assert.equal(n, lp.nodes);
   const h = design.layers.layerHeightMm;
   assert.ok(lp.first >= design.base.layers + RAMP_IN_LAYERS);
   for (let i = lp.first; i <= lp.last; i++) {
     assert.equal(pointsAround(tp.model, i * h, (i + 1) * h).n, n, `layer ${i}`);
-    // The first layer adds one bead: the step out onto the Pattern at its sharp start.
-    assert.equal(tp.layerStarts[i + 1] - tp.layerStarts[i], i === lp.first ? n + 1 : n, `points on layer ${i}`);
-    assertZigzag(layerPoints(design, tp, i), lp.nodes, 0.75, `layer ${i}`);
+    assert.equal(tp.layerStarts[i + 1] - tp.layerStarts[i], n, `points on layer ${i}`);
+    // The first layer comes in from the plain wall over its seam ramp (D60).
+    assertZigzag(layerPoints(design, tp, i), lp.nodes, 0.75, `layer ${i}`, i === lp.first ? 0.2 : 0);
   }
   // Below the range the layers follow the bead spacing as before.
   assert.notEqual(pointsAround(tp.model, 2 * h, 3 * h).n, n);
@@ -156,15 +227,16 @@ test('Fade runs over From–To and never changes the drawing', () => {
     const nodeOff = (i, j) => layerPoints(design, tp, i).find((pt) => Math.abs(pt.u * lp.nodes - j) < 1e-6).off;
     return { design, lp, nodeOff };
   };
+  // Node 30 is across the pot from the seam, clear of the ramp.
   const up = run({ shape: 'fadesUp', amount: 1 });
-  assert.ok(Math.abs(up.nodeOff(up.lp.first, 2) - 0.75) < 1e-9, 'full at From');
-  assert.ok(Math.abs(up.nodeOff(up.lp.last, 2)) < 1e-9, 'gone at To');
+  assert.ok(Math.abs(up.nodeOff(up.lp.first, 30) - 0.75) < 1e-9, 'full at From');
+  assert.ok(Math.abs(up.nodeOff(up.lp.last, 30)) < 1e-9, 'gone at To');
   const down = run({ shape: 'fadesDown', amount: 0.5 });
-  assert.ok(Math.abs(down.nodeOff(down.lp.first, 2) - 0.375) < 1e-9, 'half at From');
-  assert.ok(Math.abs(down.nodeOff(down.lp.last, 2) - 0.75) < 1e-9, 'full at To');
+  assert.ok(Math.abs(down.nodeOff(down.lp.first, 30) - 0.375) < 1e-9, 'half at From');
+  assert.ok(Math.abs(down.nodeOff(down.lp.last, 30) - 0.75) < 1e-9, 'full at To');
   const middle = run({ shape: 'middle', amount: 1 });
-  assert.ok(Math.abs(middle.nodeOff(middle.lp.first, 2) - 0.75) < 1e-9);
-  assert.ok(Math.abs(middle.nodeOff(middle.lp.last, 2) - 0.75) < 1e-9);
+  assert.ok(Math.abs(middle.nodeOff(middle.lp.first, 30) - 0.75) < 1e-9);
+  assert.ok(Math.abs(middle.nodeOff(middle.lp.last, 30) - 0.75) < 1e-9);
   // Diagonal: a band without pattern that winds once round over From–To.
   assert.equal(fadeAt({ shape: 'diagonal', amount: 1 }, 0, 0.5), 0);
   assert.equal(fadeAt({ shape: 'diagonal', amount: 1 }, 0.25, 0.25), 0);
@@ -179,8 +251,9 @@ test('Soften blurs the cells, wrapping round the tile, and keeps the zigzag symm
   const lp = tp.model.pattern;
   const pts = layerPoints(design, tp, lp.first);
   const node = (j) => pts.find((pt) => Math.abs(pt.u * lp.nodes - j) < 1e-6).off;
-  assert.ok(node(0) > 0.05 && node(0) < 0.75, `${node(0)}`);
-  assert.ok(Math.abs(node(1) + node(0)) < 1e-6, 'the wrap keeps in and out the same depth');
+  // Away from the seam, where the first layer comes in from the plain wall.
+  assert.ok(node(30) > 0.05 && node(30) < 0.75, `${node(30)}`);
+  assert.ok(Math.abs(node(31) + node(30)) < 1e-6, 'the wrap keeps in and out the same depth');
   assert.equal(design.assets['user:tile'].recipe.cells, '+-');
 });
 
@@ -270,7 +343,7 @@ test('the preview reports the density readout', () => {
   const r = computePreview(withPattern(cylinder({ height: 30, radius: 30 })), { library });
   assert.deepEqual(
     { nodes: r.pattern.nodes, repeats: r.pattern.repeats, columns: r.pattern.columns, rows: r.pattern.rows, pointsPerLayer: r.pattern.pointsPerLayer },
-    { nodes: 62, repeats: 31, columns: 2, rows: 1, pointsPerLayer: 186 },
+    { nodes: 62, repeats: 31, columns: 2, rows: 1, pointsPerLayer: 62 },
   );
   assert.ok(Math.abs(r.pattern.spacingMinMm - r.pattern.spacingMaxMm) < 1e-9, 'a cylinder has one spacing');
   assert.equal(computePreview(cylinder(), { library }).pattern, null);
@@ -286,13 +359,13 @@ test('the Detailed morph blend gains Fades down', () => {
 });
 
 test('the curve check runs node to node, so the points between nodes never make a corner of a node', () => {
-  // The knit at a quarter bead on the Classic vase: its narrow neck puts the
-  // nodes 3.2 mm apart with 4 points between, which measured point to point
-  // would read as corners tighter than half a bead.
-  const d = withPattern(structuredClone(presets[0]), TILES.knit, { fromMm: 10, toMm: 150 });
+  // The knit at a quarter bead on the Classic vase, softened a little: its
+  // narrow neck puts the nodes 3.2 mm apart with points between, which
+  // measured point to point would read as corners tighter than half a bead.
+  const d = withPattern(structuredClone(presets[0]), TILES.knit, { fromMm: 10, toMm: 150, softenCells: 0.3 });
   const { design, tp } = build(d);
   const lp = tp.model.pattern;
-  assert.ok(tp.model.patternPoints / lp.nodes >= 4);
+  assert.ok(tp.model.patternPoints / lp.nodes >= 2);
   assert.ok(!warningsOf(design, tp).some((w) => w.id === 'finePattern'));
   // Every layer in the range marks its N nodes (the seam's node once).
   for (const i of [lp.first + 1, lp.last]) {

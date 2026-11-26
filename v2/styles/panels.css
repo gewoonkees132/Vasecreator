@@ -1198,4 +1198,5 @@
 /* ---- The Pattern step (ui/sections/pattern.js) ---- */
 .pattern-about { margin-top: var(--space-1); }
 .pattern-density { display: flex; flex-direction: column; gap: var(--space-2); }
-.density-readout { margin: 0; font-variant-numeric: tabular-nums; }
+.density-readout { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.density-pot { margin-top: calc(-1 * var(--space-1)); }

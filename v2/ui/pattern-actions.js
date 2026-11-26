@@ -362,16 +362,39 @@ export function readoutOf(design, library) {
 }
 
 const mm1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
+/** A whole number with thousands separators: 20,160. */
+export const wholeText = (n) => Math.round(n).toLocaleString('en-US');
 /**
- * The density readout (D40, §3.2): "96 points per layer · 3.8–6.1 mm",
- * from the narrowest layer in the range to the widest.
+ * The density readout (D40, D58, §3.2): "96 points per layer · 3.8–6.1 mm ·
+ * 8,064 in all": the points a layer has, how far apart its cells are from
+ * the narrowest layer in the range to the widest, and the points over all the
+ * Pattern's layers. With Soften on a layer has more points than cells (D59),
+ * so both are named, unless `compact` (the dock's one line).
  * @param {ReturnType<typeof patternReadout>} r
+ * @param {{ compact?: boolean }} [options]
  */
-export function densityText(r) {
+export function densityText(r, { compact = false } = {}) {
   if (!r) return '';
   const lo = mm1(r.spacingMinMm);
   const hi = mm1(r.spacingMaxMm);
-  return `${r.nodes} points per layer · ${lo === hi ? `${lo} mm apart` : `${lo}–${hi} mm`}${r.clamped ? ' · the most a layer takes' : ''}`;
+  const per = r.extra > 0 && !compact ? `${r.nodes} cells, ${r.pointsPerLayer} points per layer` : `${r.pointsPerLayer} points per layer`;
+  return `${per} · ${lo === hi ? `${lo} mm apart` : `${lo}–${hi} mm`} · ${wholeText(r.points)} in all${r.clamped ? ' · the most a layer takes' : ''}`;
+}
+
+/**
+ * What Soften does to the points (D58, D59): crisp, a layer has one point a
+ * cell; softened, the same points are added between every two cells.
+ * @param {number} softenCells
+ * @param {ReturnType<typeof patternReadout>} r
+ * @param {{ compact?: boolean }} [options] compact: the dock's one line
+ */
+export function softenText(softenCells, r, { compact = false } = {}) {
+  if (!(softenCells > 0)) return compact ? 'Crisp: one point a cell' : 'Crisp: what you draw is what prints, one point a cell';
+  if (!r) return 'Blurs each point into its neighbours';
+  if (r.extra === 0) return compact ? 'Blurs the cells · adds no points' : 'Blurs each point into its neighbours; the cells are close enough that it adds no points';
+  const between = `${r.extra} ${r.extra === 1 ? 'point' : 'points'} between cells`;
+  if (compact) return `Adds ${between} · ${r.pointsPerLayer} per layer`;
+  return `Blurs each point into its neighbours and adds ${between}: ${wholeText(r.points - r.nodes * r.layers)} more points. The drawing stays in, flat or out`;
 }
 
 /**
