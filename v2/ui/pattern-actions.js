@@ -19,7 +19,7 @@
 // is gone (D63).
 
 import { makeBitmap } from '../core/patterns.js';
-import { DEPTH_BEADS, MAX_NODES, SPACING_BEADS, defaultPatternRange, defaultSpacingMm, drawingDefaults, newPattern, patternReadout } from '../core/layer-pattern.js';
+import { DEPTH_BEADS, MAX_NODES, NO_SLANT, SPACING_BEADS, defaultPatternRange, defaultSpacingMm, drawingDefaults, newPattern, patternReadout } from '../core/layer-pattern.js';
 import { drawingId } from '../core/bitmap.js';
 import { drawBitmapSwatch } from './swatch.js';
 import { savePattern, SAVED_NAMES } from '../store/assets.js';
@@ -180,6 +180,48 @@ export function softenText(softenCells, r, { compact = false } = {}) {
   const between = `${r.extra} ${r.extra === 1 ? 'point' : 'points'} between cells`;
   if (compact) return `Adds ${between} · ${r.pointsPerLayer} per layer`;
   return `Blurs each point into its neighbours and adds ${between}: ${wholeText(r.points - r.nodes * r.layers)} more points. The drawing stays in, flat or out`;
+}
+
+/**
+ * The angle a slant gives lines that stand straight in the drawing (D70),
+ * from the horizontal: a layer up for |cells| × the cell spacing across.
+ * @param {number} cells @param {number} layerMm @param {number} spacingMm
+ * @returns {number} degrees, 90 without slant
+ */
+export function slantAngle(cells, layerMm, spacingMm) {
+  if (!cells) return 90;
+  return (Math.atan(layerMm / (Math.abs(cells) * spacingMm)) * 180) / Math.PI;
+}
+
+const deg = (v) => `${Math.round(v)}°`;
+const lean = (cells) => (cells > 0 ? 'right' : 'left');
+/** The angle over the range, narrowest layer to widest: "51°" or "48–55°". */
+function angleText(cells, h, r) {
+  const a = slantAngle(cells, h, r.spacingMinMm);
+  const b = slantAngle(cells, h, r.spacingMaxMm);
+  return Math.round(a) === Math.round(b) ? deg(a) : `${deg(Math.min(a, b))}–${deg(Math.max(a, b))}`;
+}
+
+/**
+ * What the slant does (D70, D71): "Lines lean right at 51° · 2 cells a layer",
+ * or, per facet, the range of angles the faces take.
+ * @param {object} design normalised, with a Pattern
+ * @param {ReturnType<typeof patternReadout>} r
+ * @param {{ perFacet?: boolean, compact?: boolean }} [options]
+ */
+export function slantText(design, r, { perFacet = false, compact = false } = {}) {
+  const s = design.pattern?.slant;
+  if (!s || !r) return '';
+  const h = design.layers.layerHeightMm;
+  const cells = (v) => `${Math.abs(v)} ${Math.abs(v) === 1 ? 'cell' : 'cells'} a layer`;
+  if (perFacet) {
+    const lo = Math.min(s.cells, s.toCells);
+    const hi = Math.max(s.cells, s.toCells);
+    if (lo === hi) return slantText({ ...design, pattern: { ...design.pattern, slant: { ...s, perFacet: false } } }, r, { compact });
+    return compact ? `Each facet ${lo} to ${hi} cells a layer` : `Each facet takes its own slant, ${lo} to ${hi} cells a layer`;
+  }
+  if (!s.cells) return compact ? 'Straight up' : 'Straight up: the columns stand one above the other';
+  return `${compact ? 'Leans' : 'Lines lean'} ${lean(s.cells)} at ${angleText(s.cells, h, r)} · ${cells(s.cells)}`;
 }
 
 /**
@@ -378,6 +420,7 @@ export function patternSettings(p) {
     density: { by: p.density.by, spacingMm: p.density.spacingMm, points: p.density.points },
     fade: { shape: p.fade.shape, amount: p.fade.amount },
     softenCells: p.softenCells,
+    slant: { ...(p.slant ?? NO_SLANT) },
   };
 }
 
@@ -429,6 +472,7 @@ export function applyPatternEntry(d, entry) {
     toMm: range.toMm,
     fade: { shape: s.fade.shape, amount: s.fade.amount },
     softenCells: s.softenCells,
+    slant: { ...(s.slant ?? NO_SLANT) },
   };
   if (old !== id) dropUnusedDrawing(d, old);
 }

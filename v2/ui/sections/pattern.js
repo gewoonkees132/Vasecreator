@@ -11,14 +11,18 @@
 //   From / to its own range (D41); the blue bracket on the pot sets it too
 //   Fade      Even, Fades up, Fades down, Middle or Diagonal, and an amount (D42)
 //   Soften    a blur of 0–2 cells; 0 is crisp (D42)
+//   Slant     whole cells a layer the drawing moves by, so stripes lean (D70);
+//             with the Facets morph, a slant of its own on each facet (D71)
 // One row of a drawing is one layer and one cell one point, so what you see
 // in a swatch is what prints.
 
-import { h, slider, numberField, segmented } from '../controls.js';
+import { h, slider, numberField, segmented, toggle } from '../controls.js';
 import { DEPTH_BEADS, SPACING_BEADS } from '../../core/layer-pattern.js';
+import { FACETS_MAP } from '../../core/morph.js';
+import { LIMITS } from '../../core/design.js';
 import { BLEND_OPTIONS } from '../dock-tools.js';
 import {
-  findLayerEntry, layerMineEntries, pickLayerPattern, drawLayerEntry, readoutOf, densityText, softenText, wholeText, densityLimits, setDensityFace,
+  findLayerEntry, layerMineEntries, pickLayerPattern, drawLayerEntry, readoutOf, densityText, softenText, slantText, wholeText, densityLimits, setDensityFace,
   openEditor, editableEntry, savableEntry, saveEntry, pickSavedPattern, targetKey, savedSpacingMm, drawsWith,
 } from '../pattern-actions.js';
 import { listPatterns, deletePattern, onPatternsChanged } from '../../store/assets.js';
@@ -28,7 +32,9 @@ import { ICONS } from '../icons.js';
 
 const SWATCH = 52;
 const TARGET = { kind: 'pattern' };
-const PARTS = ['drawing', 'depth', 'density', 'range', 'fade', 'soften'];
+const PARTS = ['drawing', 'depth', 'density', 'range', 'fade', 'soften', 'slant'];
+const quarter = (v) => Math.round(v * 4) / 4;
+const SLANT = LIMITS.slantCells;
 const FADE_WHERE = { fadesUp: 'At the top: ', fadesDown: 'At the bottom: ', middle: 'Halfway up: ', diagonal: 'In the band: ' };
 const deepest = (d) => Math.floor(DEPTH_BEADS.max * d.layers.beadWidthMm * 100) / 100;
 const fmt = (v, decimals = 2) => String(Math.round(v * 10 ** decimals) / 10 ** decimals);
@@ -228,6 +234,24 @@ const section = {
       onCommit: commit,
     });
 
+    // ---- Slant (D70, D71) ----
+    const slant = slider({
+      label: 'Slant', unit: 'cells', min: SLANT.min, max: SLANT.max, step: 0.25, snap: 1, decimals: 2, value: 0, info: '',
+      onInput: edit('Slant', (p, v) => { p.slant.cells = quarter(Math.min(SLANT.max, Math.max(SLANT.min, v))); }),
+      onCommit: commit,
+    });
+    const perFacet = toggle({
+      label: 'Different on each facet', value: false,
+      onChange: (v) => store.apply(v ? 'Slant on each facet' : 'Slant even', (d) => { if (d.pattern) d.pattern.slant.perFacet = v; }),
+    });
+    const slantTo = slider({
+      label: 'To', unit: 'cells', min: SLANT.min, max: SLANT.max, step: 0.25, snap: 1, decimals: 2, value: 0, info: '',
+      onInput: edit('Slant to', (p, v) => { p.slant.toCells = quarter(Math.min(SLANT.max, Math.max(SLANT.min, v))); }),
+      onCommit: commit,
+    });
+    const slantNote = h('p', { class: 'panel-note' });
+    const slantBox = h('div', { class: 'slot-settings' }, [slant.el, perFacet.el, slantTo.el, slantNote]);
+
     // The Pattern step's parts (ui/steps.js).
     for (const e of [strip, saveForm.el, confirm.el, mineMsg, editorMsg, about]) e.dataset.part = 'drawing';
     depth.el.dataset.part = 'depth';
@@ -235,7 +259,8 @@ const section = {
     rangeBox.dataset.part = 'range';
     fadeBox.dataset.part = 'fade';
     soften.el.dataset.part = 'soften';
-    el.append(strip, saveForm.el, confirm.el, mineMsg, editorMsg, about, depth.el, densityBox, rangeBox, fadeBox, soften.el);
+    slantBox.dataset.part = 'slant';
+    el.append(strip, saveForm.el, confirm.el, mineMsg, editorMsg, about, depth.el, densityBox, rangeBox, fadeBox, soften.el, slantBox);
 
     // A saved Pattern: its tile applies it in one tap (D48), and × on its corner deletes it.
     function mineTile(e) {
@@ -329,6 +354,18 @@ const section = {
 
       soften.set(p.softenCells);
       soften.setInfo(softenText(p.softenCells, r));
+
+      const facets = d.form.morph?.map === FACETS_MAP;
+      const each = facets && p.slant.perFacet;
+      slant.set(p.slant.cells);
+      perFacet.el.hidden = !facets;
+      perFacet.set(p.slant.perFacet);
+      slantTo.el.hidden = !each;
+      slantTo.set(p.slant.toCells);
+      slant.setInfo(each ? 'From' : slantText(d, r));
+      slantNote.textContent = each
+        ? `${slantText(d, r, { perFacet: true })}. Within a facet the lines run on; at its edges they turn.`
+        : facets ? 'Moves the drawing along a little every layer, so stripes lean. With Facets, each facet can lean its own way.' : 'Moves the drawing along a little every layer, so stripes lean.';
     };
     update(store.state);
     refreshSaved();
@@ -339,7 +376,7 @@ const section = {
       destroy() {
         offPatterns?.();
         offResult?.();
-        for (const c of [depth, spacing, points, from, to, amount, soften]) c.destroy?.();
+        for (const c of [depth, spacing, points, from, to, amount, soften, slant, perFacet, slantTo]) c.destroy?.();
         el.replaceChildren();
       },
     };

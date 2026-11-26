@@ -107,7 +107,7 @@ test('a missing image prints plain, warns, and blocks export', () => {
 });
 
 test('every built-in morph map stays in −1…1 and is seamless around', () => {
-  assert.deepEqual(MORPH_MAPS.map((m) => m.id), ['lib:lobes@1', 'lib:lean@1', 'lib:waist@1', 'lib:swirl@1', 'lib:blobs@1']);
+  assert.deepEqual(MORPH_MAPS.map((m) => m.id), ['lib:lobes@1', 'lib:lean@1', 'lib:waist@1', 'lib:swirl@1', 'lib:blobs@1', 'lib:facets@1']);
   for (const { id } of MORPH_MAPS) {
     let lo = Infinity;
     let hi = -Infinity;

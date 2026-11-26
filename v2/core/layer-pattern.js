@@ -27,12 +27,19 @@
 // on the narrowest layer in the range; the repeats are whole, so the spacing
 // shown is recomputed from them) or as points per layer (a whole number of
 // tiles). The one set last is kept when the pot changes size.
+//
+// Slant (D70) moves the drawing round(slant × k) whole cells on the k-th
+// layer from From, so the nodes stay nodes and vertical stripes become
+// diagonal lines. With the Facets morph and *Different on each facet* (D71),
+// each face takes its own slant between Slant and To, fixed by the Facets
+// layout: a node finds its face at the layer's middle height.
 
 import { bitmapValues } from './patterns.js';
 import { BLEND_SHAPES, blendShape } from './surface.js';
 import { blurGrid } from './raster.js';
 import { createProfile } from './profile.js';
 import { createPlan } from './plan.js';
+import { FACETS_MAP, facetShare } from './morph.js';
 
 /** The Fade's shapes (D42, D54). */
 export const FADE_SHAPES = BLEND_SHAPES;
@@ -53,6 +60,17 @@ export const DEPTH_BEADS = Object.freeze({ max: 2 / 3, default: 2 / 3 });
 export const DEFAULT_POINTS = 96;
 /** The most nodes a layer may have: the toolpath's MAX_POINTS_PER_LAYER (a test keeps them equal). */
 export const MAX_NODES = 1600;
+/** A Pattern without slant (D70). */
+export const NO_SLANT = Object.freeze({ cells: 0, perFacet: false, toCells: 0 });
+
+/**
+ * Whether a Pattern's slant changes from face to face (D71): asked for, and
+ * the design's Morph is Facets.
+ * @param {object} design normalised
+ */
+export function slantPerFacet(design) {
+  return !!design.pattern?.slant?.perFacet && design.form.morph?.map === FACETS_MAP;
+}
 
 /**
  * Where a new Pattern runs (§3.4): from 8 mm to 10 mm below the rim.
@@ -202,15 +220,16 @@ export function patternReadout(design, library) {
  * @param {object} design normalised
  * @param {object} library
  * @param {{ profile: { at(z: number): number }, unitPerimeter: number, layerCount: number,
- *           baseLayers: number, maxNodes: number }} wall
+ *           baseLayers: number, maxNodes: number, facetAt?: (z: number, u: number) => number }} wall
+ *   facetAt: the Facets morph's face at (z, u), for a slant per facet (D71)
  * @returns {null | {
  *   drawing: string, missing: boolean, active: boolean, recipe: object | null,
  *   columns: number, rows: number, repeats: number, nodes: number, clamped: boolean,
  *   first: number, last: number, depthMm: number, spacingMinMm: number, spacingMaxMm: number,
  *   extra: number, pointsPerLayer: number,
  *   inRange(layer: number): boolean, rowOf(layer: number): number, at(layer: number, u: number, below?: number): number,
- *   seamColumn(rampCells: number): number,
- * }} null when the design has no Pattern
+ *   seamColumn(rampCells: number): number, seamShift(layer: number): number,
+ * }} null when the design has no Pattern; seamShift is how many cells the seam column moves on a layer (D72)
  */
 export function createLayerPattern(design, library, wall) {
   const p = design.pattern;
@@ -228,6 +247,16 @@ export function createLayerPattern(design, library, wall) {
   const inRange = (i) => active && i >= first && i <= last;
   const rowOf = (i) => (inRange(i) ? (i - first) % rows : -1);
 
+  // Slant (D70, D71): the cells layer i is moved by, evenly or on each face.
+  const slant = p.slant ?? NO_SLANT;
+  const perFacet = slantPerFacet(design) && typeof wall.facetAt === 'function';
+  const seed = design.form.morph?.facets?.seed ?? 0;
+  const faceSlant = (face) => (face < 0 ? slant.cells : slant.cells + (slant.toCells - slant.cells) * facetShare(face, seed));
+  const evenShift = (i) => (inRange(i) ? Math.round(slant.cells * (i - first)) : 0);
+  const slanted = perFacet ? slant.cells !== 0 || slant.toCells !== 0 : slant.cells !== 0;
+  const h = design.layers.layerHeightMm;
+  const mod = (a, b) => ((a % b) + b) % b;
+
   // Node displacements per layer. Wall points alternate between their own
   // layer and the one below (the checks), so two layers are kept.
   const cache = [{ layer: -1, values: new Float64Array(N) }, { layer: -1, values: new Float64Array(N) }];
@@ -242,12 +271,36 @@ export function createLayerPattern(design, library, wall) {
     const t = (i - first) / span;
     const uniform = p.fade.shape !== 'diagonal';
     const strength = uniform ? fadeAt(p.fade, t, 0) : 1;
+    const k = i - first;
+    const zMid = (i + 0.5) * h;
+    const shift = evenShift(i);
+    const v = entry.values;
+    const faceOf = perFacet && slanted ? faceRow : null;
     for (let j = 0; j < N; j++) {
       const f = uniform ? strength : fadeAt(p.fade, t, j / N);
-      entry.values[j] = p.depthMm * grid[offset + (j % columns)] * f;
+      let column = j % columns;
+      if (faceOf) {
+        faceOf[j] = wall.facetAt(zMid, j / N);
+        column = mod(j - Math.round(faceSlant(faceOf[j]) * k), columns);
+      } else if (slanted) {
+        column = mod(j - shift, columns);
+      }
+      v[j] = p.depthMm * grid[offset + column] * f;
     }
-    return entry.values;
+    // Where two facets meet, their drawings, moved by different amounts, can
+    // leave a lone cell standing out of or sunk into both neighbours: a spike
+    // a cell wide that the drawing never had. It takes its neighbours' mean.
+    if (faceOf) {
+      for (let j = 0; j < N; j++) {
+        const a = j === 0 ? N - 1 : j - 1;
+        const b = j + 1 === N ? 0 : j + 1;
+        if (faceOf[a] === faceOf[j] && faceOf[b] === faceOf[j]) continue;
+        if ((v[j] - v[a]) * (v[j] - v[b]) > 1e-9) v[j] = 0.5 * (v[a] + v[b]);
+      }
+    }
+    return v;
   }
+  const faceRow = new Int32Array(N);
 
   // Layer i's own row at u: on a node its value; between nodes a straight
   // line when crisp, and with Soften a smooth curve through the nodes
@@ -326,6 +379,8 @@ export function createLayerPattern(design, library, wall) {
     columns, rows, repeats, nodes: N, clamped, first, last, depthMm: p.depthMm,
     extra, pointsPerLayer, spacingMinMm, spacingMaxMm,
     inRange, rowOf, at, seamColumn,
+    // The seam column follows an even slant; per facet it holds (D72).
+    seamShift: (i) => (perFacet ? 0 : evenShift(i)),
   };
 }
 
@@ -357,6 +412,7 @@ export function newPattern(design, drawing) {
     ...defaultPatternRange(design),
     fade: { shape: 'even', amount: 1 },
     softenCells: 0,
+    slant: { ...NO_SLANT },
   };
 }
 

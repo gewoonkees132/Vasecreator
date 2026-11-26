@@ -62,7 +62,7 @@ test('Save pattern writes the drawing, depth, density, Fade and Soften, never Fr
   assert.equal(e.name, 'My pattern');
   assert.deepEqual(e.drawing, { kind: 'bitmap', columns: 4, rows: 2, cells: ZIGZAG.cells });
   assert.deepEqual(e.settings, {
-    depthMm: 0.5, density: { by: 'points', spacingMm: 3.1, points: 120 }, fade: { shape: 'middle', amount: 0.6 }, softenCells: 0.75,
+    depthMm: 0.5, density: { by: 'points', spacingMm: 3.1, points: 120 }, fade: { shape: 'middle', amount: 0.6 }, softenCells: 0.75, slant: { cells: 0, perFacet: false, toCells: 0 },
   });
   assert.ok(!('fromMm' in e.settings) && !('toMm' in e.settings));
   // A starter saves too, as a drawing of its own; no Pattern, nothing to save.

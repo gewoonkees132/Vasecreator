@@ -1,11 +1,13 @@
 // Geometry morph (design §9.6, D23), the Morph part of Shape: a soft greyscale map that
 // pushes the whole form in and out before patterns go on top. None, the
 // built-in maps (core/morph.js MORPH_MAPS) or your own image, then Softness,
-// Strength, Repeats around and Blend.
+// Strength, Repeats around and Blend. Facets (D69) have their own settings:
+// Facets around, Rows, Stagger, Irregularity with Shuffle, Round rim, Edges
+// and Blend; their depth follows from the number of faces, so no Strength.
 
-import { h, slider, numberField } from '../controls.js';
+import { h, slider, numberField, toggle } from '../controls.js';
 import { limit } from './shape.js';
-import { MORPH_MAPS, MORPH_DEFAULTS as CORE_DEFAULTS, evaluateMorphMap } from '../../core/morph.js';
+import { MORPH_MAPS, MORPH_DEFAULTS as CORE_DEFAULTS, evaluateMorphMap, FACETS_MAP, FACETS_DEFAULTS, FACETS_START, FACETS_MIN_AROUND } from '../../core/morph.js';
 import * as imageSwatch from '../image-swatch.js';
 import { rasterFromRGBA } from '../../core/raster.js';
 import { saveImage, loadImage, cachedImage } from '../../store/assets.js';
@@ -92,6 +94,12 @@ function mapName(design, id) {
   return design.assets?.[id]?.name || 'Image';
 }
 
+// A control's visible label (the first label-ish element in it).
+function setLabel(root, text) {
+  const label = root.querySelector('.nf-label, .sl-label, label');
+  if (label && label.textContent !== text) label.textContent = text;
+}
+
 const fmtMm = (v) => `${Math.round((Number(v) || 0) * 10) / 10} mm`;
 
 const section = {
@@ -100,6 +108,7 @@ const section = {
 
   summary(design) {
     const m = design.form?.morph;
+    if (m?.map === FACETS_MAP) return `Facets · ${m.repeats} around, ${m.facets?.rows ?? FACETS_DEFAULTS.rows} rows`;
     return m?.map ? `${mapName(design, m.map)} · ${fmtMm(m.strengthMm)}` : 'none';
   },
 
@@ -140,7 +149,14 @@ const section = {
       if (id === 'img:') return;   // the image tile is already the map in use
       store.apply(`Morph: ${id ? name : 'none'}`, (d) => {
         if (!id) { d.form.morph = null; return; }
-        d.form.morph = { ...MORPH_DEFAULTS, ...(morphOf(d) || {}), map: id };
+        const was = morphOf(d);
+        if (id === FACETS_MAP) {
+          // Facets start from their own layout (D69), not the last map's numbers.
+          if (was?.map !== FACETS_MAP) d.form.morph = { ...MORPH_DEFAULTS, ...FACETS_START, map: id, facets: { ...FACETS_DEFAULTS } };
+          return;
+        }
+        const { facets: _f, ...rest } = was || {};
+        d.form.morph = { ...MORPH_DEFAULTS, ...(was?.map === FACETS_MAP ? {} : rest), map: id };
       });
     };
 
@@ -179,7 +195,35 @@ const section = {
     const strength = field('strengthMm', 'Strength', slider, { unit: 'mm', ...limit(['strengthMm', 'morphStrengthMm'], { min: 0, max: 40, step: 0.5 }), decimals: 1, value: MORPH_DEFAULTS.strengthMm, info: 'The largest push, in or out' });
     const repeats = field('repeats', 'Repeats around', numberField, { unit: '×', ...limit(['morphRepeats'], { min: 1, max: 24, step: 1 }), step: 1, decimals: 0, value: MORPH_DEFAULTS.repeats, info: 'Whole repeats, so it meets itself' });
     const blend = field('blend', 'Blend', slider, { ...limit(['morphBlend'], { min: 0, max: 1, step: 0.05 }), decimals: 2, value: MORPH_DEFAULTS.blend, info: 'How much of the morph to use' });
-    settings.append(softness.el, strength.el, repeats.el, blend.el);
+    // Facets (D69): the layout's own settings.
+    const facetEdit = (label, fn) => (v) => store.change(label, (d) => { if (d.form.morph?.facets) fn(d.form.morph.facets, v); });
+    const rows = numberField({
+      label: 'Rows', unit: '', ...limit(['facetRows'], { min: 1, max: 8, step: 1 }), step: 1, decimals: 0, value: FACETS_DEFAULTS.rows,
+      info: 'Rows of facets, bottom to rim',
+      onInput: facetEdit('Facet rows', (f, v) => { f.rows = Math.round(v); }), onCommit: () => store.commit(),
+    });
+    const stagger = toggle({
+      label: 'Stagger rows', value: FACETS_DEFAULTS.stagger,
+      onChange: (v) => store.apply(v ? 'Facets staggered' : 'Facets in line', (d) => { if (d.form.morph?.facets) d.form.morph.facets.stagger = v; }),
+    });
+    const irregularity = slider({
+      label: 'Irregularity', unit: '%', min: 0, max: 100, step: 1, snap: 10, decimals: 0, value: 50,
+      info: 'How far each facet moves from a neat grid',
+      onInput: facetEdit('Facet irregularity', (f, v) => { f.irregularity = Math.min(1, Math.max(0, v / 100)); }), onCommit: () => store.commit(),
+    });
+    const shuffle = h('button', { type: 'button', class: 'btn btn-secondary', text: 'Shuffle' });
+    shuffle.addEventListener('click', () => store.apply('Facets shuffled', (d) => {
+      const f = d.form.morph?.facets;
+      if (f) f.seed = (f.seed + 1) % 1000;
+    }));
+    const shuffleRow = h('div', { class: 'nf' }, [h('span', { class: 'nf-label', text: 'Layout' }), shuffle]);
+    const rim = slider({
+      label: 'Round rim', unit: 'mm', ...limit(['facetRimMm'], { min: 0, max: 100, step: 0.5 }), snap: 5, decimals: 1, value: FACETS_DEFAULTS.rimMm,
+      info: 'A band below the rim that fades back to round',
+      onInput: facetEdit('Round rim', (f, v) => { f.rimMm = v; }), onCommit: () => store.commit(),
+    });
+    const facetBox = h('div', { class: 'slot-settings' }, [rows.el, stagger.el, irregularity.el, shuffleRow, rim.el]);
+    settings.append(softness.el, strength.el, repeats.el, facetBox, blend.el);
 
     el.append(grid, note, settings);
 
@@ -207,10 +251,26 @@ const section = {
       }
       settings.hidden = !m;
       if (m) {
+        const facets = m.map === FACETS_MAP;
         softness.set(m.softnessMm ?? MORPH_DEFAULTS.softnessMm);
         strength.set(m.strengthMm ?? MORPH_DEFAULTS.strengthMm);
         repeats.set(m.repeats ?? MORPH_DEFAULTS.repeats);
         blend.set(m.blend ?? MORPH_DEFAULTS.blend);
+        strength.el.hidden = facets;
+        facetBox.hidden = !facets;
+        setLabel(softness.el, facets ? 'Edges' : 'Softness');
+        softness.setInfo(facets ? 'Rounds the edges between facets, in mm' : 'How soft the map is: a blur in mm');
+        setLabel(repeats.el, facets ? 'Facets around' : 'Repeats around');
+        repeats.setLimits?.({ min: facets ? FACETS_MIN_AROUND : 1 });
+        repeats.setInfo?.(facets ? 'Facets in each row; fewer cut deeper' : 'Whole repeats, so it meets itself');
+        blend.setInfo(facets ? '1 is flat facets; less is between round and faceted' : 'How much of the morph to use');
+        if (facets) {
+          const f = { ...FACETS_DEFAULTS, ...(m.facets || {}) };
+          rows.set(f.rows);
+          stagger.set(f.stagger);
+          irregularity.set(Math.round(f.irregularity * 100));
+          rim.set(f.rimMm);
+        }
       }
     };
     update(store.state);
@@ -218,7 +278,7 @@ const section = {
     return {
       update,
       destroy() {
-        for (const c of [softness, strength, repeats, blend]) c.destroy?.();
+        for (const c of [softness, strength, repeats, blend, rows, stagger, irregularity, rim]) c.destroy?.();
         el.replaceChildren();
       },
     };

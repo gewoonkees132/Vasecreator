@@ -93,6 +93,7 @@ export function createWallModel(design, library, { images } = {}) {
   const missingImages = morph?.missingImage ? [design.form.morph.map] : [];
   const pattern = createLayerPattern(design, library, {
     profile, unitPerimeter: plan.unitPerimeter, layerCount, baseLayers, maxNodes: MAX_POINTS_PER_LAYER,
+    facetAt: morph?.facetAt,
   });
   if (pattern?.missing) missing.push(pattern.drawing);
   const lp = pattern?.active ? pattern : null;
@@ -314,7 +315,8 @@ function seamPositions(m) {
         column = (t * lp.columns + c) / lp.nodes;
         column -= Math.floor(column);
       }
-      u = column;
+      u = column + lp.seamShift(i) / lp.nodes;
+      u -= Math.floor(u);
     } else if (!Number.isNaN(column)) {
       // Above the range the seam goes back to its own place a bead width a
       // layer at most (a hidden seam on a plain wall holds).

@@ -13,7 +13,7 @@
 import { DENSITY_FACES, DEFAULT_POINTS, DEPTH_BEADS, FADE_SHAPES, SPACING_BEADS, defaultPatternRange, defaultSpacingMm } from './layer-pattern.js';
 import { createProfile } from './profile.js';
 import { validateRecipe } from './patterns.js';
-import { MORPH_DEFAULTS, isMorphMap } from './morph.js';
+import { FACETS_DEFAULTS, FACETS_MAP, FACETS_MIN_AROUND, MORPH_DEFAULTS, isMorphMap } from './morph.js';
 
 export const DESIGN_SCHEMA = 'vasecreator/design';
 export const DESIGN_VERSION = 5;
@@ -65,6 +65,11 @@ export const LIMITS = Object.freeze({
   morphStrengthMm: { min: 0, max: 60, step: 0.5 },    // form.morph.strengthMm
   morphRepeats: { min: 1, max: 24, step: 1 },         // form.morph.repeats
   morphBlend: { min: 0, max: 1, step: 0.01 },         // form.morph.blend
+  facetRows: { min: 1, max: 8, step: 1 },             // form.morph.facets.rows (D69)
+  facetIrregularity: { min: 0, max: 1, step: 0.01 },  // form.morph.facets.irregularity
+  facetSeed: { min: 0, max: 999, step: 1 },           // form.morph.facets.seed
+  facetRimMm: { min: 0, max: 100, step: 0.5 },        // form.morph.facets.rimMm
+  slantCells: { min: -8, max: 8, step: 0.25 },        // pattern.slant.cells and toCells (D70, D71)
 });
 
 // The "Classic vase" preset (library/presets.json), named for a new design.
@@ -194,17 +199,44 @@ function normaliseAssets(input) {
 
 // form.morph: null, or a built-in map or an image reference with every field
 // clamped. An 'img:' map whose asset is missing is kept; the toolpath reports it.
+// Facets (D69) also have their layout, and at least three faces around;
+// every other map drops it.
 function normaliseMorph(input) {
   if (!isObject(input) || typeof input.map !== 'string') return null;
   const map = input.map;
   if (!isMorphMap(map) && !/^img:[0-9a-f]{16}$/.test(map)) return null;
   const D = MORPH_DEFAULTS;
-  return {
+  const out = {
     map,
     softnessMm: num(input.softnessMm, D.softnessMm, LIMITS.morphSoftnessMm),
     strengthMm: num(input.strengthMm, D.strengthMm, LIMITS.morphStrengthMm),
     repeats: num(input.repeats, D.repeats, LIMITS.morphRepeats, true),
     blend: num(input.blend, D.blend, LIMITS.morphBlend),
+  };
+  if (map === FACETS_MAP) {
+    const f = isObject(input.facets) ? input.facets : {};
+    const F = FACETS_DEFAULTS;
+    out.repeats = Math.max(out.repeats, FACETS_MIN_AROUND);
+    out.facets = {
+      rows: num(f.rows, F.rows, LIMITS.facetRows, true),
+      stagger: typeof f.stagger === 'boolean' ? f.stagger : F.stagger,
+      irregularity: num(f.irregularity, F.irregularity, LIMITS.facetIrregularity),
+      seed: num(f.seed, F.seed, LIMITS.facetSeed, true),
+      rimMm: num(f.rimMm, F.rimMm, LIMITS.facetRimMm),
+    };
+  }
+  return out;
+}
+
+const quarter = (v) => Math.round(v * 4) / 4;
+
+// pattern.slant (D70, D71): whole quarter cells a layer, per facet or even.
+function normaliseSlant(input) {
+  const s = isObject(input) ? input : {};
+  return {
+    cells: quarter(num(s.cells, 0, LIMITS.slantCells)),
+    perFacet: s.perFacet === true,
+    toCells: quarter(num(s.toCells, 0, LIMITS.slantCells)),
   };
 }
 
@@ -240,6 +272,7 @@ function normalisePattern(input, d) {
     toMm: range.toMm,
     fade: { shape: pick(fade.shape, FADE_SHAPES, 'even'), amount: num(fade.amount, 1, LIMITS.amount) },
     softenCells: num(input.softenCells, 0, LIMITS.softenCells),
+    slant: normaliseSlant(input.slant),
   };
 }
 

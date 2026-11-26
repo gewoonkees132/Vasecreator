@@ -107,7 +107,7 @@ export function imageHashes(design) {
 //   { id: 'saved:…', kind: 'pattern', name, drawing, settings, created, updated }
 // `drawing` is a crisp `bitmap` recipe. `settings` is what applying it sets
 // besides the drawing: { depthMm, density: { by, spacingMm, points },
-// fade: { shape, amount }, softenCells } (never From / To, which depend on
+// fade: { shape, amount }, softenCells, slant: { cells, perFacet, toCells } } (never From / To, which depend on
 // the pot's height). A design that uses one keeps its own copy of the drawing
 // in design.assets. Records of any other shape (the old { id, name, recipe },
 // or a Detailed morph swatch, kind 'detail', D63) are ignored (D50).
@@ -153,6 +153,7 @@ export function normaliseSavedPattern(raw) {
   const F = FALLBACK[kind];
   const density = isObject(s.density) ? s.density : {};
   const fade = isObject(s.fade) ? s.fade : {};
+  const slant = isObject(s.slant) ? s.slant : {};
   const settings = {
     depthMm: num(s.depthMm, F.depthMm, LIMITS.patternDepthMm),
     density: {
@@ -162,6 +163,11 @@ export function normaliseSavedPattern(raw) {
     },
     fade: { shape: oneOf(fade.shape, FADE_SHAPES, 'even'), amount: num(fade.amount, 1, LIMITS.amount) },
     softenCells: num(s.softenCells, 0, LIMITS.softenCells),
+    slant: {
+      cells: Math.round(num(slant.cells, 0, LIMITS.slantCells) * 4) / 4,
+      perFacet: slant.perFacet === true,
+      toCells: Math.round(num(slant.toCells, 0, LIMITS.slantCells) * 4) / 4,
+    },
   };
   const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 80) : SAVED_NAMES[kind];
   const time = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);

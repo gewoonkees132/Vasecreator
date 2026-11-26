@@ -389,6 +389,29 @@ Design JSON additions (made in version 2; both fields are optional and `normalis
   - A design never refers to an entry: applying one copies its drawing into `design.assets`, so the design opens, and its file carries the drawing, after the entry is deleted.
 - Design files (`<name>.vasecreator.json`) embed the pixels of every referenced image under a top-level `"images": { "<hash>": { "width", "height", "data": "<base64>" } }`; opening a file stores them with `saveImage` before normalising (which drops the field).
 
+## Facets and Slant (docs/design/v2-recreate-vases.md, D69–D72)
+
+- **Facets morph** (`lib:facets@1`, D69). `core/morph.js`:
+  - `createFacets(radiusAt, H, { around, rows, stagger, irregularity, seed, rimMm, softnessMm, blend })` → `{ at(z, u), facetAt(z, u), faces }`.
+    - **The faces.** Flat planes tangent to the form at each face's centre, moved in by cos(π / around), so the edges sit about on the profile.
+    - **Lean.** Each row leans a little less than the row below, so rows stay rows on straight or hollow walls.
+    - **Which plane counts.** Only the rows next to z are considered. The edges are rounded by a polynomial smooth minimum `softnessMm` wide, and the push fades to 0 over `rimMm` below the rim.
+  - `createMorph` builds it from the design's own profile for a Facets morph. The strength is unused; `amplitude` is the largest push, sampled.
+  - The morph also returns `facetAt`. The swatch (`evaluateMorphMap`) shows regular facets on a cylinder.
+  - Exports `FACETS_MAP`, `FACETS_DEFAULTS`, `FACETS_START` (what picking Facets sets), `FACETS_MIN_AROUND` and `facetShare(face, seed)`.
+- **Design JSON.**
+  - `form.morph.facets = { rows, stagger, irregularity, seed, rimMm }`, only with the Facets map. `normaliseDesign` fills it there, drops it for other maps, and keeps `repeats` ≥ 3.
+  - `pattern.slant = { cells, perFacet, toCells }`, always filled: quarter cells within `LIMITS.slantCells` (±8). Saved Pattern setups carry it.
+- **Slant** (`core/layer-pattern.js`, D70, D71).
+  - Layer k from From reads its row moved round(slant × k) cells, so nodes stay nodes.
+  - With `perFacet` and the Facets morph (`slantPerFacet(design)`), each node takes the slant of its face (`wall.facetAt`, passed in by the toolpath, at the layer's middle height): Slant + (To − Slant) × `facetShare(face, seed)`.
+  - A lone cell left standing out of or sunk into both neighbours where two faces meet takes their mean.
+  - `createLayerPattern` adds `seamShift(layer)`. **The seam** (`seamPositions`, D72) moves the seam column by it, so an even slant takes the seam along; per facet it is 0 and the seam holds.
+- **UI.**
+  - Morph shows Facets' own settings: Edges (softness), Facets around (repeats), Rows, Stagger, Irregularity, Shuffle, Round rim and Blend, with no Strength.
+  - The Pattern step has a Slant part: Slant, plus *Different on each facet* and To when the Morph is Facets. On the phone it is the dock tools `slant`, `slantFacets` and `slantTo`.
+  - `slantText` and `slantAngle` in `ui/pattern-actions.js` write the readout.
+
 ## CAD export (issue #7)
 
 `core/cad.js` writes plain formats with no library (`.3dm` would need rhino3dm.js).

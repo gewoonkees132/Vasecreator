@@ -24,7 +24,8 @@ import { DEPTH_BEADS } from '../core/layer-pattern.js';
 import { footprintAt, depthLocked } from './sections/shape.js';
 import { curveType } from './sections/curve.js';
 import morph from './sections/morph.js';
-import { findLayerEntry, readoutOf, densityText, softenText, densityLimits } from './pattern-actions.js';
+import { findLayerEntry, readoutOf, densityText, softenText, slantText, densityLimits } from './pattern-actions.js';
+import { FACETS_MAP } from '../core/morph.js';
 
 const round1 = (v) => Math.round(v * 10) / 10;
 const fmt = (v, decimals = 1) => {
@@ -75,6 +76,9 @@ const MORPH_TOOL = {
 const hasPattern = (s) => !!s.design.pattern;
 const pat = (s) => s.design.pattern;
 const deepest = (d) => Math.floor(DEPTH_BEADS.max * d.layers.beadWidthMm * 100) / 100;
+const facetsOn = (s) => s.design.form.morph?.map === FACETS_MAP;
+const eachFacet = (s) => facetsOn(s) && !!pat(s).slant?.perFacet;
+const quarter = (v) => Math.round(Math.min(Math.max(v, LIMITS.slantCells.min), LIMITS.slantCells.max) * 4) / 4;
 
 const PATTERN_TOOLS = [
   { id: 'drawing', name: 'Pattern', kind: 'drawings' },
@@ -176,6 +180,36 @@ const PATTERN_TOOLS = [
       note: softenText(pat(s).softenCells, readoutOf(s.design, env?.library), { compact: true }),
     }),
     set: (d, v) => { if (d.pattern) d.pattern.softenCells = Math.min(2, Math.max(0, v)); },
+  },
+  {
+    id: 'slant', name: 'Slant', kind: 'dial',
+    applies: hasPattern,
+    value: (s) => (eachFacet(s) ? `${fmt(pat(s).slant.cells, 2)} to ${fmt(pat(s).slant.toCells, 2)}` : pat(s).slant.cells ? fmt(pat(s).slant.cells, 2) : 'None'),
+    dial: (s, env) => ({
+      label: eachFacet(s) ? 'Slant from' : 'Slant', unit: 'cells', ...L('slantCells', {}), step: 0.25, decimals: 2, value: pat(s).slant.cells,
+      note: slantText(s.design, readoutOf(s.design, env?.library), { perFacet: eachFacet(s), compact: true }),
+    }),
+    set: (d, v) => { if (d.pattern) d.pattern.slant.cells = quarter(v); },
+  },
+  {
+    id: 'slantFacets', name: 'Slant on', kind: 'options',
+    applies: (s) => hasPattern(s) && facetsOn(s),
+    options: [{ value: 'even', label: 'Even' }, { value: 'facet', label: 'Each facet' }],
+    current: (s) => (pat(s).slant.perFacet ? 'facet' : 'even'),
+    value: (s) => (pat(s).slant.perFacet ? 'Each facet' : 'Even'),
+    note: (s) => (pat(s).slant.perFacet ? 'Each facet leans its own way, between Slant and To' : 'The whole Pattern leans the same way'),
+    choose: (d, v) => { if (d.pattern) d.pattern.slant.perFacet = v === 'facet'; },
+    label: () => 'Slant on',
+  },
+  {
+    id: 'slantTo', name: 'Slant to', kind: 'dial',
+    applies: (s) => hasPattern(s) && eachFacet(s),
+    value: (s) => fmt(pat(s).slant.toCells, 2),
+    dial: (s, env) => ({
+      label: 'Slant to', unit: 'cells', ...L('slantCells', {}), step: 0.25, decimals: 2, value: pat(s).slant.toCells,
+      note: slantText(s.design, readoutOf(s.design, env?.library), { perFacet: true, compact: true }),
+    }),
+    set: (d, v) => { if (d.pattern) d.pattern.slant.toCells = quarter(v); },
   },
 ];
 

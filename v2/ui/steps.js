@@ -95,6 +95,7 @@ export const STEP_LIST = [
       { id: 'range', name: 'From / to', section: 'pattern' },
       { id: 'fade', name: 'Fade', section: 'pattern' },
       { id: 'soften', name: 'Soften', section: 'pattern' },
+      { id: 'slant', name: 'Slant', section: 'pattern' },
     ],
   },
   {
