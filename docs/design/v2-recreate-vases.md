@@ -105,4 +105,22 @@ The vases were built in the running app through the same store edits the control
 
 ## 6. Build notes
 
-(Filled in as the slices land.)
+### 6.1 Facets, Slant and Slant per facet (commit `9097f3e`)
+
+- **Engine.** `core/morph.js` `createFacets`, `core/layer-pattern.js` (Slant, `seamShift`) and `core/toolpath.js` (passes `facetAt` and moves the seam column). Contracts are in `v2/ARCHITECTURE.md` "Facets and Slant". Tests are in `test/facets-slant.test.js` (366 pass, golden G-code unchanged).
+- **Rows need a lean (found while building).** On a straight or hollow wall, planes tangent to the wall all stand upright, so the rows of faces run into each other and merge into one ring of faces. So each row leans at least a little less than the row below, like a low barrel: the row edges sit a quarter of the faces' depth in. On a shape that already bulges enough (the planter's egg) nothing changes.
+- **Lone cells at facet edges (found while building).** Where two faces with different slants meet, the two moved drawings can leave a single cell standing out of, or sunk into, both neighbours: a spike one cell wide that the drawing never had, which showed as lumps. It takes its neighbours' mean, only where faces meet.
+- **Picking Facets** starts from its own layout (6 around, 4 rows, staggered, half irregular, 2 mm edges, a 20 mm round rim, Blend 1), not from the last map's numbers. Leaving Facets drops its layout.
+
+### 6.2 Round 2: the vases with Facets and Slant (8 × 5 mm bead)
+
+- **Faceted planter, made from the controls alone.**
+  - **Shape.** Profile 490 mm, widest 320 mm.
+  - **Morph.** Facets: 5 around, 4 rows, staggered, irregularity 60 %, Shuffle 5, Round rim 0, edges 2 mm.
+  - **Pattern.** A drawing of your own, `+++++---` (8 × 1, one wide ridge and a 3-cell groove), 2 mm apart, from 0 to 470 mm. Slant −2.5, *Different on each facet*, to 2.5.
+  - **Round rim.** The 20 mm Round rim stood proud like a collar, because the faces sink in and the rim goes back to the profile. 0 matches the photo better.
+- **Bold or clean.** At 4 mm deep the hatching reads clearly, but "Bead not supported" speaks up. At a facet edge the lines of two faces meet, so a layer can step a full 2 × depth plus the facet's lean from the layer below.
+  - At 1.6 mm deep and 2.7 mm apart it is within every Pattern rule but one ("finer than the bead" on the narrow foot), and the hatching only reads in a raking light.
+  - That is clay physics at 8 × 5, not a tool limit: a finer bead allows deeper and closer hatching.
+- **Ribbed bottle.** Unchanged from round 1 (§2.1): it needed nothing new.
+- **Printer.** Both pots are taller or wider than the generic gantry (300 × 300 × 400): set your printer in Print.
