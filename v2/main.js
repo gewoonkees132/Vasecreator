@@ -12,9 +12,6 @@ import { createEngine } from './worker/client.js';
 import { BeadRenderer } from './render/beads.js';
 import { createProfileHandles } from './render/handles.js';
 import { createGizmos } from './render/gizmos.js';
-import { createPaintInput } from './render/paint.js';
-import { decodePaint, encodePaint } from './core/paint.js';
-import { brushOf, paintActive, wallOf } from './ui/paint.js';
 import { mountSteps, shapeOnly } from './ui/steps.js';
 import { mountTopbar } from './ui/topbar.js';
 import { mountChips } from './ui/chips.js';
@@ -244,27 +241,6 @@ async function boot() {
       store.change('Seam angle', (d) => { d.layers.seam.angleDeg = angle; });
     },
     onCommit() {
-      dragging = false;
-      store.commit();
-    },
-  });
-
-  // Painting the Pattern on the pot (D85, D86): one history step per stroke.
-  const setPaint = (cells) => store.change('Painted pattern', (d) => { if (d.pattern) d.pattern.paint = encodePaint(cells); });
-  const paintInput = createPaintInput(renderer, {
-    active: () => paintActive(store.state) && !store.state.view.paintTurn,
-    brush: () => brushOf(store.state),
-    wall: () => wallOf(store.state.design),
-    onStroke(cells) {
-      dragging = true;
-      setPaint(cells);
-    },
-    onEnd() {
-      dragging = false;
-      store.commit();
-    },
-    onCancel(before) {
-      setPaint(before);
       dragging = false;
       store.commit();
     },
@@ -536,40 +512,9 @@ async function boot() {
     let mode = null;
     if (v.editor) mode = null;
     else if (v.mode === 'design' && v.step === 'layers') mode = 'seam';
-    // The bracket's handles sit where people paint: it steps aside in Paint mode.
-    else if (v.mode === 'design' && v.step === 'pattern' && design.pattern && !paintActive(store.state)) mode = 'pattern';
+    else if (v.mode === 'design' && v.step === 'pattern' && design.pattern) mode = 'pattern';
     gizmos.setMode(mode);
     if (mode) gizmos.update(design, store.state.result);
-  }
-
-  // Paint mode (D85–D87): the paint shows on the pot as a wash, the pointer
-  // paints, and the Pattern's bracket hides. It ends with what it needs: the
-  // Pattern step, a Pattern and the 2D editor closed.
-  let shownPaint = null;
-  let shownPaintOn = null;
-  function applyPaint() {
-    const state = store.state;
-    const on = paintActive(state);
-    if (state.view.paint && !on) {
-      const tools = { ...(state.view.tools || {}) };
-      if (tools.pattern === 'paint') tools.pattern = null;
-      store.setView({ paint: false, paintTurn: false, tools });
-      return;
-    }
-    const p = state.design.pattern;
-    const H = state.design.form.height;
-    const key = `${p?.paint?.cells ?? ''}|${p ? p.fromMm / H : 0}|${p ? p.toMm / H : 1}`;
-    if (key !== shownPaint) {
-      shownPaint = key;
-      renderer.setPaint(decodePaint(p?.paint), p ? { fromV: p.fromMm / H, toV: p.toMm / H } : {});
-    }
-    if (on !== shownPaintOn) {
-      shownPaintOn = on;
-      renderer.setPaintVisible(on);
-      applyGizmos();
-    }
-    canvas.classList.toggle('is-painting', on && !state.view.paintTurn);
-    paintInput.refresh();
   }
 
   let printerTimer = 0;
@@ -587,7 +532,6 @@ async function boot() {
   // Designs in the top bar (ui/designs-tip.js); the screen never opens by itself.
   store.subscribe((state, what) => {
     if (what.has('design')) applyGizmos();
-    if (what.has('design') || what.has('view')) applyPaint();
     if (what.has('design') || what.has('printer')) {
       clearTimeout(thumbTimer);
       requestPreview();
@@ -681,7 +625,6 @@ async function boot() {
   mount('designs-tip', () => mountDesignsTip(steps?.tipHost ?? panel, ctx));
 
   applyStep();
-  applyPaint();
   layout(false);
   requestPreview();
 

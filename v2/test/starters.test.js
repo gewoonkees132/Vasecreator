@@ -110,7 +110,7 @@ test('switching drawings keeps From / To, Fade and Soften and takes the starter\
   setLayerPattern(d, findLayerEntry(library, 'lib:rib-1x1@1'));
   assert.deepEqual(
     { ...d.pattern },
-    { drawing: 'lib:rib-1x1@1', depthMm: 5.33, density: { by: 'spacing', spacingMm: 2, points: 96 }, fromMm: 30, toMm: 90, fade: { shape: 'middle', amount: 0.5 }, softenCells: 0.5, slant: { cells: 0, perFacet: false, toCells: 0 }, sits: 'centre', paint: null },
+    { drawing: 'lib:rib-1x1@1', depthMm: 5.33, density: { by: 'spacing', spacingMm: 2, points: 96 }, fromMm: 30, toMm: 90, fade: { shape: 'middle', amount: 0.5 }, softenCells: 0.5, slant: { cells: 0, perFacet: false, toCells: 0 }, sits: 'centre' },
   );
 });
 

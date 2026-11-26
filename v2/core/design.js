@@ -14,10 +14,11 @@ import { DENSITY_FACES, DEFAULT_POINTS, DEPTH_BEADS, FADE_SHAPES, PATTERN_SITS, 
 import { createProfile } from './profile.js';
 import { BASE_PATTERNS, basePairs } from './base-infill.js';
 import { validateRecipe } from './patterns.js';
-import { normalisePaint } from './paint.js';
 import { FACETS_DEFAULTS, FACETS_MAP, FACETS_MIN_AROUND, MORPH_DEFAULTS, isMorphMap } from './morph.js';
 
 export const DESIGN_SCHEMA = 'vasecreator/design';
+// 6 since the paint brush (docs/design/v2-paint-brush.md), which was removed again the same day: the
+// number stays, so designs saved meanwhile still open; their pattern.paint is dropped.
 export const DESIGN_VERSION = 6;
 
 export const INTERPS = ['catmullRomCentripetal', 'monotone', 'linear'];
@@ -276,14 +277,12 @@ function normalisePattern(input, d) {
     softenCells: num(input.softenCells, 0, LIMITS.softenCells),
     slant: normaliseSlant(input.slant),
     sits: pick(input.sits, PATTERN_SITS, 'centre'),
-    // The paint (D79, core/paint.js): null is white, the Pattern in full everywhere.
-    paint: normalisePaint(input.paint),
   };
 }
 
 /**
  * A design without the optional fields when they are empty (assets {},
- * form.morph null, pattern null and a Pattern's paint null), so files stay short.
+ * form.morph null and pattern null), so files stay short.
  * @param {object} d a design
  * @returns {object} d itself, or a shallow copy without the empty fields
  */
@@ -291,13 +290,8 @@ export function compactDesign(d) {
   const emptyAssets = !isObject(d.assets) || Object.keys(d.assets).length === 0;
   const noMorph = isObject(d.form) && d.form.morph == null;
   const noPattern = Object.hasOwn(d, 'pattern') && d.pattern == null;
-  const noPaint = isObject(d.pattern) && Object.hasOwn(d.pattern, 'paint') && d.pattern.paint == null;
-  if (!emptyAssets && !noMorph && !noPattern && !noPaint) return d;
+  if (!emptyAssets && !noMorph && !noPattern) return d;
   const out = { ...d };
-  if (noPaint) {
-    out.pattern = { ...d.pattern };
-    delete out.pattern.paint;
-  }
   if (emptyAssets) delete out.assets;
   if (noPattern) delete out.pattern;
   if (noMorph) {

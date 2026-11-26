@@ -890,6 +890,3 @@ dialog::backdrop {
     scroll-behavior: auto !important;
   }
 }
-
-/* Paint mode (D85): a press on the pot paints. OrbitControls sets the cursor inline. */
-#scene.is-painting { cursor: crosshair !important; }

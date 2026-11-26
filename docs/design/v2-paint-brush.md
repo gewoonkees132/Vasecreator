@@ -1,7 +1,7 @@
 # Vasecreator v2: painting the Pattern on the pot (the paint brush)
 
 - **Date:** 2026-11-26
-- **Status:** approved by the owner on 2026-11-26 ("sounds good please implement") and built the same day, all four slices; see §14. Checked in headless Chrome at a desktop and a touch phone viewport; not yet on a real phone (D3).
+- **Status:** **removed on 2026-11-26 at the owner’s request** ("I don’t like it"), the same day it was built and went live (commit `adfd252`). None of the code below is in the app any more; this document is kept for the record. The design version stays 6, so designs saved while it was live still open: their `pattern.paint` is dropped on opening.
 - **Builds on:** [`v2-pattern-studio.md`](v2-pattern-studio.md) (the Pattern, D35–D68, D78), [`v2-mobile-stage.md`](v2-mobile-stage.md) (the phone dock) and `v2/ARCHITECTURE.md`. It takes up the parked item 18 of the pattern studio, "one-off edits on the whole wall", in a different form.
 - **Code:** everything lives in `v2/`, and paths below are relative to it.
 - **Decisions:** D79–D87 below. D79–D82 are the owner's; the rest are the builder's calls and are marked so.
