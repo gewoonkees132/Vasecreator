@@ -2,12 +2,23 @@
 // per path segment (design §9.7, research §8.2).
 //
 // Vertex pulling: the GPU reads the toolpath straight from the positions
-// array. Each segment (point i → i+1) is one instance of a small template
-// (two rings of a rounded cross-section plus flat caps). The vertex shader
-// builds the bead's frame from the segment, mitres the rings onto the plane
-// that bisects the turn to the neighbouring segment (so beads join without
-// gaps or bulges) and collapses segments that carry no bead. setToolpath()
+// array. Each segment (point i → i+1) is one instance of a small template: a
+// few rings of a rounded cross-section along the segment, plus flat caps. The
+// vertex shader lays the rings on a smooth curve through the segment and its
+// two neighbours (a centripetal Catmull-Rom spline), so a bead flows through
+// the toolpath points the way soft clay does instead of turning sharp
+// corners. Neighbouring segments agree on the curve's direction at the point
+// they share, so their end rings coincide and beads join without gaps,
+// bulges or creases. Segments that carry no bead collapse. setToolpath()
 // therefore does no per-segment work in JavaScript at all.
+//
+// Shading: a studio light rig (a soft key light raking in from the upper
+// left, a weak fill, a rim light and a dim environment) that turns with the
+// view like a turntable in a photo studio, so the relief always reads. The
+// fragment shader darkens the grooves between layers and the inside of tight
+// turns (an analytic ambient occlusion: the cross-section and the curve's
+// bend say where neighbouring clay hides the light), which costs nothing per
+// toolpath change.
 //
 // Rendering is on demand only (research §9.2): on camera moves (while damping
 // settles), new toolpaths, highlight and marker changes, and resizes.
@@ -17,25 +28,36 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-/** Sides around the bead cross-section. 10 keeps the outer face round enough to catch the light per layer. */
-const SIDES = 10;
 /**
- * Geometry level of detail. A bead is 4·SIDES − 4 triangles (36 at 10 sides,
- * 20 at 6). Phones and tablets (coarse pointer or a small screen) draw
- * LOD_SIDES-sided beads above LOD_SEGMENTS_COMPACT segments, about 2 M
- * triangles at full detail; every device does above LOD_SEGMENTS_ANY. Beads
- * that many are only a few pixels tall, where the shading LOD below has
- * already flattened most of their relief. The low template is scaled to the
- * full one's width and height, so layers still overlap and the pot keeps its
- * size. Display only: the toolpath and the G-code don't change.
+ * Geometry level of detail: sides around the bead cross-section and ring
+ * steps along each segment. One bead is 2·sides·steps + 2·(sides − 2)
+ * triangles. The richest detail that keeps the whole pot within the triangle
+ * budget is used: phones and tablets (coarse pointer or a small screen) get
+ * a smaller budget. With one step a bead is straight and mitred at the
+ * joints (the curve still sets the joint's direction); with more it follows
+ * the curve. Beads that many are only a few pixels tall, where the shading
+ * LOD below has already flattened most of their relief. Coarser rings are
+ * scaled to the full one's width and height, so layers still overlap and the
+ * pot keeps its size. Display only: the toolpath and the G-code don't change.
  */
-const LOD_SIDES = 6;
-const LOD_SEGMENTS_COMPACT = 60000;
-const LOD_SEGMENTS_ANY = 300000;
-/** Once switched, stay switched until the count drops this far below the limit, so a drag near it doesn't flicker. */
+const DETAILS = [
+  { sides: 12, steps: 10 },
+  { sides: 10, steps: 6 },
+  { sides: 10, steps: 4 },
+  { sides: 10, steps: 3 },
+  { sides: 8, steps: 2 },
+  { sides: 6, steps: 2 },
+  { sides: 6, steps: 1 },
+];
+const FULL_SIDES = 10;
+const TRIANGLE_BUDGET_COMPACT = 1.8e6;
+const TRIANGLE_BUDGET_ANY = 6e6;
+/** Thumbnails are a few hundred pixels: a modest template is plenty. */
+const THUMB_DETAIL = DETAILS[2];
+/** Once switched down, switch back up only when the count drops this far below the limit, so a drag near it doesn't flicker. */
 const LOD_HYSTERESIS = 0.9;
 /** Superellipse exponent of the cross-section: 2 is an ellipse, higher is a flatter, squarer (squashed clay) bead. */
-const SHAPE_EXP = 2.6;
+const SHAPE_EXP = 2.2;
 /** Beads are drawn a little taller than the layer so stacked layers overlap and never show hairline cracks. */
 const HEIGHT_OVERLAP = 1.06;
 /**
@@ -55,11 +77,26 @@ const THUMB_SUPERSAMPLE = 2;
 const DEFAULT_AZIMUTH = THREE.MathUtils.degToRad(32);
 const DEFAULT_ELEVATION = THREE.MathUtils.degToRad(22);
 
-const COLOR_BEAD = '#f3f1ec';
+/** A matte, slightly warm white, like bisque-fired clay. */
+const COLOR_BEAD = '#f3f0ea';
 const COLOR_WARNING = '#e0a100';
 const COLOR_ERROR = '#d64545';
 // Dashed and lighter than the solid profile line, so the two never read as one (C13).
 const COLOR_SEAM = 'rgb(93,138,139)';
+
+/**
+ * The light rig, by angle around the pot from the camera (degrees, positive
+ * towards the camera's right) and height above the horizon. The key rakes
+ * across the surface from the upper left, so ribs and layers cast soft
+ * shading; the fill keeps the shadow side from going black; the rim light
+ * from behind separates the silhouette from the background.
+ */
+const LIGHTS = [
+  { name: 'key', color: 0xfffaf3, intensity: 3.0, azimuth: -60, elevation: 35 },
+  { name: 'fill', color: 0xe8eef5, intensity: 0.3, azimuth: 70, elevation: 10 },
+  { name: 'rim', color: 0xffffff, intensity: 0.6, azimuth: 150, elevation: 35 },
+];
+const ENVIRONMENT_INTENSITY = 0.24;
 
 const UP = new THREE.Vector3(0, 0, 1);
 
@@ -75,13 +112,41 @@ attribute float aIssue;  // issue bits of the bead ending at aEnd
 uniform vec2 uBead;      // bead width, drawn bead height (mm)
 uniform vec2 uHalfPx;    // half the size of the final image, px (NDC to pixels)
 uniform int uMask;
+uniform float uMitre;    // 1: one ring step, straight beads mitred at the joints
+uniform float uTopZ;     // the top of the highest bead (mm)
 varying float vHighlight;
+varying vec2 vBdN;       // cross-section normal: x across, y along the stacking direction
+varying float vBdCav;    // how far the bead bends towards this side, 1 = folds over
+varying vec2 vBdOcc;     // groove occlusion weight below, above (the top layer has none above)
 // Horizontal normal of a direction; a vertical move has none, so any
 // horizontal side will do.
 vec3 bdSideOf( vec3 t ) {
   vec3 s = cross( t, vec3( 0.0, 0.0, 1.0 ) );
   float l = length( s );
   return l > 1e-4 ? s / l : vec3( 1.0, 0.0, 0.0 );
+}
+// Centripetal Catmull-Rom from p1 to p2 (t in 0..1) as a cubic Hermite:
+// position and velocity. Centripetal knots never overshoot or loop, even
+// next to a much shorter or longer segment.
+void bdCurve( vec3 p0, vec3 p1, vec3 p2, vec3 p3, float t, out vec3 pos, out vec3 vel ) {
+  float d0 = sqrt( max( length( p1 - p0 ), 1e-6 ) );
+  float d1 = sqrt( max( length( p2 - p1 ), 1e-6 ) );
+  float d2 = sqrt( max( length( p3 - p2 ), 1e-6 ) );
+  vec3 m1 = ( ( p1 - p0 ) / d0 - ( p2 - p0 ) / ( d0 + d1 ) + ( p2 - p1 ) / d1 ) * d1;
+  vec3 m2 = ( ( p2 - p1 ) / d1 - ( p3 - p1 ) / ( d1 + d2 ) + ( p3 - p2 ) / d2 ) * d1;
+  float t2 = t * t, t3 = t2 * t;
+  pos = ( 2.0 * t3 - 3.0 * t2 + 1.0 ) * p1 + ( t3 - 2.0 * t2 + t ) * m1 + ( 3.0 * t2 - 2.0 * t3 ) * p2 + ( t3 - t2 ) * m2;
+  vel = ( 6.0 * t2 - 6.0 * t ) * ( p1 - p2 ) + ( 3.0 * t2 - 4.0 * t + 1.0 ) * m1 + ( 3.0 * t2 - 2.0 * t ) * m2;
+}
+// The bend at p1: towards the centre of the circle through p0, p1 and p2,
+// 1 / radius long. Both segments meeting at p1 work it out alike, so the
+// shading that uses it has no step there (the curve's own bend does).
+vec3 bdBend( vec3 p0, vec3 p1, vec3 p2 ) {
+  vec3 a = p0 - p1, b = p2 - p1, n = cross( a, b );
+  float nn = dot( n, n );
+  if ( nn < 1e-10 ) return vec3( 0.0 );
+  vec3 c = cross( dot( a, a ) * b - dot( b, b ) * a, n ) / ( 2.0 * nn );
+  return c / max( dot( c, c ), 1e-6 );
 }
 `;
 
@@ -92,36 +157,47 @@ vec3 bdDir = aEnd - aStart;
 float bdLen = length( bdDir );
 bool bdLive = aKinds.y > 0.5 && bdLen > 1e-5;
 vec3 bdT = bdLive ? bdDir / bdLen : vec3( 1.0, 0.0, 0.0 );
-vec3 bdSide = bdSideOf( bdT );
-vec3 bdUp = cross( bdSide, bdT );
-bool bdAtEnd = position.z > 0.5;
-// The neighbouring move at this ring's end of the segment.
-vec3 bdNb = bdAtEnd ? aNext - aEnd : aStart - aPrev;
-float bdNbKind = bdAtEnd ? aKinds.z : aKinds.x;
-float bdNbLen = length( bdNb );
-vec3 bdM = bdT;
-float bdC = 1.0;
-bool bdMitred = false;
-if ( bdNbKind > 0.5 && bdNbLen > 1e-5 ) {
-  vec3 bdSum = bdT + bdNb / bdNbLen;
-  if ( dot( bdSum, bdSum ) > 1e-8 ) {
-    bdM = normalize( bdSum );
-    bdC = dot( bdT, bdM );
-    // Mitre only up to a 120 degree turn; sharper hairpins get open ends.
-    bdMitred = bdC > 0.5;
-  }
-}
-// Shade the joint ring with the bisector's frame: both neighbours then agree
-// on the normal there, so the joints don't show as stripes.
-vec3 bdNT = bdMitred ? bdM : bdT;
-vec3 bdNSide = bdSideOf( bdNT );
+// Join a neighbour only if it carries a bead and doesn't turn back on
+// itself; hairpins get open ends. Both segments at a joint decide alike. A
+// curved bead rounds even a sharp zigzag into a smooth bump (the fold on the
+// inside of the turn stays hidden in the clay, as with a round nozzle); a
+// mitre would stick out past 120 degrees.
+vec3 bdA = aStart - aPrev;
+vec3 bdB = aNext - aEnd;
+float bdLa = length( bdA ), bdLb = length( bdB );
+float bdTurn = uMitre > 0.5 ? -0.5 : -0.97;
+bool bdJoinS = aKinds.x > 0.5 && bdLa > 1e-5 && dot( bdA, bdT ) > bdTurn * bdLa;
+bool bdJoinE = aKinds.z > 0.5 && bdLb > 1e-5 && dot( bdB, bdT ) > bdTurn * bdLb;
+// An open end carries straight on, so the curve leaves it along the segment.
+vec3 bdP0 = bdJoinS ? aPrev : aStart - bdDir;
+vec3 bdP3 = bdJoinE ? aNext : aEnd + bdDir;
+vec3 bdPos, bdVel;
+bdCurve( bdP0, aStart, aEnd, bdP3, position.z, bdPos, bdVel );
+float bdV2 = dot( bdVel, bdVel );
+vec3 bdTan = bdV2 > 1e-12 ? bdVel * inversesqrt( bdV2 ) : bdT;
+vec3 bdKappa = mix( bdBend( bdP0, aStart, aEnd ), bdBend( aStart, aEnd, bdP3 ), position.z );
+bool bdAtStart = position.z < 0.001;
+bool bdAtEnd = position.z > 0.999;
+bool bdOpen = ( bdAtStart && !bdJoinS ) || ( bdAtEnd && !bdJoinE );
+// Rings stand square to the curve. One step: square to the segment, and slid
+// onto the plane square to the curve at the joint (a mitre), so both
+// neighbours land on the same ring there.
+bool bdMitred = uMitre > 0.5 && !bdOpen && ( bdAtStart || bdAtEnd );
+vec3 bdF = uMitre > 0.5 ? bdT : bdTan;
+vec3 bdSide = bdSideOf( bdF );
+vec3 bdUp = cross( bdSide, bdF );
+// Shade with the curve's own frame: both neighbours agree on it at a joint,
+// so the joints don't show as stripes.
+vec3 bdNSide = bdSideOf( bdTan );
+vec3 bdNUp = cross( bdNSide, bdTan );
 // z is the top of the bead, so its centre is half a layer lower.
-vec3 bdCentre = ( bdAtEnd ? aEnd : aStart ) - vec3( 0.0, 0.0, 0.5 * uBead.y / ${HEIGHT_OVERLAP.toFixed(3)} );
+float bdLayer = uBead.y / ${HEIGHT_OVERLAP.toFixed(3)};
+vec3 bdCentre = bdPos - vec3( 0.0, 0.0, 0.5 * bdLayer );
 // Level of detail: how many pixels apart this bead and its neighbours land
 // on screen. Wall beads stack a layer apart; base beads lie side by side.
 bool bdBase = abs( aKinds.y - 3.0 ) < 0.5;
-float bdPitch = bdBase ? uBead.x : uBead.y / ${HEIGHT_OVERLAP.toFixed(3)};
-vec3 bdStep = ( bdBase ? bdNSide : cross( bdNSide, bdNT ) ) * bdPitch;
+float bdPitch = bdBase ? uBead.x : bdLayer;
+vec3 bdStep = ( bdBase ? bdNSide : bdNUp ) * bdPitch;
 vec4 bdClip = projectionMatrix * modelViewMatrix * vec4( bdCentre, 1.0 );
 vec4 bdDClip = projectionMatrix * modelViewMatrix * vec4( bdStep, 0.0 );
 float bdW = max( bdClip.w, 1e-3 );
@@ -130,30 +206,59 @@ float bdPx = length( ( bdDClip.xy * bdW - bdClip.xy * bdDClip.w ) / ( bdW * bdW 
 // Allow for a flare of up to about 45 degrees, so bowls and flared rims seen
 // from above keep their relief.
 if ( !bdBase ) bdPx = max( bdPx, bdPitch * abs( normalize( cameraPosition - bdCentre ).z ) * projectionMatrix[1][1] * uHalfPx.y / bdW );
-float bdDetail = mix( ${LOD_HINT.toFixed(3)}, 1.0, smoothstep( ${LOD_FLAT_PX.toFixed(3)}, ${LOD_FULL_PX.toFixed(3)}, bdPx ) );
+float bdFine = smoothstep( ${LOD_FLAT_PX.toFixed(3)}, ${LOD_FULL_PX.toFixed(3)}, bdPx );
+float bdDetail = mix( ${LOD_HINT.toFixed(3)}, 1.0, bdFine );
 // The template normal belongs to a unit shape; scaling it to width x height
 // needs the inverse-transpose, i.e. a divide. Easing the relief off is the
 // same as shading a bead stretched along the stacking direction: walls lose
 // their up/down tilt, base beads their sideways one.
+vec2 bdTrue = normalize( normal.xy / uBead );
 vec2 bdN = normalize( normal.xy * ( bdBase
   ? vec2( bdDetail / uBead.x, 1.0 / uBead.y )
   : vec2( 1.0 / uBead.x, bdDetail / uBead.y ) ) );
-vec3 objectNormal = bdNSide * bdN.x + cross( bdNSide, bdNT ) * bdN.y;
+vec3 objectNormal = bdNSide * bdN.x + bdNUp * bdN.y;
+// Ambient occlusion terms, eased off with the relief. Neighbouring layers
+// (base: neighbouring rings) hide the light from the bead's top and bottom;
+// nothing lies on the top layer.
+vBdN = bdBase ? bdTrue.yx : bdTrue;
+bool bdTop = !bdBase && bdCentre.z > uTopZ - 1.02 * bdLayer;
+vBdOcc = vec2( 1.0, bdTop ? 0.0 : 1.0 ) * bdFine;
+// On the inside of a turn, the bead's own clay hides the light.
+vBdCav = dot( bdKappa, bdNSide * ( position.x * uBead.x ) + bdNUp * ( position.y * uBead.y ) ) * bdFine;
 vHighlight = ( uMask != 0 && ( int( aIssue + 0.5 ) & uMask ) != 0 ) ? 1.0 : 0.0;
 `;
 
 const VERT_POSITION = /* glsl */`
 vec3 bdOff = bdSide * ( position.x * uBead.x ) + bdUp * ( position.y * uBead.y );
-// Mitred: slide the ring along the tangent onto the bisecting plane. Both
-// neighbours land on the same plane, so the joint is closed and nothing
-// sticks out. Open end (start or end of a bead run, a hairpin): a short stub.
-float bdAlong = bdMitred ? - dot( bdOff, bdM ) / bdC : ( bdAtEnd ? 0.35 : -0.35 ) * uBead.y;
-vec3 transformed = bdLive ? bdCentre + bdOff + bdT * bdAlong : vec3( 0.0 );
+// Mitred: slide the ring along the segment onto the plane square to the
+// curve. Open end (start or end of a bead run, a hairpin): a short stub.
+float bdC = max( dot( bdT, bdTan ), 0.5 );
+float bdAlong = bdMitred ? - dot( bdOff, bdTan ) / bdC : bdOpen ? ( bdAtEnd ? 0.35 : -0.35 ) * uBead.y : 0.0;
+vec3 transformed = bdLive ? bdCentre + bdOff + bdF * bdAlong : vec3( 0.0 );
 `;
 
 const FRAG_PARS = /* glsl */`
 uniform vec3 uHighlightColor;
 varying float vHighlight;
+varying vec2 vBdN;
+varying float vBdCav;
+varying vec2 vBdOcc;
+`;
+
+// After three's lights: scale the light by the occlusion. Indirect light is
+// hidden fully, direct light (which has no shadow map) partly.
+const FRAG_OCCLUSION = /* glsl */`
+#include <aomap_fragment>
+{
+  vec2 bdN = vBdN / max( length( vBdN ), 1e-4 );
+  float bdGroove = smoothstep( 0.6, 1.0, abs( bdN.y ) ) * ( bdN.y > 0.0 ? vBdOcc.y : vBdOcc.x );
+  float bdCav = smoothstep( 0.0, 1.0, vBdCav );
+  float bdAO = ( 1.0 - 0.4 * bdGroove ) * ( 1.0 - 0.5 * bdCav );
+  reflectedLight.indirectDiffuse *= bdAO;
+  reflectedLight.indirectSpecular *= bdAO;
+  reflectedLight.directDiffuse *= mix( 1.0, bdAO, 0.4 );
+  reflectedLight.directSpecular *= bdAO;
+}
 `;
 
 /**
@@ -194,7 +299,7 @@ export class BeadRenderer {
     this._afterRender = new Set();
     this._seamVisible = false;
     this._bed = null;
-    this._sides = SIDES;
+    this._detail = DETAILS[0];
 
     this._renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
     this._renderer.setClearColor(0x000000, 0);
@@ -206,13 +311,17 @@ export class BeadRenderer {
     this._scene = new THREE.Scene();
     // RoomEnvironment is y-up; turn it so its ceiling lights sit above the pot.
     this._scene.environmentRotation.set(Math.PI / 2, 0, 0);
-    this._scene.environmentIntensity = 0.5;
+    this._scene.environmentIntensity = ENVIRONMENT_INTENSITY;
     this._initEnvironment();
 
-    // A gentle key light that follows the camera (placed in _renderWith), so
-    // the side you look at is always lit like a studio shot.
-    this._key = new THREE.DirectionalLight(0xffffff, 1.3);
-    this._scene.add(this._key, this._key.target);
+    // The studio lights turn with the view (placed in _renderWith), like a
+    // pot on a turntable: whichever side you look at is lit the same way.
+    this._lights = LIGHTS.map((spec) => {
+      const light = new THREE.DirectionalLight(spec.color, spec.intensity);
+      light.name = spec.name;
+      this._scene.add(light, light.target);
+      return { light, spec };
+    });
 
     this._camera = new THREE.PerspectiveCamera(FOV, 1, 1, 5000);
     this._camera.up.copy(UP);   // before OrbitControls reads it
@@ -230,9 +339,11 @@ export class BeadRenderer {
       uBead: { value: new THREE.Vector2(3, 1.5 * HEIGHT_OVERLAP) },
       uHalfPx: { value: new THREE.Vector2(1, 1) },
       uMask: { value: 0 },
+      uMitre: { value: 0 },
+      uTopZ: { value: 1e9 },
       uHighlightColor: { value: new THREE.Color(COLOR_WARNING) },
     };
-    this._material = new THREE.MeshStandardMaterial({ color: COLOR_BEAD, roughness: 0.6, metalness: 0 });
+    this._material = new THREE.MeshStandardMaterial({ color: COLOR_BEAD, roughness: 0.82, metalness: 0 });
     this._material.onBeforeCompile = (shader) => {
       Object.assign(shader.uniforms, this._uniforms);
       shader.vertexShader = shader.vertexShader
@@ -242,9 +353,10 @@ export class BeadRenderer {
       shader.fragmentShader = shader.fragmentShader
         .replace('#include <common>', `#include <common>\n${FRAG_PARS}`)
         .replace('vec4 diffuseColor = vec4( diffuse, opacity );',
-          'vec4 diffuseColor = vec4( mix( diffuse, uHighlightColor, vHighlight ), opacity );');
+          'vec4 diffuseColor = vec4( mix( diffuse, uHighlightColor, vHighlight ), opacity );')
+        .replace('#include <aomap_fragment>', FRAG_OCCLUSION);
     };
-    this._material.customProgramCacheKey = () => 'vc-beads-2';
+    this._material.customProgramCacheKey = () => 'vc-beads-3';
 
     this._mesh = new THREE.Mesh(new THREE.InstancedBufferGeometry(), this._material);
     // The template's own bounds mean nothing; the beads are placed in the shader.
@@ -313,8 +425,8 @@ export class BeadRenderer {
    */
   setToolpath(result) {
     const n = result?.positions ? Math.floor(result.positions.length / 3) : 0;
-    this._sides = sidesFor(n - 1, this._sides);
-    const geometry = result ? buildGeometry(result, this._sides) : null;
+    this._detail = detailFor(n - 1, this._detail);
+    const geometry = result ? buildGeometry(result, this._detail) : null;
     this._mesh.geometry.dispose();
     this._mesh.geometry = geometry || new THREE.InstancedBufferGeometry();
     this._mesh.visible = !!geometry;
@@ -494,7 +606,7 @@ export class BeadRenderer {
     if (!result) throw new Error('BeadRenderer.thumbnail: no toolpath');
     if (this._lost) throw new Error('BeadRenderer.thumbnail: WebGL context lost');
     size = Math.max(16, Math.round(size));
-    const own = result === this._result ? null : buildGeometry(result);
+    const own = result === this._result ? null : buildGeometry(result, THUMB_DETAIL);
     if (result !== this._result && !own) throw new Error('BeadRenderer.thumbnail: empty toolpath');
     try {
       return await this._thumbnailWith(result, own, size);
@@ -615,13 +727,25 @@ export class BeadRenderer {
 
   _renderWith(camera, lookAt) {
     camera.updateMatrixWorld();
-    // Key light from above and to the left of the camera.
-    const right = this._v.setFromMatrixColumn(camera.matrixWorld, 0);
-    const target = this._key.target.position.copy(lookAt);
-    this._key.position.copy(camera.position).sub(target).normalize()
-      .addScaledVector(right, -0.55).addScaledVector(UP, 0.9).normalize()
-      .multiplyScalar(1000).add(target);
-    this._key.target.updateMatrixWorld();
+    // The camera's direction around the pot; looking straight down, the
+    // direction the top of the screen points away from.
+    const view = this._v.copy(camera.position).sub(lookAt);
+    view.z = 0;
+    if (view.lengthSq() < 1e-6) view.setFromMatrixColumn(camera.matrixWorld, 1).negate().setZ(0);
+    if (view.lengthSq() < 1e-6) view.set(0, -1, 0);
+    view.normalize();
+    const az0 = Math.atan2(view.y, view.x);
+    for (const { light, spec } of this._lights) {
+      const az = az0 + THREE.MathUtils.degToRad(spec.azimuth);
+      const el = THREE.MathUtils.degToRad(spec.elevation);
+      light.target.position.copy(lookAt);
+      light.position.set(Math.cos(az) * Math.cos(el), Math.sin(az) * Math.cos(el), Math.sin(el))
+        .multiplyScalar(1000).add(lookAt);
+      light.target.updateMatrixWorld();
+    }
+    const geometry = this._mesh.geometry;
+    this._uniforms.uMitre.value = geometry.userData.steps === 1 ? 1 : 0;
+    this._uniforms.uTopZ.value = geometry.userData.topZ ?? 1e9;
     this._renderer.render(this._scene, camera);
   }
 
@@ -711,13 +835,15 @@ export class BeadRenderer {
 // ------------------------------------------------------------------ helpers
 
 /**
- * Two rings of a unit superellipse cross-section (x along the side, y up,
- * z = ring 0 at the segment start, 1 at its end), smooth normals, and flat
- * caps that close the open ends of a bead run (mitred joints hide them).
+ * Rings of a unit superellipse cross-section (x along the side, y up, z = how
+ * far along the segment, 0 to 1), smooth normals, and flat caps that close
+ * the open ends of a bead run (joints hide them).
+ * @param {{ sides: number, steps: number }} detail
  */
-function templateData(sides) {
-  const pos = new Float32Array(2 * sides * 3);
-  const nrm = new Float32Array(2 * sides * 3);
+function templateData({ sides, steps }) {
+  const rings = steps + 1;
+  const pos = new Float32Array(rings * sides * 3);
+  const nrm = new Float32Array(rings * sides * 3);
   const e = 2 / SHAPE_EXP, f = 2 * (SHAPE_EXP - 1) / SHAPE_EXP;
   const spow = (v, p) => Math.sign(v) * Math.abs(v) ** p;
   // Half the width and height a ring of this many sides reaches.
@@ -732,16 +858,17 @@ function templateData(sides) {
   };
   // A coarser ring is stretched to the full one's extent (the full one is
   // left exactly as it is), with its normals corrected for the stretch.
-  const want = extent(SIDES), have = extent(sides);
+  const want = extent(FULL_SIDES), have = extent(sides);
   const sx = want.x / have.x, sy = want.y / have.y;
-  for (let ring = 0; ring < 2; ring++) {
+  for (let ring = 0; ring < rings; ring++) {
     for (let k = 0; k < sides; k++) {
       const a = (2 * Math.PI * k) / sides;
       const c = Math.cos(a), s = Math.sin(a);
       const o = (ring * sides + k) * 3;
       pos[o] = 0.5 * spow(c, e) * sx;
       pos[o + 1] = 0.5 * spow(s, e) * sy;
-      pos[o + 2] = ring;
+      // Rings bunch up towards the toolpath points, where a zigzag bends hardest.
+      pos[o + 2] = 0.5 - 0.5 * Math.cos((Math.PI * ring) / steps);
       // Gradient of |2x|^n + |2y|^n, which is the outward normal.
       const nx = spow(c, f) / sx, ny = spow(s, f) / sy, nl = Math.hypot(nx, ny) || 1;
       nrm[o] = nx / nl;
@@ -749,29 +876,41 @@ function templateData(sides) {
     }
   }
   const idx = [];
-  for (let k = 0; k < sides; k++) {
-    const a0 = k, b0 = (k + 1) % sides, a1 = a0 + sides, b1 = b0 + sides;
-    idx.push(a0, b1, b0, a0, a1, b1);
+  for (let ring = 0; ring < steps; ring++) {
+    for (let k = 0; k < sides; k++) {
+      const a0 = ring * sides + k, b0 = ring * sides + (k + 1) % sides, a1 = a0 + sides, b1 = b0 + sides;
+      idx.push(a0, b1, b0, a0, a1, b1);
+    }
   }
+  const last = steps * sides;
   for (let k = 1; k < sides - 1; k++) {
     idx.push(0, k, k + 1);                                // start cap faces back
-    idx.push(sides, sides + k + 1, sides + k);            // end cap faces forward
+    idx.push(last, last + k + 1, last + k);               // end cap faces forward
   }
   return { position: pos, normal: nrm, index: new Uint16Array(idx) };
 }
 
-/** Template arrays by side count, built on first use. */
+/** Template arrays by detail, built on first use. */
 const templates = new Map();
 
+/** Triangles one bead of this detail is drawn with. */
+const trianglesOf = ({ sides, steps }) => 2 * sides * steps + 2 * (sides - 2);
+
 /**
- * Sides per bead for a toolpath of this many segments (see LOD_SIDES).
+ * The richest detail whose beads fit the device's triangle budget (see
+ * DETAILS).
  * @param {number} segments
- * @param {number} current the side count in use, for the hysteresis
+ * @param {{ sides: number, steps: number }} current the detail in use, for the hysteresis
  */
-function sidesFor(segments, current) {
-  const limit = isCompactDevice() ? LOD_SEGMENTS_COMPACT : LOD_SEGMENTS_ANY;
-  const low = current === LOD_SIDES ? segments > limit * LOD_HYSTERESIS : segments > limit;
-  return low ? LOD_SIDES : SIDES;
+function detailFor(segments, current) {
+  const budget = isCompactDevice() ? TRIANGLE_BUDGET_COMPACT : TRIANGLE_BUDGET_ANY;
+  const at = DETAILS.indexOf(current);
+  for (let i = 0; i < DETAILS.length - 1; i++) {
+    // Stepping up from a coarser detail needs some room to spare.
+    const limit = budget * (at > i ? LOD_HYSTERESIS : 1);
+    if (segments * trianglesOf(DETAILS[i]) <= limit) return DETAILS[i];
+  }
+  return DETAILS[DETAILS.length - 1];
 }
 
 /** A phone or tablet: touch as the main pointer, or a small screen. */
@@ -786,15 +925,15 @@ function isCompactDevice() {
  * by one point at each end so every segment can read both neighbours; there
  * is no per-segment JavaScript.
  * @param {PreviewResult} result
- * @param {number} [sides] around the bead cross-section
+ * @param {{ sides: number, steps: number }} [detail] of the bead template
  * @returns {THREE.InstancedBufferGeometry | null}
  */
-function buildGeometry(result, sides = SIDES) {
+function buildGeometry(result, detail = DETAILS[0]) {
   const positions = result?.positions;
   const n = positions ? Math.floor(positions.length / 3) : 0;
   if (n < 2) return null;
-  if (!templates.has(sides)) templates.set(sides, templateData(sides));
-  const templateArrays = templates.get(sides);
+  if (!templates.has(detail)) templates.set(detail, templateData(detail));
+  const templateArrays = templates.get(detail);
   const pos = new Float32Array(3 * (n + 2));
   pos.set(positions.subarray(0, 3), 0);
   pos.set(positions.subarray(0, 3 * n), 3);
@@ -823,6 +962,9 @@ function buildGeometry(result, sides = SIDES) {
   const iBuf = new THREE.InstancedInterleavedBuffer(issues, 1, 1);
   g.setAttribute('aIssue', new THREE.InterleavedBufferAttribute(iBuf, 1, 1));
   g.instanceCount = n - 1;
+  g.userData.steps = detail.steps;
+  // Nothing lies on the top layer, so its top isn't shaded as a groove.
+  g.userData.topZ = result.bounds?.max?.[2] ?? Infinity;
   return g;
 }
 
