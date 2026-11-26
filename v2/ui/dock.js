@@ -7,8 +7,8 @@
 //   the tool row (ui/dock-tools.js), chips with their values, the whole
 //     width of the screen: there is no Next, the step emblems below move
 //     between steps (pattern studio D49).
-// A group tool (Shape's Morph, D36) opens a row of its own: a back button
-// that stays put at the left, then the group's toggle (Large · Detailed) and
+// A group tool opens a row of its own: a back button
+// that stays put at the left, then the group's toggle and
 // its tools, which scroll.
 // The adjuster keeps one height whatever the tool, so the pot never jumps.
 // Every edit goes through the store like the sheet's controls. Buttons that
@@ -18,14 +18,13 @@ import { h } from './controls.js';
 import { createDial } from './dial.js';
 import { labelIcon } from './press-label.js';
 import { ICONS } from './icons.js';
-import { toolsFor, currentTool, toolName, slotInfo, drawingInfo, openGroup } from './dock-tools.js';
+import { toolsFor, currentTool, toolName, drawingInfo, openGroup } from './dock-tools.js';
 import { depthLocked } from './sections/shape.js';
-import { PLAIN } from '../core/patterns.js';
 import { listPatterns, onPatternsChanged } from '../store/assets.js';
 import {
-  IMAGE_ACCEPT, pickPattern, importImageFile, openEditor, drawEntry, mineEntries, loadImages,
+  openEditor,
   pickLayerPattern, layerMineEntries, drawLayerEntry, readoutOf, setDensityFace, editableEntry,
-  pickSavedPattern, pickSavedDetail, targetKey, savedSpacingMm, savableEntry, saveEntry,
+  pickSavedPattern, targetKey, savedSpacingMm, savableEntry, saveEntry,
 } from './pattern-actions.js';
 import { createSaveForm } from './my-patterns.js';
 
@@ -163,15 +162,9 @@ export function mountDock(el, ctx, frame) {
   hintBtn.addEventListener('click', (e) => { if (tool?.part) frame.openSheet(tool.part, { focus: e.detail === 0 }); });
   const hintBox = h('div', { class: 'dock-hint' }, [hintText, hintBtn]);
 
-  // ---------- The Detailed morph's swatch carousel (M9) ----------
+  // ---------- The carousel's tiles (M9) ----------
 
-  const carousel = h('div', { class: 'dock-carousel', role: 'group' });
-  const fileInput = h('input', { type: 'file', accept: IMAGE_ACCEPT, class: 'visually-hidden', tabIndex: -1, 'aria-hidden': 'true' });
-  let tiles = [];
-  let tilesKey = '';
-  let carouselSlot = null;
-
-  const swatchTile = (id, name, extraClass = '', onPick = () => pickPattern(ctx, carouselSlot, id)) => {
+  const swatchTile = (id, name, extraClass, onPick) => {
     const canvas = h('canvas', { class: 'dock-swatch-canvas', width: 1, height: 1, 'aria-hidden': 'true' });
     const btn = h('button', { type: 'button', class: `dock-swatch ${extraClass}`, title: name, 'aria-pressed': 'false' }, [
       canvas, h('span', { class: 'dock-swatch-name', text: name }),
@@ -196,11 +189,6 @@ export function mountDock(el, ctx, frame) {
     btn.addEventListener('click', onClick);
     return btn;
   };
-  const imageTile = actionTile('dock-swatch--image', 'image', 'Image', 'Use an image as a swatch', () => {
-    loadImages().catch(() => {}); // warm up while the picker is open
-    fileInput.value = '';
-    fileInput.click();
-  });
   // The 2D editor (D45, D46): Make starts an empty grid, Edit the drawing in use.
   const edit = (target, mode, from) => {
     openEditor(ctx, target, { mode, returnFocus: from }).catch((err) => {
@@ -208,12 +196,9 @@ export function mountDock(el, ctx, frame) {
       say('The editor didn’t load. Reload the page to try again.');
     });
   };
-  const makeTile = actionTile('dock-swatch--make', 'make', 'Make', 'Make your own swatch', () => edit({ kind: 'detail', slot: carouselSlot }, 'make', makeTile));
-  const editTile = actionTile('dock-swatch--edit', 'edit', 'Edit', 'Edit the swatch', () => edit({ kind: 'detail', slot: carouselSlot }, 'edit', editTile));
   const makeDrawingTile = actionTile('dock-swatch--make', 'make', 'Make', 'Make your own pattern', () => edit({ kind: 'pattern' }, 'make', makeDrawingTile));
   const editDrawingTile = actionTile('dock-swatch--edit', 'edit', 'Edit', 'Edit the pattern', () => edit({ kind: 'pattern' }, 'edit', editDrawingTile));
   // Save to My patterns (D48): the name form takes the adjuster's place.
-  const saveTile = actionTile('dock-swatch--keep', 'keep', 'Save', 'Save the swatch to My patterns', () => startNaming({ kind: 'detail', slot: carouselSlot }, saveTile));
   const saveDrawingTile = actionTile('dock-swatch--keep', 'keep', 'Save', 'Save the pattern to My patterns', () => startNaming({ kind: 'pattern' }, saveDrawingTile));
   /** Shows an Edit tile only when the target holds a drawing, named for what it edits. */
   function syncEditTile(tileEl, target, d) {
@@ -222,59 +207,6 @@ export function mountDock(el, ctx, frame) {
     if (!e) return;
     labelIcon(tileEl, e.own || String(e.id).startsWith('user:') ? `Edit ${e.name}` : `Edit a copy of ${e.name}`);
   }
-  fileInput.addEventListener('change', async () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    imageTile.disabled = true;
-    say('Reading the image…');
-    try {
-      await importImageFile(ctx, file, carouselSlot);
-      say('');
-    } catch (err) {
-      const plain = err?.constructor === Error && err.message;
-      if (!plain) console.warn('Image not used', err);
-      say(plain ? err.message : 'That image couldn’t be used. Try a PNG, JPEG or WebP file.');
-    } finally {
-      imageTile.disabled = false;
-    }
-  });
-
-  function renderCarousel(state, s) {
-    const d = state.design;
-    const mine = mineEntries(library, d, saved);
-    // A replaced entry keeps its id and name; its time rebuilds the tile, so a tap applies what was saved last.
-    const key = `${s}|${mine.map((e) => `${e.id}|${e.name}|${e.saved?.updated ?? 0}`).join(';')}`;
-    if (key !== tilesKey) {
-      tilesKey = key;
-      tiles = [];
-      if (s === 'b') tiles.push(noneTile(() => pickPattern(ctx, carouselSlot, null)));
-      for (const p of library.patterns) tiles.push({ ...swatchTile(p.id, p.name), entry: p });
-      tiles.push({ ...swatchTile(PLAIN.id, PLAIN.name), entry: PLAIN });
-      // A saved swatch brings its depth, repeats and tile height (D48).
-      const mineTiles = mine.map((e) => ({
-        ...swatchTile(e.id, e.name, 'dock-swatch--mine', e.saved ? () => pickSavedDetail(ctx, carouselSlot, e.saved) : undefined),
-        entry: e,
-      }));
-      if (mineTiles.length) mineTiles[0].btn.classList.add('is-first-mine');
-      tiles.push(...mineTiles);
-      carousel.replaceChildren(...tiles.map((t) => t.btn), imageTile, makeTile, editTile, saveTile, fileInput);
-      carousel.setAttribute('aria-label', `Detailed morph swatches for ${s.toUpperCase()}`);
-    }
-    const slot = d.form.detail[s];
-    syncEditTile(editTile, { kind: 'detail', slot: s }, d);
-    saveTile.hidden = editTile.hidden;
-    if (!saveTile.hidden) labelIcon(saveTile, `Save the swatch of ${s.toUpperCase()} to My patterns`);
-    const onKey = slot ? targetKey(d, library, { kind: 'detail', slot: s }) : null;
-    let selected = null;
-    for (const t of tiles) {
-      const on = t.entry?.saved ? !!slot && t.entry.key === onKey : slot ? t.id === slot.pattern : t.id === null;
-      t.btn.setAttribute('aria-pressed', String(on));
-      if (on) selected = t.btn;
-      if (t.canvas && t.entry) drawEntry(t, t.entry, on && t.entry.own ? slot : null, d, SWATCH, () => update(store.state));
-    }
-    return selected;
-  }
-
   // ---------- The Pattern's carousel (§3.8): the starters, None, your own ----------
 
   const drawings = h('div', { class: 'dock-carousel dock-carousel--drawings', role: 'group', 'aria-label': 'Patterns' });
@@ -346,7 +278,7 @@ export function mountDock(el, ctx, frame) {
     save: (entry, name, list) => saveEntry(ctx, naming.target, entry, name, list),
     onClose: (result) => endNaming(result),
   });
-  const forms = { pattern: saveForm('pattern'), detail: saveForm('detail') };
+  const forms = { pattern: saveForm('pattern') };
   function startNaming(target, from) {
     if (!target?.kind) return;
     const form = forms[target.kind];
@@ -412,7 +344,7 @@ export function mountDock(el, ctx, frame) {
     const btn = h('button', { type: 'button', class: `dock-chip dock-chip--${t.kind}`, role: 'tab', id: `dock-tool-${t.id}`, 'aria-controls': adjust.id }, [h('span', { class: 'dock-chip-text' }, [name, value])]);
     btn.dataset.tool = t.id;
     let swatch = null;
-    if (t.kind === 'patterns' || t.kind === 'drawings') {
+    if (t.kind === 'drawings') {
       swatch = { canvas: h('canvas', { class: 'dock-chip-swatch', width: 1, height: 1, 'aria-hidden': 'true' }), drawn: '' };
       btn.prepend(swatch.canvas);
     }
@@ -424,9 +356,7 @@ export function mountDock(el, ctx, frame) {
   function pick(t) {
     const step = store.state.view.step;
     const g = openGroup(step, store.state);
-    const patch = { tools: { ...(store.state.view.tools || {}), [g ? g.key : step]: t.id } };
-    if (t.kind === 'patterns') patch.slot = t.slot;
-    store.setView(patch);
+    store.setView({ tools: { ...(store.state.view.tools || {}), [g ? g.key : step]: t.id } });
   }
 
   tabs.addEventListener('keydown', (e) => {
@@ -472,15 +402,8 @@ export function mountDock(el, ctx, frame) {
       const on = t === cur;
       c.btn.setAttribute('aria-selected', String(on));
       c.btn.tabIndex = on ? 0 : -1;
-      if (t.kind === 'patterns') {
-        const info = slotInfo(state, library, t.slot);
-        setText(c.name, t.slot.toUpperCase());
-        setText(c.value, info.name);
-        c.btn.setAttribute('aria-label', `Detailed morph ${t.slot.toUpperCase()}: ${info.name}`);
-        c.swatch.canvas.classList.toggle('is-none', !info.slot);
-        if (info.entry) drawEntry(c.swatch, { ...info.entry, id: info.slot.pattern }, info.slot, state.design, CHIP_SWATCH, () => update(store.state));
-        else clearSwatch(c.swatch);
-      } else if (t.kind === 'drawings') {
+      if (t.kind === 'drawings') {
+        const info = drawingInfo(state, library);      } else if (t.kind === 'drawings') {
         const info = drawingInfo(state, library);
         setText(c.name, toolName(t, state));
         setText(c.value, info.name);
@@ -497,8 +420,8 @@ export function mountDock(el, ctx, frame) {
       }
     }
 
-    // The adjuster: switch only when the tool (or its slot) changed.
-    const fresh = cur !== tool || step !== shownStep || (cur?.kind === 'patterns' && cur.slot !== carouselSlot);
+    // The adjuster: switch only when the tool changed.
+    const fresh = cur !== tool || step !== shownStep;
     tool = cur;
     if (fresh && naming) dropNaming();
     if (fresh) {
@@ -512,7 +435,6 @@ export function mountDock(el, ctx, frame) {
 
   function showAdjuster(state) {
     const t = tool;
-    carouselSlot = null;
     if (!t) { adjust.replaceChildren(); return; }
     if (t.kind === 'dial') {
       const spec = safeSpec(t, state);
@@ -526,11 +448,6 @@ export function mountDock(el, ctx, frame) {
       optKey = '';
       renderOptions(state);
       adjust.replaceChildren(optBox);
-    } else if (t.kind === 'patterns') {
-      carouselSlot = t.slot;
-      const selected = renderCarousel(state, t.slot);
-      adjust.replaceChildren(carousel);
-      requestAnimationFrame(() => keepInView(carousel, selected));
     } else if (t.kind === 'drawings') {
       const selected = renderDrawings(state);
       adjust.replaceChildren(drawings);
@@ -561,10 +478,6 @@ export function mountDock(el, ctx, frame) {
       if (t.face) syncFace(state);
     } else if (t.kind === 'options') {
       renderOptions(state);
-    } else if (t.kind === 'patterns') {
-      const before = carousel.querySelector('[aria-pressed="true"]');
-      const selected = renderCarousel(state, t.slot);
-      if (selected !== before) keepInView(carousel, selected);
     } else if (t.kind === 'drawings') {
       const before = drawings.querySelector('[aria-pressed="true"]');
       const selected = renderDrawings(state);

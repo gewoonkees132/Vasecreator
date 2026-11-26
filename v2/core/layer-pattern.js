@@ -12,7 +12,7 @@
 // runs straight between them, so in·out·in·out is a zigzag (D37). With Soften
 // on, every gap gets the same `extra` points, about half a bead apart, on a
 // smooth curve through the softened nodes (D59). It is added radially, after
-// the profile, the Morph and the Detailed morph.
+// the profile and the Morph.
 //
 // A layer starts where the one below ended, on that layer's row, and changes
 // to its own row over the seam ramp (D60): `at` takes the share of the row
@@ -28,17 +28,23 @@
 // shown is recomputed from them) or as points per layer (a whole number of
 // tiles). The one set last is kept when the pot changes size.
 
-import { PLAIN, bitmapValues } from './patterns.js';
-import { BLEND_SHAPES, blendShape, softEdgeMm } from './surface.js';
+import { bitmapValues } from './patterns.js';
+import { BLEND_SHAPES, blendShape } from './surface.js';
 import { blurGrid } from './raster.js';
 import { createProfile } from './profile.js';
 import { createPlan } from './plan.js';
 
-/** The Fade's shapes: the Detailed morph's blend words (D42, D54). */
+/** The Fade's shapes (D42, D54). */
 export const FADE_SHAPES = BLEND_SHAPES;
 export const DENSITY_FACES = ['spacing', 'points'];
-/** Node spacing around, in bead widths (D40). */
-export const SPACING_BEADS = Object.freeze({ min: 0.5, max: 3, default: 1 });
+/** Node spacing around, in bead widths (D40; from a quarter bead since D64, so 2 mm fits the standard 8 mm bead). */
+export const SPACING_BEADS = Object.freeze({ min: 0.25, max: 3 });
+/** The node spacing every drawing starts with: 2 mm (D64), held to the bead's range. */
+export const DEFAULT_SPACING_MM = 2;
+/** The standard node spacing for a bead width, in mm. */
+export function defaultSpacingMm(beadWidthMm) {
+  return Math.min(Math.max(DEFAULT_SPACING_MM, SPACING_BEADS.min * beadWidthMm), SPACING_BEADS.max * beadWidthMm);
+}
 /**
  * Depth as a share of a bead width: the most, and the standard every drawing
  * starts with, both two thirds of a bead (D61; D38 had half a bead at most).
@@ -49,30 +55,13 @@ export const DEFAULT_POINTS = 96;
 export const MAX_NODES = 1600;
 
 /**
- * Where a new Pattern runs (§3.4): over the Detailed morph's range when it
- * has one, else from 8 mm to 10 mm below the rim.
- *
- * Over the Detailed morph it keeps inside the relief's soft start and end,
- * where the relief is whole. The Pattern starts and stops sharply, and
- * starting it on the relief's ramp would put two steps on one layer: on
- * the Classic vase the flutes alone grow 0.67 mm on the layer the Pattern
- * would start on, so no starter Pattern could pass bead support (D43) there.
- * A range too short for that keeps the Detailed morph's own.
+ * Where a new Pattern runs (§3.4): from 8 mm to 10 mm below the rim.
  * @param {object} design normalised
  * @returns {{ fromMm: number, toMm: number }}
  */
 export function defaultPatternRange(design) {
-  const detail = design.form.detail;
   const H = design.form.height;
   const h = design.layers.layerHeightMm;
-  const on = (slot) => !!slot && slot.pattern !== PLAIN.id && slot.depthMm > 0;
-  if (detail && (on(detail.a) || on(detail.b))) {
-    const edge = softEdgeMm(Math.max(detail.a?.depthMm ?? 0, detail.b?.depthMm ?? 0), h);
-    const fromMm = detail.fromMm + edge;
-    const toMm = Math.min(detail.toMm, H) - edge;
-    if (toMm - fromMm >= h) return { fromMm, toMm };
-    return { fromMm: detail.fromMm, toMm: Math.min(detail.toMm, H) };
-  }
   const toMm = Math.max(H - 10, h);
   return { fromMm: Math.min(8, Math.max(toMm - h, 0)), toMm };
 }
@@ -303,20 +292,17 @@ export function createLayerPattern(design, library, wall) {
 }
 
 /**
- * The depth and density a drawing starts with, in mm for this design's bead:
- * always two thirds of a bead deep (D61), and the drawing's own spacing (in
- * bead widths, as the starter library gives it) or else nodes one bead apart (D40).
+ * The depth and density every drawing starts with, in mm for this design's
+ * bead: two thirds of a bead deep (D61) and nodes 2 mm apart (D64).
  * @param {object} design normalised
- * @param {{ spacingBeads?: number }} [defaults]
  * @returns {{ depthMm: number, density: { by: 'spacing', spacingMm: number, points: number } }}
  */
-export function drawingDefaults(design, defaults = {}) {
+export function drawingDefaults(design) {
   const w = design.layers.beadWidthMm;
-  const spacing = Math.min(Math.max(defaults.spacingBeads ?? SPACING_BEADS.default, SPACING_BEADS.min), SPACING_BEADS.max);
   return {
     // A whole hundredth of a mm, never past the most.
     depthMm: Math.min(Math.round(DEPTH_BEADS.default * w * 100) / 100, Math.floor(DEPTH_BEADS.max * w * 100) / 100),
-    density: { by: 'spacing', spacingMm: Math.round(spacing * w * 100) / 100, points: DEFAULT_POINTS },
+    density: { by: 'spacing', spacingMm: Math.round(defaultSpacingMm(w) * 100) / 100, points: DEFAULT_POINTS },
   };
 }
 
@@ -325,12 +311,11 @@ export function drawingDefaults(design, defaults = {}) {
  * (drawingDefaults), crisp, no fade, over defaultPatternRange.
  * @param {object} design normalised
  * @param {string} drawing
- * @param {{ spacingBeads?: number }} [defaults]
  */
-export function newPattern(design, drawing, defaults) {
+export function newPattern(design, drawing) {
   return {
     drawing,
-    ...drawingDefaults(design, defaults),
+    ...drawingDefaults(design),
     ...defaultPatternRange(design),
     fade: { shape: 'even', amount: 1 },
     softenCells: 0,

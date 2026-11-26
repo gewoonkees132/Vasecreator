@@ -14,6 +14,14 @@ Read these first: `docs/design/v2-design-brainstorm.md` (the approved design, ca
 
 **The pattern studio (issue #3, D35–D57) is built** on `t3/pattern-studio`, in six slices ([`docs/design/v2-pattern-studio.md`](../docs/design/v2-pattern-studio.md) §11): slice 1, the engine (the Pattern, the Detailed morph's rename, bead support), slice 2, the Pattern and Shape steps (the starter Patterns, the Pattern's tools and blue bracket, the Detailed morph as a part of Shape, Diagonal for the A/B blend), slice 3, the 2D editor (one editor for the Pattern and the Detailed morph's coarse grids, live on the pot, one history step per session), slice 4, the warnings card rules (the overhang limit, bead support and fineness set under their warnings, D44), slice 5, the *Next* and icon sweep (no *Next* anywhere; single-task buttons are icons named three ways, D49), and slice 6, saved patterns (*Save* puts a Pattern or a Detailed morph swatch in My patterns with its settings, under a name; one tap applies it to any design, presets included; the design keeps its own copy; drawings go by content ids, D48), are all built. The branch is pushed for the owner's review; nothing of it is in `main`.
 
+**The Detailed morph is gone (D63, 2026-11-26; design version 4, no migration).** The mm-scale relief (`form.detail`, slots A and B, their blend, the shape library `library/patterns.json`, image swatches on the wall, `rules.layersPerBump`, the Detailed morph's saved swatches and its mode in the 2D editor) was removed at the owner's request. Wherever this file still names one of these, it describes what was there before; what is gone:
+- **Core:** `form.detail`, `LIMITS.depthMm` / `repeats` / `tileHeightMm` / `layersPerBump`, `snapTileHeight`; `core/surface.js` keeps only `BLEND_SHAPES` and `blendShape` (the Pattern's Fade); `core/patterns.js` keeps the bitmap alone (`bitmapValues`, `makeBitmap`, `fillBitmap`, `validateRecipe`, which accepts only `kind: 'bitmap'`); `core/toolpath.js` lost `resolveSlots`, `patternFeatures`, `detailAt`, `weightsAt`, `slots` and `active`: the displacement is the Pattern alone, and an image draws only as a morph map.
+- **Library:** `library = { layerPatterns }`; `library/patterns.json` is deleted. The presets are plain shapes.
+- **UI:** `ui/sections/detail.js` is deleted; Shape's parts are size, footprint, twist, curve, points and morph. The dock's Morph is a plain `sheet` tool again (no `group`, no `patterns` kind, no `view.slot` or `view.morphKind`). `ui/swatch.js` keeps `drawBitmapSwatch`. `ui/pattern-actions.js` keeps the Pattern's functions; the one target is `{ kind: 'pattern' }`. The gizmos' modes are `'pattern'`, `'seam'` or null.
+- **Storage:** My patterns holds `kind: 'pattern'` entries only; a stored `kind: 'detail'` record is ignored, not deleted.
+
+**The standards (D61, D62, D64).** A new design and the presets start at an 8 mm bead and 5 mm layers. Every drawing starts two thirds of a bead deep (also the most) and with nodes 2 mm apart (`DEFAULT_SPACING_MM`, `defaultSpacingMm(beadWidthMm)` in `core/layer-pattern.js`; the spacing runs from a quarter bead to three beads). `drawingDefaults(design)` and `newPattern(design, drawing)` take no per-drawing defaults any more, and the starter library carries none.
+
 **The mobile stage (a design iteration, M1–M12, awaiting the owner's check) is built:** on a phone the pot is the stage. The canvas fills the window, the chips sit in the top bar, and a slim dock above the step bar replaces the controls area. The dock holds a row of tools with their values and one big control for the chosen tool (a ruler dial, option buttons, the swatch carousel or a hint); its *Next* went with the pattern studio (D49), so the tool row has the whole width. The full settings are an optional sheet. Handles on the pot set where the pattern runs (Pattern) and turn the seam (Layers & seam), on desktop too. The design is in [`docs/design/v2-mobile-stage.md`](../docs/design/v2-mobile-stage.md) ("stage §…").
 
 Still open:
@@ -39,7 +47,7 @@ v2/
   main.js               bootstrap and wiring: store + engine client + renderer + handles + gizmos + UI
   styles/               app.css: tokens, layout (desktop and the phone stage), top bar, chips, history, dialogs; panels.css: the step frame, sections, controls, Print, the phone dock; editor.css: the 2D editor
   core/                 pure and deterministic (see Rules)
-    math.js patterns.js surface.js      deterministic maths, pattern recipes (shape, bitmap), the Detailed morph's A/B weights
+    math.js patterns.js surface.js      deterministic maths, the Pattern's bitmap recipe, the Fade's shapes
     bitmap.js                           the 2D editor's operations on a bitmap tile (D45, D46)
     layer-pattern.js                    the Pattern: a bead-scale bitmap, one row per layer, one cell per node (D35–D43)
     design.js profile.js plan.js        the design document, r(z) of the profile curve, footprint outlines
@@ -52,8 +60,8 @@ v2/
                         my-patterns.js (Save's name form and the delete confirmation, D48)
                         rules.js (the warning rules the warnings card sets, D44)
                         dock.js dock-tools.js dial.js   (the phone dock, mobile stage)
-  ui/sections/          shape, curve, points, morph, detail (Shape) · pattern (Pattern) · layers · base
-  library/              patterns.json (the Detailed morph's swatches), layer-patterns.json (the starter Patterns), presets.json
+  ui/sections/          shape, curve, points, morph (Shape) · pattern (Pattern) · layers · base
+  library/              layer-patterns.json (the starter Patterns), presets.json
   test/                 *.test.js, support/ (fixtures, printability measures), golden/
   tools/serve.mjs       dev server
 ```
@@ -63,7 +71,7 @@ v2/
 The shape is the one in `library/presets.json` (design §13). `core/design.js` owns it:
 
 ```js
-export const DESIGN_SCHEMA = 'vasecreator/design', DESIGN_VERSION = 3, MIN_KNOTS = 2, MAX_KNOTS = 12, INTERPS, FOOTPRINTS, SEAM_POSITIONS, INNER_WALLS;
+export const DESIGN_SCHEMA = 'vasecreator/design', DESIGN_VERSION = 4, MIN_KNOTS = 2, MAX_KNOTS = 12, INTERPS, FOOTPRINTS, SEAM_POSITIONS, INNER_WALLS;
 export const LIMITS = { … }                    // { min, max, step } per field, keyed by JSON field name (below)
 export function defaultDesign(): Design        // a copy of the "Classic vase" preset named 'Design 1' (a test keeps them equal)
 export function normaliseDesign(json): Design  // new object: fills defaults, clamps, sorts knots, snaps tile heights, migrates;
@@ -76,7 +84,7 @@ export function widestRadius(d): number        // of the evaluated curve, which 
 export function moveKnot(d, index, { z?, r? }) // bottom knot stays at z 0; the top knot sets the height; neighbours ≥ a layer apart; r ≥ minRadius
 export function insertKnot(d, { z, r? }): number   // z moves into the free space between neighbours; r defaults to the curve; −1 only with 12 knots or no room
 export function deleteKnot(d, index): boolean  // false for the bottom/top knot or when only 2 remain
-export function setHeight(d, mm)               // scales knot z and the Detailed morph's and the Pattern's ranges; never squeezes knots under a layer apart
+export function setHeight(d, mm)               // scales knot z and the Pattern's range; never squeezes knots under a layer apart
 export function setWidth(d, mm), setDepth(d, mm)   // scale knot r to the widest diameter (C6); set form.plan.depthRatio = mm / width
 ```
 
@@ -89,7 +97,7 @@ export function setWidth(d, mm), setDepth(d, mm)   // scale knot r to the widest
   "drawing": "user:…" | "lib:…@1",   // a bitmap recipe: design.assets, or library.layerPatterns (core/layer-pattern.js findDrawing)
   "depthMm": 5.33,                    // out = +depth, in = −depth; 0 to ⅔ bead width, and ⅔ is where every drawing starts (D38, D61)
   "density": { "by": "spacing" | "points", "spacingMm": 3, "points": 96 },   // the face set last is the one used (D40)
-  "fromMm": 16, "toMm": 144,          // its own range (D41); defaults to the Detailed morph's inside its soft edges, or 8 mm to 10 mm below the rim
+  "fromMm": 16, "toMm": 144,          // its own range (D41); defaults to 8 mm to 10 mm below the rim
   "fade": { "shape": "even" | "fadesUp" | "fadesDown" | "middle" | "diagonal", "amount": 1 },
   "softenCells": 0                    // a wrapping Gaussian blur, σ 0–2 cells (D42)
 }
@@ -219,7 +227,7 @@ export class BeadRenderer {
 
 `render/handles.js`: `createProfileHandles(renderer, overlayEl, { onDrag(index, {z, r}), onCommit(), onAdd({z, r}), onRemove(index), onSelect(index) })` returns `{ update(design, profileLine), setSelected(index), setVisible(bool), dispose() }`. `setSelected(null)` or `setSelected(-1)` clears the selection. Raw values go out; the caller applies `moveKnot`, `insertKnot` or `deleteKnot` and calls `update()`.
 
-`render/gizmos.js` (stage M7, M8; pattern studio D41): `createGizmos(renderer, overlayEl, { onRange(target, which, zMm), onSeam(angleDeg), onCommit() })` returns `{ setMode('detail' | 'pattern' | 'seam' | null), update(design, result), dispose() }`. *detail* is a dark dashed bracket on the screen-left side of the wall, clear of the profile handles, from `form.detail.fromMm` to `toMm`; *pattern* is the same bracket in blue on the screen-right side for `design.pattern`'s range. Each has a *From* and a *To* handle dragged up and down on the facing plane (as the profile handles), and `onRange` says which range (`'detail'` or `'pattern'`). The offset clears the silhouette, the depths of the Detailed morph and the Pattern, and a morph. *seam* is a grip at the top of `result.seamLine`, dragged around the pot: the change in angle on the horizontal plane through the grip is added to the seam angle, so it works for every seam position. It fades when the seam is on the far side. Both are focusable sliders with arrow keys (1 mm or 1°, Shift 10 mm or 15°) and stay inside `renderer.region`. `main.js` shows *detail* in Shape once the Detailed morph has a swatch, *pattern* in Pattern once there is a Pattern and *seam* in Layers & seam, never in Print, and applies the values with `store.change` and one `store.commit` per drag.
+`render/gizmos.js` (stage M7, M8; pattern studio D41): `createGizmos(renderer, overlayEl, { onRange(target, which, zMm), onSeam(angleDeg), onCommit() })` returns `{ setMode('pattern' | 'seam' | null), update(design, result), dispose() }`. *detail* is a dark dashed bracket on the screen-left side of the wall, clear of the profile handles, from `form.detail.fromMm` to `toMm`; *pattern* is the same bracket in blue on the screen-right side for `design.pattern`'s range. Each has a *From* and a *To* handle dragged up and down on the facing plane (as the profile handles), and `onRange` says which range (`'detail'` or `'pattern'`). The offset clears the silhouette, the depths of the Detailed morph and the Pattern, and a morph. *seam* is a grip at the top of `result.seamLine`, dragged around the pot: the change in angle on the horizontal plane through the grip is added to the seam angle, so it works for every seam position. It fades when the seam is on the far side. Both are focusable sliders with arrow keys (1 mm or 1°, Shift 10 mm or 15°) and stay inside `renderer.region`. `main.js` shows *detail* in Shape once the Detailed morph has a swatch, *pattern* in Pattern once there is a Pattern and *seam* in Layers & seam, never in Print, and applies the values with `store.change` and one `store.commit` per drag.
 
 Handles sit in the vertical plane through the axis that faces the camera, on the screen-right side (C17). The module sets `overlayEl` to `pointer-events: none` itself, so the view still orbits; only the handles and the line's hit stroke take events. Handles are focusable DOM elements (44 px on touch), and the line is SVG, re-placed in `onAfterRender`. Input uses Pointer Events with capture. Tap the line to add a point. Delete, Backspace, right-click or a long-press offers Remove. Arrow keys nudge 1 mm (Shift: 10), with one commit per nudge.
 
@@ -251,8 +259,8 @@ Store = {
                                     // after a change, on page hide, when the tab is shown again and when another tab saved a step
 }
 view = { step: 'shape' | 'pattern' | 'layers' | 'base' | 'print', parts: { [step]: partId }, tools: { [step]: toolId, ['<step>.<group>.<side>']: toolId },
-         mode: 'design' | 'print', slot: 'a' | 'b', morphKind?: 'large' | 'detailed', selectedKnot: number | null, highlight: warningId | null, designsOpen, sizeLocked,
-         editor: null | 'pattern' | 'detail' }   // the 2D editor is open (ui/pattern-editor.js sets it)
+         mode: 'design' | 'print', selectedKnot: number | null, highlight: warningId | null, designsOpen, sizeLocked,
+         editor: null | 'pattern' }   // the 2D editor is open (ui/pattern-editor.js sets it)
 // step is kept in localStorage (vc2.step), so a reload comes back to it; parts (the part a phone's sheet
 // shows per step) and tools (the dock tool per step, mobile stage) last the session. mode is derived from step inside setView ('print' on Print, else 'design') and
 // can't be set on its own. Switching steps never adds a history step; undo, redo and restore never change it.

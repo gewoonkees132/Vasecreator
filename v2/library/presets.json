@@ -4,12 +4,12 @@
   "presets": [
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 4,
       "units": "mm",
       "meta": {
         "id": "preset:classic-vase@1",
         "name": "Classic vase",
-        "description": "A rounded body with a slim neck; flutes on the belly fade into a smooth neck."
+        "description": "A rounded body with a slim neck."
       },
       "form": {
         "height": 170,
@@ -23,33 +23,44 @@
             { "z": 170, "r": 39 }
           ]
         },
-        "plan": { "footprint": "circle", "depthRatio": 1, "cornerRounding": 0 },
-        "twist": { "degrees": 0 },
-        "detail": {
-          "fromMm": 10,
-          "toMm": 150,
-          "a": { "pattern": "lib:flutes@1", "depthMm": 2, "repeats": 12, "tileHeightMm": 20 },
-          "b": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 20 },
-          "blend": { "shape": "fadesUp", "amount": 1 }
+        "plan": {
+          "footprint": "circle",
+          "depthRatio": 1,
+          "cornerRounding": 0
+        },
+        "twist": {
+          "degrees": 0
         }
       },
       "layers": {
         "beadWidthMm": 8,
         "layerHeightMm": 5,
-        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+        "seam": {
+          "rampLengthMm": 15,
+          "position": "hidden",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.7, "curveRatio": 0.5, "layersPerBump": 2 },
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
       "base": { "layers": 2, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 7.2, "innerWall": "smooth" }
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     },
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 4,
       "units": "mm",
       "meta": {
         "id": "preset:twisted-column@1",
         "name": "Twisted column",
-        "description": "A gently swelling column with pleats that wind a sixth of a turn."
+        "description": "A gently swelling square column that winds a sixth of a turn."
       },
       "form": {
         "height": 150,
@@ -62,33 +73,44 @@
             { "z": 150, "r": 40 }
           ]
         },
-        "plan": { "footprint": "rectangle", "depthRatio": 1, "cornerRounding": 0.3 },
-        "twist": { "degrees": 60 },
-        "detail": {
-          "fromMm": 5,
-          "toMm": 145,
-          "a": { "pattern": "lib:pleats@1", "depthMm": 2, "repeats": 8, "tileHeightMm": 20 },
-          "b": null,
-          "blend": { "shape": "fadesUp", "amount": 1 }
+        "plan": {
+          "footprint": "rectangle",
+          "depthRatio": 1,
+          "cornerRounding": 0.3
+        },
+        "twist": {
+          "degrees": 60
         }
       },
       "layers": {
         "beadWidthMm": 8,
         "layerHeightMm": 5,
-        "seam": { "rampLengthMm": 15, "position": "followTwist", "angleDeg": 0 }
+        "seam": {
+          "rampLengthMm": 15,
+          "position": "followTwist",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.7, "curveRatio": 0.5, "layersPerBump": 2 },
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
       "base": { "layers": 2, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 7.2, "innerWall": "smooth" }
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     },
     {
       "schema": "vasecreator/design",
-      "version": 3,
+      "version": 4,
       "units": "mm",
       "meta": {
         "id": "preset:square-planter@1",
         "name": "Square planter",
-        "description": "A flaring square planter with a basket weave and a drainage hole."
+        "description": "A flaring square planter with a drainage hole."
       },
       "form": {
         "height": 110,
@@ -100,24 +122,35 @@
             { "z": 110, "r": 62, "corner": 0 }
           ]
         },
-        "plan": { "footprint": "rectangle", "depthRatio": 1, "cornerRounding": 0.3 },
-        "twist": { "degrees": 0 },
-        "detail": {
-          "fromMm": 10,
-          "toMm": 100,
-          "a": { "pattern": "lib:basket@1", "depthMm": 2, "repeats": 4, "tileHeightMm": 40 },
-          "b": null,
-          "blend": { "shape": "fadesUp", "amount": 1 }
+        "plan": {
+          "footprint": "rectangle",
+          "depthRatio": 1,
+          "cornerRounding": 0.3
+        },
+        "twist": {
+          "degrees": 0
         }
       },
       "layers": {
         "beadWidthMm": 8,
         "layerHeightMm": 5,
-        "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
+        "seam": {
+          "rampLengthMm": 15,
+          "position": "hidden",
+          "angleDeg": 0
+        }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.7, "curveRatio": 0.5, "layersPerBump": 2 },
+      "rules": {
+        "overhangLimitDeg": 45,
+        "supportRatio": 0.7,
+        "curveRatio": 0.5
+      },
       "base": { "layers": 2, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 20 } },
-      "finish": { "walls": 1, "wallSpacingMm": 7.2, "innerWall": "smooth" }
+      "finish": {
+        "walls": 1,
+        "wallSpacingMm": 7.2,
+        "innerWall": "smooth"
+      }
     }
   ]
 }

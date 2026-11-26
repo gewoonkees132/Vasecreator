@@ -27,11 +27,9 @@ test('ratios of a bead show as percentages, within the design limits', () => {
   assert.equal(shownRule(d, field('overhangLimitDeg')), 45);
   assert.equal(shownRule(d, field('supportRatio')), 70);
   assert.equal(shownRule(d, field('curveRatio')), 50);
-  assert.equal(shownRule(d, field('layersPerBump')), 2);
   assert.deepEqual(ruleLimits(field('supportRatio')), { min: 10, max: 100, step: 5 });
   assert.deepEqual(ruleLimits(field('curveRatio')), { min: 10, max: 150, step: 5 });
   assert.deepEqual(ruleLimits(field('overhangLimitDeg')), { min: 5, max: 80, step: 1 });
-  assert.deepEqual(ruleLimits(field('layersPerBump')), { min: 1, max: 6, step: 1 });
 });
 
 test('a shown value writes back unscaled, clamped and whole where it must be', () => {
@@ -42,8 +40,6 @@ test('a shown value writes back unscaled, clamped and whole where it must be', (
   assert.equal(d.rules.curveRatio, 0.55);
   setRule(d, field('curveRatio'), 400);
   assert.equal(d.rules.curveRatio, LIMITS.curveRatio.max);
-  setRule(d, field('layersPerBump'), 2.6);
-  assert.equal(d.rules.layersPerBump, 3);
   setRule(d, field('overhangLimitDeg'), 2);
   assert.equal(d.rules.overhangLimitDeg, 5);
   // What a field writes survives normalising unchanged.
@@ -93,7 +89,6 @@ test('the overhang limit is only in the warnings card now', () => {
 test('a rule set in the card changes the warning live', () => {
   // A cone leaning about 37°: fine at 45°, flagged at 30°, as the card sets it.
   const d = defaultDesign();
-  d.form.detail.a = null;
   d.form.profile = { interp: 'linear', tension: 0.5, cornerMm: 0, knots: [{ z: 0, r: 40 }, { z: 40, r: 40 }, { z: 80, r: 70 }, { z: 100, r: 70 }] };
   d.form.height = 100;
   const overhang = (design) => computePreview(design, { library }).warnings.find((w) => w.id === 'overhang');

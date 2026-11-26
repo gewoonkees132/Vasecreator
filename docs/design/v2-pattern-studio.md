@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Owner decisions D35–D62 (D58–D62 on 2026-11-26, after the owner saw the seam in Rhino; built, §11.7 and §11.8; D58–D60 pushed as `fdeec4a`). D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`), 5 (the *Next* and icon sweep, `2391041`) and 6 (saved patterns) are built on `t3/pattern-studio` (all pushed for the owner's review, up to slice 6, `e056938`). All six slices are built (§11, notes in §11.1–§11.6).
+- **Status:** Owner decisions D35–D64 (D58–D64 on 2026-11-26, after the owner saw the seam in Rhino; built, §11.7–§11.9; D58–D62 pushed up to `85c7578`). **The Detailed morph was removed by D63:** §4, D35/D36's split, D45's soft grids, D52–D54 and everything else below about the Detailed morph is history, kept for the record. D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`), 5 (the *Next* and icon sweep, `2391041`) and 6 (saved patterns) are built on `t3/pattern-studio` (all pushed for the owner's review, up to slice 6, `e056938`). All six slices are built (§11, notes in §11.1–§11.6).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -107,6 +107,8 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 | D60 | **The seam never steps sideways, and is spread over whole points.** A layer starts on the point where the layer below ended. Its climb of one layer height is shared out evenly over a whole number of cells (the seam ramp length, rounded to cells: 15 mm at 3 mm cells is 5 points), and over the same points it changes from the row below to its own. | Owner (2026-11-26): "spread over multiple points, e.g. Z-height distributed over 4 points"; changing rows over the same points is the builder's |
 | D61 | **The standard depth is two thirds of a layer width.** Every drawing starts with Depth at ⅔ of the bead width (5.33 mm on the standard bead), whatever the starter; the most is ⅔ too (D38 had ½). No starter flips from out to in between rows, so a layer sits at most ⅔ of a bead off the one below. | Owner (2026-11-26). The bead-support rule's default going from 50 % to 70 %, so a straight wall passes, is the builder's |
 | D62 | **The standard layer is 8 mm wide and 5 mm high,** for a new design and for the three presets. | Owner (2026-11-26). The presets' retuned relief, base and hole (§11.8) and the wider layer-ratio band are the builder's |
+| D63 | **The Detailed morph is removed completely.** "It's no longer required." The mm-scale relief, its slots A and B, their blend, its swatch library, image swatches on the wall, its saved swatches and its mode in the 2D editor all go. The Pattern is the only surface detail; the Morph stays. No backwards compatibility: an older design opens without its relief. | Owner (2026-11-26) |
+| D64 | **The standard pattern width is 2 mm.** Every drawing starts with its points 2 mm apart around the pot (the Density spacing), whatever the starter. | Owner (2026-11-26): "set the default pattern width to 2mm". Reading "pattern width" as the cell width, and lowering the least spacing from half a bead to a quarter so 2 mm fits the 8 mm bead, are the builder's |
 
 **What this revises:**
 - D16 (swatches from a bitmap generator) is now carried by D45 and D47.
@@ -735,6 +737,18 @@ The owner exported a softened Pattern to Rhino and saw a sideways step at the se
   - Square planter: basket 8 × 1 mm → 4 × 2 mm; relief from 10 to 100 mm; base 4 → 2 layers; drain hole 14 → 20 mm (two beads at least).
 - **Layer ratio.** "Layer height is unusual for this bead" now starts above 0.65 × the bead width (was 0.6), since 5 / 8 is 0.625.
 - **Tests.** The `cylinder` fixture pins its own 3 mm by 1.5 mm layer, so the engine tests keep their numbers; tests on the presets and the defaults moved to the new values, and the golden G-code files were regenerated (the presets are now 34, 30 and 22 layers).
+
+### 11.9 The Detailed morph removed, and the 2 mm standard spacing (D63, D64)
+
+- **What went (D63).** `form.detail` and everything that read it: `ui/sections/detail.js`, `library/patterns.json` (the twelve shapes), the analytic shapes and soft grids in `core/patterns.js`, `detailGate` / `detailWeights` / `softEdgeMm` in `core/surface.js`, the slots in `core/toolpath.js`, `rules.layersPerBump` and its rule in the warnings card, the dock's slot carousel and Morph's Large · Detailed group, the gizmos' dark bracket in Shape, image swatches on the wall, the editor's Edges control and soft preview, and My patterns' `kind: 'detail'`. The design version is 4.
+- **What stayed.** The Pattern, the Morph (with its image maps), the 2D editor for the Pattern, My patterns for Patterns, and the Fade's five shapes (`core/surface.js` `blendShape`).
+- **What an old design does.** It opens; its relief is dropped without a word (no migration, D50's rule). A stored Detailed morph swatch stays in the browser's storage but no longer lists.
+- **The presets are plain shapes now**: Classic vase, Twisted column (a twisted rounded square) and Square planter, with new descriptions. Nothing replaces their flutes, pleats and basket weave.
+- **A new Pattern's range** is always 8 mm to 10 mm below the rim (it used to sit inside the relief's soft edges).
+- **The hidden seam** follows the Pattern's groove alone.
+- **Spacing (D64).** `DEFAULT_SPACING_MM = 2` and `defaultSpacingMm(beadWidthMm)` in `core/layer-pattern.js`; `SPACING_BEADS` is `{ min: 0.25, max: 3 }`. The starters carry no defaults of their own any more (`defaults` is gone from `library/layer-patterns.json`), and `drawingDefaults(design)` / `newPattern(design, drawing)` lost their third argument. Picking a starter over a Pattern of your own resets depth and spacing to the standards; a drawing of your own keeps yours.
+- **Known, and told to the owner.** At 2 mm apart and 5.33 mm deep on an 8 mm bead, every starter warns on the presets: "Bead not supported" where the wall leans, and "Pattern finer than the bead can print" where a single out or in cell makes a corner tighter than half a bead (4 mm).
+- **Tests.** 298 pass. The tests of the Detailed morph went with it (the shape library, slots, blend weights, the dock's group, the saved swatches); the fine-pattern and narrow-wall checks are now driven by a Pattern.
 
 ---
 

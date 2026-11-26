@@ -13,15 +13,13 @@
 //
 // The wall point is P = B(z, u) + D(z, u)·d̂: B the footprint outline scaled
 // by the profile radius and turned by the twist, d̂ its radial direction in
-// XY, and D the displacement in mm: the Detailed morph (form.detail, D35)
-// plus the Pattern (design.pattern, core/layer-pattern.js). Detailed morph
-// coordinates are x = repeats·u and y = z / tile height, with u riding on the
-// outline, so whole repeats meet without a seam and the relief follows the
+// XY, and D the displacement in mm: the Pattern (design.pattern,
+// core/layer-pattern.js), with u riding on the outline, so it follows the
 // twist.
 //
 // The Pattern is per layer and per node (D37, D39): inside its range every
 // layer has the same N nodes at u = j / N and, crisp, no other points (D58):
-// the outline, the Morph and the Detailed morph are followed at the nodes.
+// the outline and the Morph are followed at the nodes.
 // With Soften on, the same k points sit in every gap (D59), so a layer has
 // N·(k + 1) points and every (k + 1)-th is a node. The seam sits on a node
 // there and the ramp runs over whole cells: the climb is shared out evenly
@@ -32,19 +30,14 @@
 //
 // Phase 2: the geometry morph M(z, u) (core/morph.js) is added to the profile
 // radius before the footprint, D and the minimum-radius clamp, so the walls,
-// the base, the checks and the size all see the morphed form. Slots may also
-// name a recipe from design.assets ('user:…') or an image ('img:…', sampled
-// from the Raster passed in `images`, prefiltered for the bead grid).
+// the base, the checks and the size all see the morphed form. A morph map may
+// be an image ('img:…', sampled from the Raster passed in `images`).
 
 import { TAU, dcos, dsin, radians } from './math.js';
-import { PLAIN, evaluatePattern, findPattern } from './patterns.js';
-import { blendShape, detailGate, detailWeights } from './surface.js';
 import { createLayerPattern } from './layer-pattern.js';
 import { createProfile } from './profile.js';
-import { snapTileHeight } from './design.js';
 import { createPlan } from './plan.js';
 import { ISSUE } from './checks.js';
-import { preparedRaster } from './raster.js';
 import { createMorph } from './morph.js';
 
 /** What the move ending at a point is (ARCHITECTURE.md, PreviewResult.kinds). */
@@ -65,109 +58,6 @@ export const MAX_PREVIEW_POINTS = 2_000_000;
 /** Wall layers over which the seam ramp grows to a full layer height above a flat layer. */
 export const RAMP_IN_LAYERS = 4;
 
-// Features per tile of each named shape, around and up: how many bumps one
-// repeat puts in a row and in a column. Drives the points per layer (8 per
-// feature) and the vertical fineness check.
-const SHAPE_FEATURES = {
-  flutes: [1, 0], pleats: [1, 0], ribs: [0, 1], ripple: [1, 1], spiral: [1, 1], chevron: [1, 1],
-  diamonds: [1, 1], scales: [1, 2], dots: [1, 2], honeycomb: [1, 2], basket: [4, 4],
-};
-
-/**
- * Bumps per tile of a pattern recipe.
- * @param {object} recipe
- * @returns {{ around: number, up: number }}
- */
-export function patternFeatures(recipe) {
-  if (recipe.kind === 'shape') {
-    const [around, up] = SHAPE_FEATURES[recipe.shape] ?? [1, 1];
-    return { around, up };
-  }
-  if (recipe.kind === 'bitmap') {
-    // A grid whose rows are all the same has no bumps up; one whose columns
-    // are all the same has none around.
-    const { columns, rows, cells } = recipe;
-    let around = 0;
-    let up = 0;
-    for (let r = 0; r < rows && !around; r++) {
-      for (let c = 1; c < columns; c++) if (cells[r * columns + c] !== cells[r * columns]) { around = columns; break; }
-    }
-    for (let i = columns; i < cells.length; i++) if (cells[i] !== cells[i % columns]) { up = rows; break; }
-    return { around, up };
-  }
-  return { around: 0, up: 0 };
-}
-
-/**
- * Resolves the Detailed morph's slots: library ids against the pattern library,
- * 'user:…' against the recipes in design.assets, 'img:…' against the rasters
- * in `images` (by the asset's hash). A pattern that can't be found prints
- * plain and is reported (missing, or missingImages for an image this device
- * doesn't have), so an old design still opens.
- * @param {object} design
- * @param {{ patterns: object[] }} library
- * @param {{ images?: Map<string, object>, perimeterMm?: number }} [options] perimeterMm at the widest
- *   radius, for an image's prefilter
- */
-export function resolveSlots(design, library, { images, perimeterMm = 0 } = {}) {
-  const slots = [];
-  const missing = [];
-  const missingImages = [];
-  const assets = design.assets ?? {};
-  const h = design.layers.layerHeightMm;
-  const w = design.layers.beadWidthMm;
-  for (const key of ['a', 'b']) {
-    const slot = design.form.detail[key];
-    if (!slot) continue;
-    let recipe = PLAIN.recipe;
-    let evaluate = null;
-    let features = null;
-    // Snapped here too, so a design edited without normalising still lines up.
-    const tileHeightMm = snapTileHeight(slot.tileHeightMm, h);
-    const id = slot.pattern;
-    if (typeof id === 'string' && id.startsWith('img:')) {
-      const asset = assets[id];
-      const hash = asset?.kind === 'image' ? asset.hash : id.slice(4);
-      const raster = images?.get?.(hash);
-      if (raster) {
-        // Prefilter for the bead grid (research §6.3): σ of half a sample,
-        // the bead spacing w/2 around and the layer height up, in texels.
-        const tileWidthMm = Math.max(perimeterMm / slot.repeats, 1e-6);
-        const spacingU = ((w / 2) * raster.width) / tileWidthMm;
-        const spacingV = (h * raster.height) / tileHeightMm;
-        const image = preparedRaster(raster, spacingU > 1 ? spacingU / 2 : 0, spacingV > 1 ? spacingV / 2 : 0, true);
-        recipe = { kind: 'image', hash };
-        evaluate = image.sample;
-        features = image.features;
-      } else {
-        missingImages.push(id);
-      }
-    } else if (typeof id === 'string' && id.startsWith('user:')) {
-      const asset = assets[id];
-      if (asset?.kind === 'recipe') recipe = asset.recipe;
-      else missing.push(id);
-    } else {
-      try {
-        recipe = findPattern(library ?? { patterns: [] }, id).recipe;
-      } catch {
-        missing.push(id);
-      }
-    }
-    const r = recipe;
-    slots.push({
-      key,
-      recipe,
-      depthMm: slot.depthMm,
-      repeats: slot.repeats,
-      tileHeightMm,
-      features: features ?? patternFeatures(recipe),
-      active: slot.depthMm > 0 && recipe.kind !== 'plain',
-      evaluate: evaluate ?? ((x, y) => evaluatePattern(r, x, y)),
-    });
-  }
-  return { slots, missing, missingImages };
-}
-
 // Widest radius of the profile curve over the layer tops (and the ends).
 function widestProfileRadius(profile, H, h) {
   let widest = Math.max(profile.at(0), profile.at(H));
@@ -178,12 +68,11 @@ function widestProfileRadius(profile, H, h) {
 /**
  * Everything needed to evaluate wall points for one design, precomputed once.
  * @param {object} design a normalised design
- * @param {{ patterns: object[] }} library
+ * @param {{ layerPatterns?: object[] }} library
  * @param {{ images?: Map<string, object> }} [options]
  */
 export function createWallModel(design, library, { images } = {}) {
   const { form, layers, base } = design;
-  const detail = form.detail;
   const h = layers.layerHeightMm;
   const w = layers.beadWidthMm;
   const H = form.height;
@@ -194,11 +83,12 @@ export function createWallModel(design, library, { images } = {}) {
   const plan = createPlan(form.plan);
   const twistPerMm = radians(form.twist.degrees) / H;
   const rMin = 2 * w;
-  const needsWidest = form.morph || ['a', 'b'].some((k) => String(detail[k]?.pattern ?? '').startsWith('img:'));
-  const widestMm = needsWidest ? widestProfileRadius(profile, H, h) * plan.unitPerimeter : 0;
+  const widestMm = form.morph ? widestProfileRadius(profile, H, h) * plan.unitPerimeter : 0;
   const morph = createMorph(design, { images, perimeterMm: widestMm });
-  const { slots, missing, missingImages } = resolveSlots(design, library, { images, perimeterMm: widestMm });
-  if (morph?.missingImage) missingImages.push(design.form.morph.map);
+  /** A Pattern whose drawing can't be found prints plain and is reported, so an old design still opens. */
+  const missing = [];
+  /** The morph's image map when this device doesn't have it. */
+  const missingImages = morph?.missingImage ? [design.form.morph.map] : [];
   const pattern = createLayerPattern(design, library, {
     profile, unitPerimeter: plan.unitPerimeter, layerCount, baseLayers, maxNodes: MAX_POINTS_PER_LAYER,
   });
@@ -220,58 +110,9 @@ export function createWallModel(design, library, { images } = {}) {
     }
     return { lo, hi };
   }
-  const active = slots.filter((s) => s.active);
   const limit = radians(design.rules.overhangLimitDeg);
   const stepLimit = (h * dsin(limit)) / dcos(limit);
   const supportLimit = design.rules.supportRatio * w;
-
-  // A Diagonal blend (D54) gives B a share that also depends on u, so the
-  // weights cached per height are the most each slot can reach there (A the
-  // soft edges alone, B those times the amount) and detailAt splits them per point.
-  const diagonal = !!detail.b && detail.blend.shape === 'diagonal';
-  const span = Math.max(detail.toMm - detail.fromMm, 1e-9);
-
-  // Two-entry weight cache: wall points alternate between their own height
-  // and the height one layer below (for the overhang check).
-  let zA = NaN, aA = 0, bA = 0, zB = NaN, aB = 0, bB = 0, flip = false;
-  const weight = { a: 0, b: 0 };
-  function weightsAt(z) {
-    if (z === zA) { weight.a = aA; weight.b = bA; return weight; }
-    if (z === zB) { weight.a = aB; weight.b = bB; return weight; }
-    let a;
-    let b;
-    if (diagonal) {
-      a = detailGate(detail, z, h);
-      b = a * detail.blend.amount;
-    } else {
-      ({ a, b } = detailWeights(detail, z, h));
-    }
-    if (flip) { zA = z; aA = a; bA = b; } else { zB = z; aB = a; bB = b; }
-    flip = !flip;
-    weight.a = a;
-    weight.b = b;
-    return weight;
-  }
-
-  /** The Detailed morph's displacement in mm at height z, position u. Never on the base. */
-  function detailAt(z, u) {
-    if (z <= baseTop || active.length === 0) return 0;
-    const wt = weightsAt(z);
-    let wa = wt.a;
-    let wb = wt.b;
-    if (diagonal && wa > 0) {
-      const share = detail.blend.amount * blendShape('diagonal', (z - detail.fromMm) / span, u);
-      wb = wa * share;
-      wa *= 1 - share;
-    }
-    let d = 0;
-    for (let k = 0; k < active.length; k++) {
-      const s = active[k];
-      const ws = s.key === 'a' ? wa : wb;
-      if (ws > 0) d += ws * s.depthMm * s.evaluate(s.repeats * u, z / s.tileHeightMm);
-    }
-    return d;
-  }
 
   /** The wall layer a height lies on: layer i runs from i·h up to its top at (i + 1)·h. */
   const layerAt = (z) => Math.max(0, Math.ceil(z / h - 1e-6) - 1);
@@ -279,12 +120,12 @@ export function createWallModel(design, library, { images } = {}) {
   const patternAt = lp ? lp.at : () => 0;
 
   /**
-   * All the displacement D in mm at height z, position u: the Detailed
-   * morph plus the Pattern of `layer` (by default the layer z lies on; the
-   * toolpath passes it, as the first point of a ramp sits on the layer below's top).
+   * The displacement D in mm at height z, position u: the Pattern of
+   * `layer` (by default the layer z lies on; the toolpath passes it, as the
+   * first point of a ramp sits on the layer below's top).
    */
   function displacement(z, u, layer = layerAt(z)) {
-    return detailAt(z, u) + (lp ? lp.at(layer, u) : 0);
+    return lp ? lp.at(layer, u) : 0;
   }
 
   let tz = NaN, tc = 1, ts = 0;
@@ -309,7 +150,7 @@ export function createWallModel(design, library, { images } = {}) {
    * layer `layer`, by default the one z lies on): the toolpath's wall point
    * and the CAD solid's skeleton (core/cad.js). The returned object is
    * reused; copy what you need before the next call. D is the displacement
-   * (the Detailed morph plus P, the Pattern), radius the distance along the
+   * (P, the Pattern), radius the distance along the
    * unit outline (|unit| = unitLength), bare that radius without the Pattern
    * (for the overhang check, D43), narrow whether the minimum radius clamped it.
    * `below` is the share of the Pattern still on the row of the layer below
@@ -319,7 +160,7 @@ export function createWallModel(design, library, { images } = {}) {
     plan.unitPoint(u, unitXY);
     const unitLength = Math.sqrt(unitXY[0] * unitXY[0] + unitXY[1] * unitXY[1]);
     const P = lp ? lp.at(layer, u, below) : 0;
-    const D = detailAt(z, u) + P;
+    const D = P;
     let narrow = false;
     let base = profile.at(z);
     if (morphOn) {
@@ -349,8 +190,8 @@ export function createWallModel(design, library, { images } = {}) {
 
   const model = {
     design, h, w, H, layerCount, baseLayers, baseTop, profile, plan, twistPerMm, rMin,
-    slots, active, missing, missingImages, stepLimit, supportLimit,
-    detailAt, patternAt, displacement, layerAt, weightsAt, twistAt, centrePoint,
+    missing, missingImages, stepLimit, supportLimit,
+    patternAt, displacement, layerAt, twistAt, centrePoint,
     morph: morphOn ? morph : null, morphAmp, morphAt, morphRange,
     /** The Pattern (core/layer-pattern.js) when it prints, else null. */
     pattern: lp,
@@ -416,7 +257,7 @@ class PathBuffer {
  * Seam position u for every layer (design §9.3).
  *   fixed: the outline point at a world angle; it does not turn with the twist.
  *   followTwist: the angle in outline coordinates, turning with the twist.
- *   hidden: the rectangle corner nearest the angle, or else the deepest pattern
+ *   hidden: the rectangle corner nearest the angle, or else the deepest Pattern
  *   groove near the seam of the layer below. Tracking the groove from layer to
  *   layer (rather than re-searching around the angle every time) keeps the
  *   seam from jumping across the wall where a groove drifts, as on a spiral;
@@ -466,17 +307,11 @@ function seamPositions(m) {
   return seams;
 }
 
-// The deepest groove of layer i near u = centre, over the widest tile in
-// play there (the Detailed morph's or the Pattern's).
+// The deepest groove of layer i near u = centre, over one tile of the Pattern.
 function groove(m, i, centre, w) {
   const z = (i + 1) * m.h;
-  const wt = m.weightsAt(z);
-  let repeats = 0;
-  for (const s of m.active) {
-    if ((s.key === 'a' ? wt.a : wt.b) > 0 && (repeats === 0 || s.repeats < repeats)) repeats = s.repeats;
-  }
-  if (m.pattern?.inRange(i) && (repeats === 0 || m.pattern.repeats < repeats)) repeats = m.pattern.repeats;
-  if (repeats === 0) return centre;
+  if (!m.pattern?.inRange(i)) return centre;
+  const repeats = m.pattern.repeats;
   const half = 0.5 / repeats;
   const samples = 64;
   let lo = Infinity;
@@ -493,21 +328,13 @@ function groove(m, i, centre, w) {
   return centre + Math.min(Math.max(best - centre, -maxStep), maxStep);
 }
 
-// Points the outline, the Morph and the Detailed morph need on the layer
-// from zStart to zTop (lead decision 5): a bead spacing of w/2 and at least
-// 8 points per feature, before any clamp.
-function pointsNeeded(m, zStart, zTop) {
+// Points the outline and the Morph need on the layer up to zTop (lead
+// decision 5): a bead spacing of w/2 and at least 8 points per feature,
+// before any clamp.
+function pointsNeeded(m, zTop) {
   const perimeter = (m.profile.at(zTop) + m.morphAmp) * m.plan.unitPerimeter;
   let need = Math.max(Math.ceil(perimeter / (m.w / 2)), MIN_POINTS_PER_LAYER);
   if (m.morph) need = Math.max(need, 8 * m.morph.repeats * m.morph.featuresAround);
-  const lo = m.weightsAt(zStart);
-  const loA = lo.a;
-  const loB = lo.b;
-  const hi = m.weightsAt(zTop);
-  for (const s of m.active) {
-    const on = s.key === 'a' ? loA > 0 || hi.a > 0 : loB > 0 || hi.b > 0;
-    if (on) need = Math.max(need, 8 * s.repeats * s.features.around);
-  }
   return need;
 }
 
@@ -519,7 +346,7 @@ function pointsNeeded(m, zStart, zTop) {
  * @returns {{ n: number, capped: boolean, simplified: boolean }}
  */
 export function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
-  const need = pointsNeeded(m, zStart, zTop);
+  const need = pointsNeeded(m, zTop);
   const capped = need > MAX_POINTS_PER_LAYER;
   if (m.pattern?.inRange(Math.round(zTop / m.h) - 1)) {
     const N = m.pattern.nodes;
@@ -534,10 +361,10 @@ export function pointsAround(m, zStart, zTop, cap = MAX_POINTS_PER_LAYER) {
 /**
  * Builds the full toolpath for a design.
  * @param {object} design a normalised design
- * @param {{ patterns: object[] }} library
+ * @param {{ layerPatterns?: object[] }} library
  * @param {{ walls?: 1 | 2, maxPoints?: number, images?: Map<string, object> }} [options] walls defaults
  *   to 1 (the design view's centreline wall); maxPoints is the point budget (MAX_TOOLPATH_POINTS);
- *   images are the Rasters by hash for 'img:' patterns and morph maps
+ *   images are the Rasters by hash for 'img:' morph maps
  */
 export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOLPATH_POINTS, images } = {}) {
   const m = createWallModel(design, library, { images });
@@ -594,7 +421,7 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       const zb = z - h;
       let baseBelow = profile.at(zb);
       if (morphed) baseBelow = Math.max(baseBelow + m.morphAt(zb, u), rMin);
-      const bareBelow = baseBelow * unitLength + m.detailAt(zb, u);
+      const bareBelow = baseBelow * unitLength;
       let below = bareBelow;
       if (below < rMin - 1e-9) below = rMin;
       if (Math.abs(bare - below) > stepLimit) issue |= ISSUE.overhang;

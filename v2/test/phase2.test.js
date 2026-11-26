@@ -27,10 +27,11 @@ function noise(width, height) {
   return { width, height, data };
 }
 
-function imageDesign(raster, hash, slot = {}) {
+/** The default pot with an image as its morph map (the one place an image draws since D63). */
+function imageDesign(raster, hash, morph = {}) {
   const d = defaultDesign();
   d.assets = { [`img:${hash}`]: { kind: 'image', name: 'test.png', hash, width: raster.width, height: raster.height } };
-  d.form.detail.a = { pattern: `img:${hash}`, depthMm: 2, repeats: 2, tileHeightMm: 19.5, ...slot };
+  d.form.morph = { map: `img:${hash}`, softnessMm: 12, strengthMm: 6, repeats: 2, blend: 0.8, ...morph };
   return d;
 }
 
@@ -53,12 +54,12 @@ test('normaliseDesign keeps valid assets and drops bad ones', () => {
   assert.deepEqual(n.assets[`img:${HASH}`], { kind: 'image', name: 'bark.jpg', hash: HASH, width: 256, height: 128 });
   assert.deepEqual(normaliseDesign({ ...defaultDesign(), assets: [1, 2] }).assets, {});
   const many = {};
-  for (let i = 0; i < 40; i++) many[`user:p${i}`] = { kind: 'recipe', name: 'p', recipe: { kind: 'shape', shape: 'flutes' } };
+  for (let i = 0; i < 40; i++) many[`user:p${i}`] = { kind: 'recipe', name: 'p', recipe: { kind: 'bitmap', columns: 2, rows: 1, cells: '+-' } };
   assert.equal(Object.keys(normaliseDesign({ ...defaultDesign(), assets: many }).assets).length, MAX_ASSETS);
-  // A slot that points at a missing asset is kept; the toolpath reports it.
+  // A Pattern that points at a missing drawing is kept; the toolpath reports it.
   const d = defaultDesign();
-  d.form.detail.a.pattern = 'user:gone';
-  assert.equal(normaliseDesign(d).form.detail.a.pattern, 'user:gone');
+  d.pattern = { drawing: 'user:gone' };
+  assert.equal(normaliseDesign(d).pattern.drawing, 'user:gone');
 });
 
 test('normaliseDesign fills and clamps the morph', () => {
@@ -83,56 +84,11 @@ test('normaliseDesign fills and clamps the morph', () => {
   assert.ok(designsEqual(old, normaliseDesign(old)));
 });
 
-test('a user recipe slot prints exactly like the same recipe from the library', () => {
-  const lib = defaultDesign();
-  const entry = library.patterns.find((p) => p.id === lib.form.detail.a.pattern);
-  const user = defaultDesign();
-  user.assets = { 'user:mine': { kind: 'recipe', name: 'Mine', recipe: structuredClone(entry.recipe) } };
-  user.form.detail.a.pattern = 'user:mine';
-  const a = computePreview(lib, { library });
-  const b = computePreview(user, { library });
-  assert.deepEqual(b.positions, a.positions);
-  assert.ok(!b.warnings.some((w) => w.id === 'missingPattern'));
-  // Without its asset the slot prints plain and says so.
-  delete user.assets['user:mine'];
-  const c = computePreview(user, { library });
-  assert.ok(c.warnings.some((w) => w.id === 'missingPattern'));
-});
-
-test('an image of 8 stripes at 2 repeats prints like 16 flutes, seamless at u = 0 and 1', () => {
-  const raster = stripes(256, 64, 8);
-  const hash = hashRaster(raster);
-  const d = normaliseDesign(imageDesign(raster, hash));
-  const images = new Map([[hash, raster]]);
-  const m = createWallModel(d, library, { images });
-  assert.deepEqual(m.missingImages, []);
-  assert.equal(m.slots[0].features.around, 8);
-  const z = 80;
-  const n = 1024;
-  let crossings = 0;
-  let previous = Math.sign(m.displacement(z, 0.25 / n));
-  for (let k = 1; k <= n; k++) {
-    const sign = Math.sign(m.displacement(z, (k + 0.25) / n)); // k = n closes the loop
-    if (sign !== 0 && previous !== 0 && sign !== previous) crossings++;
-    if (sign !== 0) previous = sign;
-  }
-  assert.equal(crossings, 32, '16 bumps around: 32 sign changes');
-  assert.ok(Math.abs(m.displacement(z, 0) - m.displacement(z, 1)) < 1e-12, 'seamless');
-  assert.ok(Math.abs(m.displacement(z, 1e-7) - m.displacement(z, 1 - 1e-7)) < 1e-3);
-  // White (stripe 0 starts white) pushes out, black pulls in.
-  assert.ok(m.displacement(z, 0.25 / 16) > 0 && m.displacement(z, 0.75 / 16) < 0);
-  const tp = buildToolpath(d, library, { images });
-  const layer = 12;
-  const count = tp.layerStarts[layer + 1] - tp.layerStarts[layer];
-  assert.ok(count >= 8 * 16, `points per layer ${count}`);
-});
-
 test('a missing image prints plain, warns, and blocks export', () => {
   const raster = stripes(64, 64, 4);
   const hash = hashRaster(raster);
   const d = imageDesign(raster, hash);
   const plain = defaultDesign();
-  plain.form.detail.a = { ...d.form.detail.a, pattern: 'plain' };
   const preview = computePreview(d, { library, images: new Map() });
   const warning = preview.warnings.find((w) => w.id === 'missingImage');
   assert.equal(warning?.severity, 'warning');
@@ -251,23 +207,21 @@ test('rasters: luminance, downscaling, hash and printable resolution', () => {
   );
 });
 
-test('the same design with an image and a morph writes the same G-code twice', () => {
+test('the same design with an image morph writes the same G-code twice', () => {
   const raster = noise(256, 256);
   const hash = hashRaster(raster);
   const d = imageDesign(raster, hash);
   d.assets[`img:${hash}`].name = 'noise';
-  d.form.morph = { map: 'lib:swirl@1', softnessMm: 24, strengthMm: 8, repeats: 3, blend: 0.8 };
   const run = () => emitGcode(d, null, null, { library, images: new Map([[hash, { ...raster, data: raster.data.slice() }]]) }).join('');
   const a = run();
   assert.equal(run(), a);
-  assert.match(a, /"morph":\{"map":"lib:swirl@1"/);
+  assert.match(a, /"morph":\{"map":"img:[0-9a-f]{16}"/);
 });
 
-test('a 170 mm pot with a 256² image on A and a morph previews quickly', () => {
+test('a 170 mm pot with a 256² image morph previews quickly', () => {
   const raster = noise(256, 256);
   const hash = hashRaster(raster);
   const d = imageDesign(raster, hash, { repeats: 6 });
-  d.form.morph = { map: 'lib:lobes@1', softnessMm: 24, strengthMm: 10, repeats: 4, blend: 0.8 };
   const images = new Map([[hash, raster]]);
   computePreview(d, { library, images }); // warm the prefilter cache and the JIT
   let best = Infinity;

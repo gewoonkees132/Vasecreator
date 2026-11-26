@@ -30,7 +30,7 @@ test('normalise fills missing fields and never throws on them', () => {
   const n = normaliseDesign({});
   assert.equal(n.form.height, 170);
   assert.equal(n.form.profile.knots.length, 4);
-  assert.equal(n.form.detail.b, null);
+  assert.equal(n.form.detail, undefined, 'the Detailed morph is gone (D63)');
   assert.equal(n.base.pattern, 'spiral');
   for (const broken of [{ form: null }, { form: { profile: { knots: 'x' } } }, { layers: { seam: 4 } }, { form: { detail: { a: 7 } } }, { pattern: { drawing: 5 } }, { rules: 'x' }]) {
     assert.doesNotThrow(() => normaliseDesign(broken));
@@ -42,7 +42,6 @@ test('normalise clamps, sorts and spaces the knots', () => {
     form: {
       height: 100,
       profile: { interp: 'nope', knots: [{ z: 100, r: 50 }, { z: 0, r: 1 }, { z: 50, r: 60 }, { z: 50.5, r: 61 }, { z: 99.9, r: 40 }] },
-      detail: { fromMm: 120, toMm: -5, a: { pattern: 'lib:flutes@1', repeats: 7.6, depthMm: 99 } },
     },
     layers: { beadWidthMm: 3, layerHeightMm: 1.5, seam: { angleDeg: -90 } },
     finish: { walls: 3 },
@@ -51,22 +50,19 @@ test('normalise clamps, sorts and spaces the knots', () => {
   assert.equal(n.form.profile.knots[0].r, 6, 'radius at least two beads');
   assert.equal(n.form.profile.interp, 'catmullRomCentripetal');
   assert.equal(n.layers.seam.angleDeg, 270);
-  assert.equal(n.form.detail.a.repeats, 8);
-  assert.equal(n.form.detail.a.depthMm, LIMITS.depthMm.max);
-  assert.ok(n.form.detail.fromMm >= 0 && n.form.detail.fromMm < n.form.detail.toMm && n.form.detail.toMm <= 100);
   assert.equal(n.finish.walls, 1);
 });
 
 test('normalise fills the warning rules and holds them in their limits', () => {
-  assert.deepEqual(normaliseDesign({}).rules, { overhangLimitDeg: 45, supportRatio: 0.7, curveRatio: 0.5, layersPerBump: 2 });
+  assert.deepEqual(normaliseDesign({}).rules, { overhangLimitDeg: 45, supportRatio: 0.7, curveRatio: 0.5 });
   assert.deepEqual(normaliseDesign({ rules: 'x' }).rules, defaultDesign().rules);
-  const low = normaliseDesign({ rules: { overhangLimitDeg: 1, supportRatio: 0, curveRatio: 0, layersPerBump: 0 } }).rules;
-  assert.deepEqual(low, { overhangLimitDeg: 5, supportRatio: 0.1, curveRatio: 0.1, layersPerBump: 1 });
-  const high = normaliseDesign({ rules: { overhangLimitDeg: 90, supportRatio: 3, curveRatio: 9, layersPerBump: 40 } }).rules;
-  assert.deepEqual(high, { overhangLimitDeg: 80, supportRatio: 1, curveRatio: 1.5, layersPerBump: 6 });
+  const low = normaliseDesign({ rules: { overhangLimitDeg: 1, supportRatio: 0, curveRatio: 0 } }).rules;
+  assert.deepEqual(low, { overhangLimitDeg: 5, supportRatio: 0.1, curveRatio: 0.1 });
+  const high = normaliseDesign({ rules: { overhangLimitDeg: 90, supportRatio: 3, curveRatio: 9 } }).rules;
+  assert.deepEqual(high, { overhangLimitDeg: 80, supportRatio: 1, curveRatio: 1.5 });
   // Layers per bump are whole layers; the other rules keep what was set.
   const set = normaliseDesign({ rules: { overhangLimitDeg: 52, supportRatio: 0.35, curveRatio: 0.65, layersPerBump: 2.6 } }).rules;
-  assert.deepEqual(set, { overhangLimitDeg: 52, supportRatio: 0.35, curveRatio: 0.65, layersPerBump: 3 });
+  assert.deepEqual(set, { overhangLimitDeg: 52, supportRatio: 0.35, curveRatio: 0.65 }, 'layers per bump went with the Detailed morph');
 });
 
 test('the height scales knots that stop short of it', () => {
@@ -100,9 +96,9 @@ test('designsEqual ignores meta', () => {
 
 test('LIMITS give min, max and step for every edited field', () => {
   for (const key of ['height', 'width', 'depth', 'depthRatio', 'cornerRounding', 'twist', 'knotZ', 'knotR', 'tension', 'cornerMm',
-    'depthMm', 'repeats', 'tileHeightMm', 'fromMm', 'toMm', 'amount', 'beadWidthMm', 'layerHeightMm', 'overhangLimitDeg',
+    'fromMm', 'toMm', 'amount', 'beadWidthMm', 'layerHeightMm', 'overhangLimitDeg',
     'rampLengthMm', 'angleDeg', 'baseLayers', 'spacingRatio', 'holeDiameter', 'wallSpacingMm',
-    'patternDepthMm', 'spacingMm', 'points', 'softenCells', 'supportRatio', 'curveRatio', 'layersPerBump']) {
+    'patternDepthMm', 'spacingMm', 'points', 'softenCells', 'supportRatio', 'curveRatio']) {
     const l = LIMITS[key];
     assert.ok(l && l.min < l.max && l.step > 0, key);
   }
@@ -121,7 +117,6 @@ test('moveKnot keeps the profile rules', () => {
   assert.equal(d.form.profile.knots[1].r, 2 * d.layers.beadWidthMm, 'radius stays at two beads');
   moveKnot(d, 3, { z: 140 });
   assert.equal(d.form.height, 140, 'the top point sets the height');
-  assert.ok(d.form.detail.toMm <= 140);
   moveKnot(d, 3, { z: 0 });
   assert.equal(d.form.profile.knots[3].z, 128 + h);
 });
@@ -150,8 +145,6 @@ test('setHeight and setWidth scale in proportion', () => {
   setHeight(d, 85);
   assert.deepEqual(d.form.profile.knots.map((k) => k.z), [0, 27.5, 64, 85]);
   assert.equal(d.form.height, 85);
-  assert.equal(d.form.detail.fromMm, 5);
-  assert.equal(d.form.detail.toMm, 75);
   const w0 = widestRadius(d);
   setWidth(d, w0);
   assert.ok(Math.abs(widestRadius(d) - w0 / 2) < 1e-9);

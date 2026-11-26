@@ -3,7 +3,7 @@
 // live in IndexedDB (store/db.js); design files move them between devices.
 //
 // Presets are shapes (D30, C29, narrowed by D52): their tiles show the pot
-// with its Morph and Detailed morph, which are part of the shape now, and
+// with its Morph, which is part of the shape now, and
 // opening one starts on Shape without a Pattern, keeping its form, layers,
 // base and finish. Saved designs and design files
 // open whole. Everything opens on the Shape step, except Last design, which
