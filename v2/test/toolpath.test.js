@@ -59,31 +59,45 @@ for (const [name, d, walls = 1] of variants) {
   });
 }
 
-test('wall layers start at their seam one layer down and climb over the ramp', () => {
+test('wall layers start at their seam one layer down and climb over the ramp points', () => {
   const d = cylinder({ height: 30, radius: 40, baseLayers: 2 });
   const { design, tp } = build(d);
   const h = design.layers.layerHeightMm;
-  const ramp = design.layers.seam.rampLengthMm;
-  for (let i = 2; i < tp.layerZ.length; i++) {
+  const ramp = design.layers.seam.rampPoints;
+  const L = tp.layerZ.length;
+  for (let i = 2; i < L; i++) {
     const first = tp.layerStarts[i];
     const last = tp.layerStarts[i + 1] - 1;
     const zStart = tp.layerZ[i - 1];
     const zTop = tp.layerZ[i];
-    // Over the flat base the ramp grows a quarter layer per layer; the rest is a step up.
-    const rise = h * Math.min((i - 1) / RAMP_IN_LAYERS, 1);
-    // The previous layer ends where this one starts (same point, so it is not repeated).
+    // Over the flat base the ramp grows a quarter layer per layer, and under
+    // the rim it shrinks the same way (D68); the rest is a step up.
+    const rise = h * Math.min((i - 1) / RAMP_IN_LAYERS, (L - 1 - i) / RAMP_IN_LAYERS, 1);
+    // The previous layer ends where this one starts (same point, so it is not
+    // repeated unless the layer steps up first).
     assert.ok(Math.abs(tp.path[3 * (first - 1) + 2] - zStart) < 1e-12);
-    // Climbs linearly over the ramp length, then stays at the top.
-    let along = 0;
+    const k0 = rise < h ? 0 : 1;
+    // Climbs evenly over the ramp's points (D67), then stays at the top.
     for (let p = first; p <= last; p++) {
-      along += Math.hypot(tp.path[3 * p] - tp.path[3 * p - 3], tp.path[3 * p + 1] - tp.path[3 * p - 2]);
+      const k = k0 + p - first;
       const z = tp.path[3 * p + 2];
-      if (along > ramp + 0.5) assert.equal(z, zTop);
-      else assert.ok(Math.abs(z - (zTop - rise + (rise * Math.min(along, ramp)) / ramp)) < 0.02, `layer ${i}: z ${z} at ${along} mm`);
+      assert.ok(Math.abs(z - (zTop - rise + rise * Math.min(k / ramp, 1))) < 1e-9, `layer ${i}: z ${z} at point ${k}`);
     }
     assert.equal(tp.path[3 * last + 2], zTop);
     // The loop is closed: it ends on its seam, above where it started.
     assert.ok(Math.hypot(tp.path[3 * last] - tp.path[3 * (first - 1)], tp.path[3 * last + 1] - tp.path[3 * (first - 1) + 1]) < 1e-9);
+  }
+});
+
+test('the top layer is flat, so the rim is level (D68)', () => {
+  for (const preset of presets) {
+    const { tp } = build(structuredClone(preset));
+    const L = tp.layerZ.length;
+    const zTop = tp.layerZ[L - 1];
+    for (let p = tp.layerStarts[L - 1]; p < tp.layerStarts[L]; p++) {
+      if (tp.kinds[p] !== KIND.outer) continue;
+      assert.equal(tp.path[3 * p + 2], zTop, `${preset.meta.name}: point ${p}`);
+    }
   }
 });
 
@@ -125,7 +139,7 @@ const gapCases = [
 function twistedFixed(degrees) {
   const d = cylinder({ height: 60, radius: 40 });
   d.form.twist.degrees = degrees;
-  d.layers.seam = { rampLengthMm: 15, position: 'fixed', angleDeg: 30 };
+  d.layers.seam = { rampPoints: 4, position: 'fixed', angleDeg: 30 };
   return d;
 }
 for (const [name, d] of gapCases) {
@@ -227,7 +241,7 @@ test('the seam follows the chosen rule', () => {
   const twisted = (position) => {
     const d = cylinder({ height: 60, radius: 40 });
     d.form.twist.degrees = 90;
-    d.layers.seam = { rampLengthMm: 15, position, angleDeg: 90 };
+    d.layers.seam = { rampPoints: 4, position, angleDeg: 90 };
     return build(d).tp;
   };
   const angle = (tp, i) => (Math.atan2(tp.seamLine[3 * i + 1], tp.seamLine[3 * i]) * 180) / Math.PI;

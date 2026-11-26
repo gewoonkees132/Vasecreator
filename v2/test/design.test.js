@@ -97,7 +97,7 @@ test('designsEqual ignores meta', () => {
 test('LIMITS give min, max and step for every edited field', () => {
   for (const key of ['height', 'width', 'depth', 'depthRatio', 'cornerRounding', 'twist', 'knotZ', 'knotR', 'tension', 'cornerMm',
     'fromMm', 'toMm', 'amount', 'beadWidthMm', 'layerHeightMm', 'overhangLimitDeg',
-    'rampLengthMm', 'angleDeg', 'baseLayers', 'spacingRatio', 'holeDiameter', 'wallSpacingMm',
+    'rampPoints', 'angleDeg', 'baseLayers', 'spacingRatio', 'holeDiameter', 'wallSpacingMm',
     'patternDepthMm', 'spacingMm', 'points', 'softenCells', 'supportRatio', 'curveRatio']) {
     const l = LIMITS[key];
     assert.ok(l && l.min < l.max && l.step > 0, key);

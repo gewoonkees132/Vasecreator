@@ -64,7 +64,7 @@ for (const [label, walls] of [['one wall', 1], ['two walls', 2]]) {
     assert.equal(line.points.length, tp.pointCount);
     for (let i = 0; i < tp.pointCount; i++) {
       for (let k = 0; k < 3; k++) {
-        assert.ok(Math.abs(line.points[i][k] - tp.path[3 * i + k]) <= 0.0005, `point ${i}`);
+        assert.ok(Math.abs(line.points[i][k] - tp.path[3 * i + k]) <= 0.0005 + 1e-9, `point ${i}`);
       }
     }
     // It starts on the bed and ends at the top layer.

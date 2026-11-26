@@ -4,7 +4,7 @@
   "presets": [
     {
       "schema": "vasecreator/design",
-      "version": 4,
+      "version": 5,
       "units": "mm",
       "meta": {
         "id": "preset:classic-vase@1",
@@ -36,7 +36,7 @@
         "beadWidthMm": 8,
         "layerHeightMm": 5,
         "seam": {
-          "rampLengthMm": 15,
+          "rampPoints": 4,
           "position": "hidden",
           "angleDeg": 0
         }
@@ -55,7 +55,7 @@
     },
     {
       "schema": "vasecreator/design",
-      "version": 4,
+      "version": 5,
       "units": "mm",
       "meta": {
         "id": "preset:twisted-column@1",
@@ -86,7 +86,7 @@
         "beadWidthMm": 8,
         "layerHeightMm": 5,
         "seam": {
-          "rampLengthMm": 15,
+          "rampPoints": 4,
           "position": "followTwist",
           "angleDeg": 0
         }
@@ -105,7 +105,7 @@
     },
     {
       "schema": "vasecreator/design",
-      "version": 4,
+      "version": 5,
       "units": "mm",
       "meta": {
         "id": "preset:square-planter@1",
@@ -135,7 +135,7 @@
         "beadWidthMm": 8,
         "layerHeightMm": 5,
         "seam": {
-          "rampLengthMm": 15,
+          "rampPoints": 4,
           "position": "hidden",
           "angleDeg": 0
         }

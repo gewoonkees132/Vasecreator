@@ -3,12 +3,13 @@
 //
 // The path is one continuous line of beads. Layer i has its top at
 // z_i = (i + 1)·h. A wall layer starts at its seam on the layer below's height
-// and climbs one layer height over the seam ramp, then runs flat back to the
-// seam, where the next layer starts. Every bead therefore sits one layer
+// and climbs one layer height over the seam ramp (a number of points, D67),
+// then runs flat back to the seam, where the next layer starts. Every bead therefore sits one layer
 // height above the bead below it, with no travel between layers (D10). The
 // exceptions are bounded: base layers are flat (rings included) and climb
 // with a short step at the seam; the first RAMP_IN_LAYERS wall layers grow
-// the ramp (gap ≥ 0.75 h); a seam that moves along the wall by up to a bead
+// the ramp (gap ≥ 0.75 h) and the last as many shrink it, so the rim is level
+// (gap ≤ 1.25 h, D68); a seam that moves along the wall by up to a bead
 // width changes the gap over the ramp by at most that width / ramp length.
 //
 // The wall point is P = B(z, u) + D(z, u)·d̂: B the footprint outline scaled
@@ -21,8 +22,9 @@
 // layer has the same N nodes at u = j / N and, crisp, no other points (D58):
 // the outline and the Morph are followed at the nodes.
 // With Soften on, the same k points sit in every gap (D59), so a layer has
-// N·(k + 1) points and every (k + 1)-th is a node. The seam sits on a node
-// there and the ramp runs over whole cells: the climb is shared out evenly
+// N·(k + 1) points and every (k + 1)-th is a node. The seam sits on one
+// column of the drawing there, the same on every layer (D65, D66), and the
+// ramp runs over whole cells: the climb is shared out evenly
 // over those points, and so is the change from the row below to the layer's
 // own, so the path never steps sideways at the seam (D60). It is
 // exempt from the overhang and the two-layers-per-bump rules and has its own
@@ -279,7 +281,17 @@ function seamPositions(m) {
       if (d < best) { best = d; corner = u; }
     }
   }
+  // The most the seam moves between layer i and the one above it: a bead
+  // width on the wider of the two, in u.
+  const most = (i) => w / (Math.max(m.profile.at((i + 1) * h), m.profile.at((i + 2) * h)) * plan.unitPerimeter);
+  // u moved towards `from` until it is at most `limit` away (round the pot).
+  const toward = (u, from, limit) => {
+    let d = u - from;
+    d -= Math.round(d);
+    return Math.abs(d) <= limit ? u : from + Math.sign(d) * limit;
+  };
   let previous = follow;
+  let column = NaN;
   for (let i = 0; i < layerCount; i++) {
     const zStart = i === 0 ? h : i * h;
     let u = follow;
@@ -291,20 +303,40 @@ function seamPositions(m) {
     if (position === 'fixed') u = plan.uAtAngle(angle - m.twistPerMm * zSeam);
     else if (position === 'hidden') u = plan.footprint === 'rectangle' ? corner : groove(m, i, previous, w);
     if (lp?.inRange(i)) {
-      // On a node, so the ramp never cuts a cell in half. A hidden seam
-      // still moves at most a bead width a layer, in whole nodes.
-      const N = lp.nodes;
-      u = Math.round(u * N) / N;
-      if (position === 'hidden' && lp.inRange(i - 1)) {
-        const most = Math.floor((w / (m.profile.at((i + 1) * h) * plan.unitPerimeter)) * N + 1e-9);
-        const steps = Math.round((u - previous) * N);
-        u = previous + Math.max(-most, Math.min(most, steps)) / N;
+      // The seam column (D65, D66): every layer in the range starts on the
+      // same column of the drawing, so each lap is whole tiles from seam to
+      // seam and the seam is one line that turns with the columns. Hidden
+      // takes the quietest column, the others the drawing's left edge, on
+      // the tile nearest where the seam would be on the range's first layer.
+      if (Number.isNaN(column)) {
+        const c = position === 'hidden' ? lp.seamColumn(patternRampCells(m)) : 0;
+        const t = Math.round((u * lp.nodes - c) / lp.columns);
+        column = (t * lp.columns + c) / lp.nodes;
+        column -= Math.floor(column);
       }
+      u = column;
+    } else if (!Number.isNaN(column)) {
+      // Above the range the seam goes back to its own place a bead width a
+      // layer at most (a hidden seam on a plain wall holds).
+      u = toward(u, previous, most(i - 1));
     }
     seams[i] = u;
     previous = u;
   }
+  // Below the range the seam walks to the seam column a bead width a layer
+  // at most, so it doesn't jump where the Pattern starts.
+  if (lp && !Number.isNaN(column)) {
+    for (let i = lp.first - 1; i >= 0; i--) seams[i] = toward(seams[i], seams[i + 1], most(i));
+  }
   return seams;
+}
+
+/**
+ * Cells the seam ramp runs over in the Pattern's range (D67): the ramp's
+ * points, at most half a lap, at least one.
+ */
+function patternRampCells(m) {
+  return Math.max(1, Math.min(m.design.layers.seam.rampPoints, Math.floor(m.pattern.nodes / 2)));
 }
 
 // The deepest groove of layer i near u = centre, over one tile of the Pattern.
@@ -371,7 +403,7 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   const { h, w, layerCount: L, baseLayers: nb, profile, plan, rMin, stepLimit, supportLimit, pattern: lp } = m;
   const spacing = design.finish.wallSpacingMm;
   const innerWall = design.finish.innerWall;
-  const rampMm = design.layers.seam.rampLengthMm;
+  const rampPoints = design.layers.seam.rampPoints;
   const seams = seamPositions(m);
 
   // The point budget (MAX_TOOLPATH_POINTS): a cap on points per wall layer,
@@ -459,14 +491,14 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   function outerLoop(i, u0, u1, n, rise, kind, firstKind, checkOverhang, changeRow = false) {
     const zTop = (i + 1) * h;
     const zLow = zTop - rise;
-    const perimeter = profile.at(zTop) * plan.unitPerimeter;
-    const rampLength = Math.min(rampMm, perimeter / 2);
     const span = u1 - u0;
     const onGrid = !!lp && lp.inRange(i) && n <= MAX_POINTS_PER_LAYER;
     const count = onGrid ? gridPoints(u0, u1, n) : Math.max(1, Math.round(n * span));
-    // In the Pattern's range the ramp runs over whole cells, so the climb is
-    // shared out evenly over its points.
-    const rampCells = onGrid && rampLength > 0 ? Math.max(1, Math.round((rampLength * lp.nodes) / perimeter)) : 0;
+    // The ramp is a number of points (D67), at most half a lap: in the
+    // Pattern's range whole cells, so the climb ends on a node and Soften's
+    // points between them come along; elsewhere the layer's own points.
+    const rampCells = onGrid ? patternRampCells(m) : 0;
+    const rampSteps = Math.max(1, Math.min(rampPoints, Math.floor(n / 2)));
     const blend = changeRow && !!lp && (lp.inRange(i) || lp.inRange(i - 1));
     for (let j = 0; j <= count; j++) {
       const u = onGrid ? grid[j] : j === count ? u1 : u0 + (span * j) / count;
@@ -474,7 +506,7 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       let ramp = 1;
       if (j === 0) ramp = 0;
       else if (rampCells > 0) ramp = Math.min(((u - u0) * lp.nodes) / rampCells, 1);
-      else if (rampLength > 0) ramp = Math.min((span * j) / count * perimeter / rampLength, 1);
+      else ramp = Math.min(j / rampSteps, 1);
       const z = rise > 0 ? zLow + rise * ramp : zTop;
       wallPoint(u, z, checkOverhang, i, blend ? 1 - ramp : 0);
       if (j === 0) {
@@ -611,6 +643,9 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   //   start on the bead below with no gap. The climb grows over RAMP_IN_LAYERS
   //   layers instead, with the rest as a step up at the seam, so the gap to
   //   the bead below never drops under (1 − 1/RAMP_IN_LAYERS) of a layer.
+  //   Ramp out: the last RAMP_IN_LAYERS wall layers shrink the climb the same
+  //   way, so the top layer is flat and the rim level (D68); the gap never
+  //   rises over (1 + 1/RAMP_IN_LAYERS) of a layer.
   //   Seam moved back: starting the layer behind where the one below ended
   //   would run over that layer's last beads at their own height. The layer
   //   starts where the one below ended and stops at its own seam, a little
@@ -629,7 +664,11 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
       markSeam(0, uS, h);
       outerLoop(0, uS, uS + 1, n, 0, KIND.outer, KIND.none, false);
     } else {
-      const rise = i < firstRamped ? 0 : h * Math.min((i - firstRamped + 1) / RAMP_IN_LAYERS, 1);
+      // The climb grows over the first RAMP_IN_LAYERS wall layers and shrinks
+      // over the last as many, so the top layer is flat (D68).
+      const grow = i < firstRamped ? 0 : Math.min((i - firstRamped + 1) / RAMP_IN_LAYERS, 1);
+      const shrink = Math.min((L - 1 - i) / RAMP_IN_LAYERS, 1);
+      const rise = h * Math.min(grow, shrink);
       let ahead = uS - seams[i - 1];
       ahead -= Math.round(ahead);
       const u0 = ahead < 0 ? uS - ahead : uS;

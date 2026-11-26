@@ -91,11 +91,13 @@ test('a 2-column in/out tile prints as an exact zigzag at ± depth, node for nod
 test('the seam never steps sideways: a layer starts on the row below and changes over on the ramp', () => {
   // The knit changes row every layer; the seam is fixed at u = 0, on a node.
   // From above the ramp-in layers, which step up at the seam with no bead.
-  const { design, tp } = build(withPattern(cylinder({ height: 30, radius: 30 }), TILES.knit, { fromMm: 12, toMm: 27 }));
+  // Below the ramp-out layers under the rim (D68), which step up as well.
+  const { design, tp } = build(withPattern(cylinder({ height: 30, radius: 30 }), TILES.knit, { fromMm: 12, toMm: 22 }));
   const lp = tp.model.pattern;
   const h = design.layers.layerHeightMm;
   const P = tp.path;
-  const cells = Math.round((design.layers.seam.rampLengthMm * lp.nodes) / (TAU * 30));
+  assert.ok(lp.last + 1 < tp.layerZ.length - RAMP_IN_LAYERS);
+  const cells = design.layers.seam.rampPoints;
   assert.ok(cells >= 2, 'the ramp spans several cells');
   for (let i = lp.first; i <= lp.last + 1; i++) {
     const p = tp.layerStarts[i];
@@ -273,22 +275,50 @@ test('density: points per layer is a whole number of tiles; spacing snaps to who
   }
 });
 
-test('the seam sits on a node in the range, and a hidden seam still moves at most a bead a layer', () => {
+test('every layer in the range starts on the seam column, and the seam moves at most a bead a layer all the way up (D65)', () => {
   for (const preset of presets) {
-    const d = withPattern(structuredClone(preset), TILES.knit, { fromMm: 10, toMm: 90 });
-    const { design, tp } = build(d);
-    const lp = tp.model.pattern;
-    const w = design.layers.beadWidthMm;
-    const profile = createProfile(design.form.profile);
-    for (let i = lp.first; i <= lp.last; i++) {
-      const x = tp.seams[i] * lp.nodes;
-      assert.ok(Math.abs(x - Math.round(x)) < 1e-9, `${preset.meta.name}: layer ${i} seam at node ${x}`);
-      if (design.layers.seam.position === 'hidden' && i > lp.first) {
-        const moved = Math.abs(tp.seams[i] - tp.seams[i - 1]) * profile.at((i + 1) * design.layers.layerHeightMm) * tp.model.plan.unitPerimeter;
-        assert.ok(moved <= w + 1e-6, `${preset.meta.name}: layer ${i} seam moved ${moved} mm`);
+    for (const position of ['hidden', 'fixed', 'followTwist']) {
+      const d = withPattern(structuredClone(preset), TILES.knit, { fromMm: 30, toMm: 90 });
+      d.layers.seam.position = position;
+      const { design, tp } = build(d);
+      const lp = tp.model.pattern;
+      const w = design.layers.beadWidthMm;
+      const profile = createProfile(design.form.profile);
+      const name = `${preset.meta.name}, ${position}`;
+      // Hidden takes the knit's quiet column (1), the others the left edge (0).
+      const column = position === 'hidden' ? 1 : 0;
+      for (let i = lp.first; i <= lp.last; i++) {
+        const x = tp.seams[i] * lp.nodes;
+        assert.ok(Math.abs(x - Math.round(x)) < 1e-9, `${name}: layer ${i} seam at node ${x}`);
+        assert.equal(((Math.round(x) % lp.columns) + lp.columns) % lp.columns, column, `${name}: layer ${i}`);
+        assert.equal(tp.seams[i], tp.seams[lp.first], `${name}: layer ${i} keeps the seam's place`);
+      }
+      for (let i = 1; i < tp.seams.length; i++) {
+        let du = tp.seams[i] - tp.seams[i - 1];
+        du -= Math.round(du);
+        const moved = Math.abs(du) * profile.at((i + 1) * design.layers.layerHeightMm) * tp.model.plan.unitPerimeter;
+        // A fixed seam on the twisting pot turns against the twist outside the range, as before.
+        if (position === 'fixed' && design.form.twist.degrees !== 0 && !lp.inRange(i) && !lp.inRange(i - 1)) continue;
+        assert.ok(moved <= w + 1e-6, `${name}: layer ${i} seam moved ${moved.toFixed(2)} mm`);
       }
     }
   }
+});
+
+test('a hidden seam takes the column where the rows change least, a groove before a flat one (D66)', () => {
+  // Columns 2 (flat) and 4 (in) never change; the rest do.
+  const recipe = { kind: 'bitmap', columns: 5, rows: 3, cells: '+-0+-' + '-+0--' + '++0--' };
+  const d = withPattern(cylinder({ height: 30, radius: 30 }), recipe, { fromMm: 9, toMm: 24 });
+  d.layers.seam = { rampPoints: 1, position: 'hidden', angleDeg: 0 };
+  const { tp } = build(d);
+  const lp = tp.model.pattern;
+  assert.equal(lp.seamColumn(1), 4);
+  for (let i = lp.first; i <= lp.last; i++) assert.equal(Math.round(tp.seams[i] * lp.nodes) % lp.columns, 4, `layer ${i}`);
+  // Over a longer ramp the cells after the column count too, less and less.
+  assert.equal(TILES.knit.columns, 4);
+  const knit = build(withPattern(cylinder({ height: 30, radius: 30 }), TILES.knit)).tp.model.pattern;
+  assert.equal(knit.seamColumn(4), 1);
+  assert.equal(knit.seamColumn(1), 1);
 });
 
 test('a drawing that is missing prints plain and says so', () => {

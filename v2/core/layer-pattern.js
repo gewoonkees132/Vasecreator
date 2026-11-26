@@ -209,6 +209,7 @@ export function patternReadout(design, library) {
  *   first: number, last: number, depthMm: number, spacingMinMm: number, spacingMaxMm: number,
  *   extra: number, pointsPerLayer: number,
  *   inRange(layer: number): boolean, rowOf(layer: number): number, at(layer: number, u: number, below?: number): number,
+ *   seamColumn(rampCells: number): number,
  * }} null when the design has no Pattern
  */
 export function createLayerPattern(design, library, wall) {
@@ -283,11 +284,48 @@ export function createLayerPattern(design, library, wall) {
     return (1 - below) * own(i, u) + below * own(i - 1, u);
   }
 
+  /**
+   * The quietest column of the drawing for a hidden seam (D66): a layer
+   * starts on the row below and changes to its own over `rampCells` cells
+   * from the seam column c (D60, D67), so cell c + k shows a share
+   * 1 − k / rampCells of the row below. The column whose rows change least
+   * there, over every row against the one below it (the tile repeats
+   * upwards), wins; then the deepest (a groove), then the lowest c.
+   * @param {number} rampCells
+   * @returns {number} a column, 0 … columns − 1
+   */
+  function seamColumn(rampCells) {
+    if (!recipe) return 0;
+    const n = Math.max(1, Math.min(Math.round(rampCells), columns));
+    let best = 0;
+    let bestScore = Infinity;
+    let bestDepth = Infinity;
+    for (let c = 0; c < columns; c++) {
+      let score = 0;
+      let depth = 0;
+      for (let r = 0; r < rows; r++) {
+        const row = r * columns;
+        const below = (r === 0 ? rows - 1 : r - 1) * columns;
+        for (let k = 0; k < n; k++) {
+          const col = (c + k) % columns;
+          score += (1 - k / n) * Math.abs(grid[row + col] - grid[below + col]);
+        }
+        depth += grid[row + c];
+      }
+      if (score < bestScore - 1e-6 || (score < bestScore + 1e-6 && depth < bestDepth - 1e-6)) {
+        best = c;
+        bestScore = score;
+        bestDepth = depth;
+      }
+    }
+    return best;
+  }
+
   return {
     drawing: p.drawing, missing: !recipe, active, recipe,
     columns, rows, repeats, nodes: N, clamped, first, last, depthMm: p.depthMm,
     extra, pointsPerLayer, spacingMinMm, spacingMaxMm,
-    inRange, rowOf, at,
+    inRange, rowOf, at, seamColumn,
   };
 }
 

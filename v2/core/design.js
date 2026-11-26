@@ -16,7 +16,7 @@ import { validateRecipe } from './patterns.js';
 import { MORPH_DEFAULTS, isMorphMap } from './morph.js';
 
 export const DESIGN_SCHEMA = 'vasecreator/design';
-export const DESIGN_VERSION = 4;
+export const DESIGN_VERSION = 5;
 
 export const INTERPS = ['catmullRomCentripetal', 'monotone', 'linear'];
 export const FOOTPRINTS = ['circle', 'rectangle'];
@@ -55,7 +55,7 @@ export const LIMITS = Object.freeze({
   overhangLimitDeg: { min: 5, max: 80, step: 1 },     // rules.overhangLimitDeg
   supportRatio: { min: 0.1, max: 1, step: 0.05 },     // rules.supportRatio, of a bead width
   curveRatio: { min: 0.1, max: 1.5, step: 0.05 },     // rules.curveRatio, the tightest curve's radius, of a bead width
-  rampLengthMm: { min: 0, max: 200, step: 1 },        // layers.seam.rampLengthMm
+  rampPoints: { min: 1, max: 40, step: 1 },           // layers.seam.rampPoints (D67)
   angleDeg: { min: 0, max: 359, step: 1 },            // layers.seam.angleDeg (wraps)
   baseLayers: { min: 0, max: 20, step: 1 },           // base.layers
   spacingRatio: { min: 0.5, max: 1.5, step: 0.01 },   // base.spacingRatio
@@ -96,7 +96,7 @@ const DEFAULT = {
     // The standard layer: 8 mm wide, 5 mm high (D62).
     beadWidthMm: 8,
     layerHeightMm: 5,
-    seam: { rampLengthMm: 15, position: 'hidden', angleDeg: 0 },
+    seam: { rampPoints: 4, position: 'hidden', angleDeg: 0 },
   },
   rules: { overhangLimitDeg: 45, supportRatio: 0.7, curveRatio: 0.5 },
   base: { layers: 2, pattern: 'spiral', spacingRatio: 0.9, outline: true, hole: { diameter: 0 } },
@@ -338,7 +338,7 @@ export function normaliseDesign(json) {
       beadWidthMm,
       layerHeightMm,
       seam: {
-        rampLengthMm: num(seam.rampLengthMm, D.layers.seam.rampLengthMm, LIMITS.rampLengthMm),
+        rampPoints: num(seam.rampPoints, D.layers.seam.rampPoints, LIMITS.rampPoints, true),
         position: pick(seam.position, SEAM_POSITIONS, 'fixed'),
         angleDeg: angle - 360 * Math.floor(angle / 360),
       },

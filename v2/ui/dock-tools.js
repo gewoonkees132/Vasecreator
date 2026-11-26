@@ -265,7 +265,7 @@ export const DOCK_TOOLS = {
       current: (s) => s.design.layers.seam.position,
       value: (s) => ({ fixed: 'Fixed', followTwist: 'Follows twist', hidden: 'Hidden' })[s.design.layers.seam.position],
       note: (s) => (s.design.layers.seam.position === 'hidden'
-        ? 'In the corner or groove nearest the grip'
+        ? 'In a Pattern’s quietest column, else the corner nearest the grip'
         : 'Drag the grip on the pot to move it'),
       choose: (d, v) => { d.layers.seam.position = v; },
       label: () => 'Seam position',
@@ -275,15 +275,18 @@ export const DOCK_TOOLS = {
       value: (s) => `${Math.round(s.design.layers.seam.angleDeg)}°`,
       dial: (s) => ({
         label: 'Seam angle', unit: '°', min: 0, max: 359, step: 1, decimals: 0, wrap: 360, value: s.design.layers.seam.angleDeg,
-        note: s.design.layers.seam.position === 'hidden' ? 'Hides in the corner or groove nearest this' : 'Or drag the grip on the pot',
+        note: s.design.layers.seam.position === 'hidden' ? 'Hides in a Pattern’s quietest column, else the corner nearest this' : 'Or drag the grip on the pot',
       }),
       set: (d, v) => { d.layers.seam.angleDeg = ((Math.round(v) % 360) + 360) % 360; },
     },
     {
       id: 'ramp', name: 'Ramp', kind: 'dial',
-      value: (s) => `${fmt(s.design.layers.seam.rampLengthMm, 0)} mm`,
-      dial: (s) => ({ label: 'Seam ramp length', unit: 'mm', ...L('rampLengthMm', {}), step: 1, decimals: 1, value: s.design.layers.seam.rampLengthMm }),
-      set: (d, v) => { d.layers.seam.rampLengthMm = v; },
+      value: (s) => `${s.design.layers.seam.rampPoints} pts`,
+      dial: (s) => ({
+        label: 'Seam ramp', unit: 'pts', ...L('rampPoints', {}), step: 1, decimals: 0, value: s.design.layers.seam.rampPoints,
+        note: 'The climb to the next layer; in a Pattern a point is a cell',
+      }),
+      set: (d, v) => { d.layers.seam.rampPoints = Math.round(v); },
     },
     {
       id: 'bead', name: 'Bead', kind: 'dial',

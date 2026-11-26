@@ -754,7 +754,7 @@ The owner exported a softened Pattern to Rhino and saw a sideways step at the se
 - **Known, and told to the owner.** At 2 mm apart and 5.33 mm deep on an 8 mm bead, every starter warns on the presets: "Bead not supported" where the wall leans, and "Pattern finer than the bead can print" where a single out or in cell makes a corner tighter than half a bead (4 mm).
 - **Tests.** 298 pass. The tests of the Detailed morph went with it (the shape library, slots, blend weights, the dock's group, the saved swatches); the fine-pattern and narrow-wall checks are now driven by a Pattern.
 
-### 11.10 The seam: column, points and a level rim (D65–D68; designed, not built)
+### 11.10 The seam: column, points and a level rim (D65–D68)
 
 **Why.** The owner's render (2026-11-26) showed three marks at the seam:
 - a chevron line down the Pattern;
@@ -799,6 +799,27 @@ The owner wants both hiding and designing the seam: 2, built as 1 first (this se
 - The top layer is flat.
 - Gaps stay within 0.75 h – 1.25 h.
 - The golden G-code files are regenerated.
+
+**As built (2026-11-26).**
+- **`core/design.js`.** `layers.seam.rampPoints` (whole, 1–40, default 4) replaces `rampLengthMm`, in `LIMITS` too. The presets carry 4 points. `DESIGN_VERSION` is 5.
+- **`core/layer-pattern.js`.** `seamColumn(rampCells)` scores each column as designed, on the softened cells. Cell c + k weighs 1 − k / n, since it shows that share of the row below.
+- **`core/toolpath.js`.**
+  - `seamPositions` puts the range on the seam column. It chooses the tile once, on the range's first layer, and holds that u up the range.
+  - Below the range a backward pass walks the seam to that u, a bead width a layer at most. Above it the seam walks back to its own place the same way.
+  - A bead width is measured on the wider of the two layers, so a widening pot never moves it further.
+  - `patternRampCells(m)` is the ramp in cells (at most half the nodes). `outerLoop` climbs over those cells in the range and over `rampPoints` of the layer's own points elsewhere.
+  - The rise is `h · min(grow, shrink)`. `shrink` is (L − 1 − i) / `RAMP_IN_LAYERS`, so one constant serves both ends.
+- **UI.** *Seam ramp* is in points in the Layers & seam section and in the dock's *Ramp* dial, with the note "in a Pattern a point is a cell". The Hidden notes now read "a Pattern's quietest column, else the corner nearest this angle".
+- **Checked in the browser** (headless Chrome, a Classic vase with Diamond and Herringbone, 4 mm bead, before at d92ad7e and after):
+  - The hidden seam no longer wanders through the drawing. It is one straight line, and the drawing runs on across it.
+  - The rim is level. The ramp-out layers show the same small no-bead step at the seam as the ramp-in layers above the base.
+- **Tests.** 300 pass.
+  - New: every layer in the range is on the seam column, for all three positions on all three presets, and the seam moves at most a bead a layer all the way up. Hidden's choice (a groove before a flat column; Knit's quiet column 1). The top layer is flat.
+  - The ramp test counts points. The Pattern seam test ends its range under the ramp-out layers. The DXF check allows for the 3-decimal rounding of the new ramp heights (z = 14.0625 writes as 14.063).
+  - The four golden files were regenerated.
+    - The path has 4 more points: the no-bead step-ups of the ramp-out.
+    - The ramp heights changed on every layer.
+    - The plain cylinder's top layer now gets a minimum-layer-time dwell (`G4 P240`) before the end moves.
 
 ---
 
