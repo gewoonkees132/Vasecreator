@@ -47,6 +47,22 @@ const CURVE_NOTES = {
 const CURVE_INTERP = { smooth: 'catmullRomCentripetal', gentle: 'monotone', angular: 'linear' };
 
 /** The Pattern's Fade words (D42, D54). */
+// Where the Pattern lies against the plain wall above and below it (D78).
+export const SITS_OPTIONS = [{ value: 'centre', label: 'Centred' }, { value: 'inset', label: 'Inset' }, { value: 'offset', label: 'Offset' }];
+export const SITS_NOTES = {
+  centre: 'The Pattern goes in and out of the plain wall above and below it.',
+  inset: 'The Pattern is cut into the wall: the plain wall lies on its outside.',
+  offset: 'The Pattern stands out of the wall: the plain wall lies on its inside.',
+};
+
+/** How far the Pattern goes in and out of the plain wall, for the Depth's note: centred both ways, inset or offset one way and twice as far. */
+export function depthReach(pattern, decimals = 2) {
+  const d = pattern.depthMm;
+  if (pattern.sits === 'inset') return `In up to −${fmt(2 * d, decimals)} mm from the plain wall`;
+  if (pattern.sits === 'offset') return `Out up to +${fmt(2 * d, decimals)} mm from the plain wall`;
+  return `Out +${fmt(d, decimals)} mm, in −${fmt(d, decimals)} mm`;
+}
+
 export const BLEND_OPTIONS = [
   { value: 'even', label: 'Even' }, { value: 'fadesUp', label: 'Fades up' }, { value: 'fadesDown', label: 'Fades down' },
   { value: 'middle', label: 'Middle' }, { value: 'diagonal', label: 'Diagonal' },
@@ -90,10 +106,20 @@ const PATTERN_TOOLS = [
       const v = pat(s).depthMm;
       return {
         label: 'Pattern depth', unit: 'mm', min: 0, max: Math.max(deepest(s.design), v), step: 0.05, decimals: 2, value: v,
-        note: v > 0 ? `Out +${fmt(v, 2)} mm, in −${fmt(v, 2)} mm · up to ⅔ of a bead` : 'Flat: the drawing doesn’t print',
+        note: v > 0 ? `${depthReach(pat(s))} · up to ⅔ of a bead` : 'Flat: the drawing doesn’t print',
       };
     },
     set: (d, v) => { if (d.pattern) d.pattern.depthMm = Math.min(Math.max(0, v), deepest(d)); },
+  },
+  {
+    id: 'sits', name: 'Sits', kind: 'options',
+    applies: hasPattern,
+    options: SITS_OPTIONS,
+    current: (s) => pat(s).sits,
+    value: (s) => SITS_OPTIONS.find((o) => o.value === pat(s).sits)?.label ?? 'Centred',
+    note: (s) => SITS_NOTES[pat(s).sits],
+    choose: (d, v) => { if (d.pattern) d.pattern.sits = v; },
+    label: () => 'Pattern sits',
   },
   {
     id: 'density', name: 'Density', kind: 'dial', face: true,

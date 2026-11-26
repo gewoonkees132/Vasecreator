@@ -349,14 +349,14 @@ test('normalising a Pattern clamps it to the bead and the pot', () => {
   assert.deepEqual(n.pattern, {
     // The standard 8 mm bead (D62): two thirds of it deep at most (D61), a quarter of it apart at least (D64).
     drawing: 'lib:knit@1', depthMm: (2 / 3) * 8, density: { by: 'spacing', spacingMm: 2, points: 1600 },
-    fromMm: 0, toMm: 170, fade: { shape: 'even', amount: 1 }, softenCells: 0, slant: { cells: 0, perFacet: false, toCells: 0 },
+    fromMm: 0, toMm: 170, fade: { shape: 'even', amount: 1 }, softenCells: 0, slant: { cells: 0, perFacet: false, toCells: 0 }, sits: 'centre',
   });
   // Missing fields get the defaults: two thirds of a bead deep (D61), 2 mm
   // apart (D64), from 8 mm to 10 mm below the rim.
   const bare = normaliseDesign({ ...d, pattern: { drawing: 'lib:knit@1' } }).pattern;
   assert.deepEqual(bare, {
     drawing: 'lib:knit@1', depthMm: (2 / 3) * 8, density: { by: 'spacing', spacingMm: 2, points: 96 },
-    fromMm: 8, toMm: 160, fade: { shape: 'even', amount: 1 }, softenCells: 0, slant: { cells: 0, perFacet: false, toCells: 0 },
+    fromMm: 8, toMm: 160, fade: { shape: 'even', amount: 1 }, softenCells: 0, slant: { cells: 0, perFacet: false, toCells: 0 }, sits: 'centre',
   });
   const plain = normaliseDesign(cylinder({ height: 80 }));
   assert.deepEqual(defaultPatternRange(plain), { fromMm: 8, toMm: 70 });
@@ -393,4 +393,33 @@ test('the curve check runs node to node, so the points between nodes never make 
     assert.ok(Math.abs(count - lp.nodes) <= most, `layer ${i}: ${count}`);
   }
   assert.equal(build(cylinder()).tp.nodes, null);
+});
+
+// Sits (D78): the plain wall on the Pattern's middle, its outside or its inside.
+test('Sits: inset keeps the Pattern at or inside the plain wall, offset at or outside it', () => {
+  const offs = (sits, recipe = TILES.zigzag, patch = {}) => {
+    const { design, tp } = build(withPattern(cylinder({ height: 30, radius: 30, baseLayers: 2 }), recipe, { sits, ...patch }));
+    const lp = tp.model.pattern;
+    const all = [];
+    // Past the first layer, which comes in from the plain wall over the seam ramp.
+    for (let i = lp.first + 1; i <= lp.last; i++) for (const q of layerPoints(design, tp, i)) all.push(q.off);
+    const plain = layerPoints(design, tp, lp.last + 2).map((q) => q.off);
+    return { lo: Math.min(...all), hi: Math.max(...all), plain };
+  };
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} for ${b}`);
+  // In / out, 0.75 mm deep: ±0.75 centred; 0 to −1.5 inset; 0 to +1.5 offset.
+  let r = offs('centre'); near(r.lo, -0.75); near(r.hi, 0.75);
+  r = offs('inset'); near(r.lo, -1.5); near(r.hi, 0);
+  r = offs('offset'); near(r.lo, 0); near(r.hi, 1.5);
+  // The plain wall above the Pattern stays on the profile, whichever way.
+  for (const off of r.plain) near(off, 0);
+  // A drawing with flat and out cells only: its flat cells are its inside.
+  const bumps = { kind: 'bitmap', columns: 2, rows: 1, cells: '+0' };
+  r = offs('offset', bumps); near(r.lo, 0); near(r.hi, 0.75);
+  r = offs('inset', bumps); near(r.lo, -0.75); near(r.hi, 0);
+  // Anything else is centred, so older designs print as they did.
+  assert.equal(normaliseDesign(withPattern(cylinder(), TILES.zigzag, { sits: 'sideways' })).pattern.sits, 'centre');
+  const old = withPattern(cylinder());
+  delete old.pattern.sits;
+  assert.equal(normaliseDesign(old).pattern.sits, 'centre');
 });

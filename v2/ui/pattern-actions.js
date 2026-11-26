@@ -421,6 +421,7 @@ export function patternSettings(p) {
     fade: { shape: p.fade.shape, amount: p.fade.amount },
     softenCells: p.softenCells,
     slant: { ...(p.slant ?? NO_SLANT) },
+    sits: p.sits ?? 'centre',
   };
 }
 
@@ -473,6 +474,7 @@ export function applyPatternEntry(d, entry) {
     fade: { shape: s.fade.shape, amount: s.fade.amount },
     softenCells: s.softenCells,
     slant: { ...(s.slant ?? NO_SLANT) },
+    sits: s.sits ?? 'centre',
   };
   if (old !== id) dropUnusedDrawing(d, old);
 }

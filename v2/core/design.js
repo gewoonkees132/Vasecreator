@@ -10,7 +10,7 @@
 // normalised design: knots sorted, a layer height apart, radii above the
 // minimum, every field present and in range.
 
-import { DENSITY_FACES, DEFAULT_POINTS, DEPTH_BEADS, FADE_SHAPES, SPACING_BEADS, defaultPatternRange, defaultSpacingMm } from './layer-pattern.js';
+import { DENSITY_FACES, DEFAULT_POINTS, DEPTH_BEADS, FADE_SHAPES, PATTERN_SITS, SPACING_BEADS, defaultPatternRange, defaultSpacingMm } from './layer-pattern.js';
 import { createProfile } from './profile.js';
 import { BASE_PATTERNS, basePairs } from './base-infill.js';
 import { validateRecipe } from './patterns.js';
@@ -274,6 +274,7 @@ function normalisePattern(input, d) {
     fade: { shape: pick(fade.shape, FADE_SHAPES, 'even'), amount: num(fade.amount, 1, LIMITS.amount) },
     softenCells: num(input.softenCells, 0, LIMITS.softenCells),
     slant: normaliseSlant(input.slant),
+    sits: pick(input.sits, PATTERN_SITS, 'centre'),
   };
 }
 

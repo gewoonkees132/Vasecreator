@@ -411,6 +411,7 @@ Design JSON additions (made in version 2; both fields are optional and `normalis
   - Morph shows Facets' own settings: Edges (softness), Facets around (repeats), Rows, Stagger, Irregularity, Shuffle, Round rim and Blend, with no Strength.
   - The Pattern step has a Slant part: Slant, plus *Different on each facet* and To when the Morph is Facets. On the phone it is the dock tools `slant`, `slantFacets` and `slantTo`.
   - `slantText` and `slantAngle` in `ui/pattern-actions.js` write the readout.
+- **Sits (D78).** `pattern.sits` is one of `PATTERN_SITS` (`'centre'`, `'inset'`, `'offset'`; anything else is `'centre'`). `createLayerPattern` adds minus the drawing's highest cell (inset) or minus its lowest (offset) to every cell before the depth and the Fade, so the plain wall lies on the Pattern's outside or inside. `SITS_OPTIONS` and `SITS_NOTES` in `ui/dock-tools.js` serve the dock's *Sits* tool and the Pattern section's toggle; saved Patterns carry it in their `settings`.
 
 ## CAD export (issue #7)
 

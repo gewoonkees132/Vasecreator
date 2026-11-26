@@ -12,7 +12,7 @@ import { openDb } from './db.js';
 import { hashRaster } from '../core/raster.js';
 import { validateRecipe } from '../core/patterns.js';
 import { LIMITS } from '../core/design.js';
-import { DEFAULT_POINTS, DENSITY_FACES, FADE_SHAPES } from '../core/layer-pattern.js';
+import { DEFAULT_POINTS, DENSITY_FACES, FADE_SHAPES, PATTERN_SITS } from '../core/layer-pattern.js';
 
 let dbPromise = null;
 const getDb = () => (dbPromise ??= openDb());
@@ -107,7 +107,7 @@ export function imageHashes(design) {
 //   { id: 'saved:…', kind: 'pattern', name, drawing, settings, created, updated }
 // `drawing` is a crisp `bitmap` recipe. `settings` is what applying it sets
 // besides the drawing: { depthMm, density: { by, spacingMm, points },
-// fade: { shape, amount }, softenCells, slant: { cells, perFacet, toCells } } (never From / To, which depend on
+// fade: { shape, amount }, softenCells, slant: { cells, perFacet, toCells }, sits } (never From / To, which depend on
 // the pot's height). A design that uses one keeps its own copy of the drawing
 // in design.assets. Records of any other shape (the old { id, name, recipe },
 // or a Detailed morph swatch, kind 'detail', D63) are ignored (D50).
@@ -168,6 +168,7 @@ export function normaliseSavedPattern(raw) {
       perFacet: slant.perFacet === true,
       toCells: Math.round(num(slant.toCells, 0, LIMITS.slantCells) * 4) / 4,
     },
+    sits: oneOf(s.sits, PATTERN_SITS, 'centre'),
   };
   const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 80) : SAVED_NAMES[kind];
   const time = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);

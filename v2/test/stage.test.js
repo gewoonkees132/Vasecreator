@@ -79,11 +79,11 @@ test('dock: the Pattern step shows the drawings, and every tool once there is a 
   assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing']);
   assert.equal(drawingInfo(s(), library).name, 'None');
   setLayerPattern(d, findLayerEntry(library, 'lib:knit@1'));
-  assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing', 'depth', 'density', 'from', 'to', 'fade', 'soften', 'slant']);
+  assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing', 'depth', 'sits', 'density', 'from', 'to', 'fade', 'soften', 'slant']);
   assert.equal(drawingInfo(s(), library).name, 'Knit');
   // The fade's amount once it fades.
   d.pattern.fade.shape = 'diagonal';
-  assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing', 'depth', 'density', 'from', 'to', 'fade', 'fadeAmount', 'soften', 'slant']);
+  assert.deepEqual(ids(toolsFor('pattern', s())), ['drawing', 'depth', 'sits', 'density', 'from', 'to', 'fade', 'fadeAmount', 'soften', 'slant']);
   const density = DOCK_TOOLS.pattern.find((t) => t.id === 'density');
   assert.match(density.dial(s(), env).note, /^\d+ points per layer · \d+\.\d–\d+\.\d mm · [\d,]+ in all$/);
   assert.equal(density.dial(s(), env).label, 'Spacing');

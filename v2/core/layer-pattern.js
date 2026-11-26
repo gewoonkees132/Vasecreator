@@ -23,6 +23,13 @@
 //   Fade multiplies by a strength over From–To (D42).
 // Neither changes the drawing itself, which stays in / flat / out.
 //
+// Sits (D78) says where the plain wall above and below the Pattern lies
+// against it. Centred: on the drawing's flat cells, so the Pattern goes in
+// and out of the wall. Inset: on its outermost cells, so the Pattern is cut
+// into the wall. Offset: on its innermost cells, so the Pattern stands out
+// of it. The Pattern is what moves, by the same share of the depth on every
+// node (and with the Fade); the pot's shape and base stay where they are.
+//
 // Density (D40) is the node spacing around, set as a spacing in mm (measured
 // on the narrowest layer in the range; the repeats are whole, so the spacing
 // shown is recomputed from them) or as points per layer (a whole number of
@@ -45,6 +52,9 @@ import { FACETS_MAP, facetShare } from './morph.js';
 /** The Fade's shapes (D42, D54). */
 export const FADE_SHAPES = BLEND_SHAPES;
 export const DENSITY_FACES = ['spacing', 'points'];
+
+/** pattern.sits (D78): where the Pattern lies against the plain wall around it. */
+export const PATTERN_SITS = Object.freeze(['centre', 'inset', 'offset']);
 /** Node spacing around, in bead widths (D40; from a quarter bead since D64, so 2 mm fits the standard 8 mm bead). */
 export const SPACING_BEADS = Object.freeze({ min: 0.25, max: 3 });
 /** The node spacing every drawing starts with: 2 mm (D64), held to the bead's range. */
@@ -244,6 +254,15 @@ export function createLayerPattern(design, library, wall) {
   const grid = recipe
     ? blurGrid(Float32Array.from(bitmapValues(recipe)), columns, rows, p.softenCells, p.softenCells, true)
     : new Float32Array(1);
+  // Sits (D78): the drawing's outermost cell on the plain wall (inset), or
+  // its innermost (offset), after Soften.
+  let lowest = Infinity;
+  let highest = -Infinity;
+  for (let c = 0; c < grid.length; c++) {
+    if (grid[c] < lowest) lowest = grid[c];
+    if (grid[c] > highest) highest = grid[c];
+  }
+  const sit = !recipe || p.sits === 'centre' || !p.sits ? 0 : p.sits === 'inset' ? -highest : -lowest;
   const span = Math.max(last - first, 1);
   const inRange = (i) => active && i >= first && i <= last;
   const rowOf = (i) => (inRange(i) ? (i - first) % rows : -1);
@@ -286,7 +305,7 @@ export function createLayerPattern(design, library, wall) {
       } else if (slanted) {
         column = mod(j - shift, columns);
       }
-      v[j] = p.depthMm * grid[offset + column] * f;
+      v[j] = p.depthMm * (grid[offset + column] + sit) * f;
     }
     // Where two facets meet, their drawings, moved by different amounts, can
     // leave a lone cell standing out of or sunk into both neighbours: a spike
@@ -414,6 +433,7 @@ export function newPattern(design, drawing) {
     fade: { shape: 'even', amount: 1 },
     softenCells: 0,
     slant: { ...NO_SLANT },
+    sits: 'centre',
   };
 }
 

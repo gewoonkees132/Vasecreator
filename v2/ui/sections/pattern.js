@@ -20,7 +20,7 @@ import { h, slider, numberField, segmented, toggle } from '../controls.js';
 import { DEPTH_BEADS, SPACING_BEADS } from '../../core/layer-pattern.js';
 import { FACETS_MAP } from '../../core/morph.js';
 import { LIMITS } from '../../core/design.js';
-import { BLEND_OPTIONS } from '../dock-tools.js';
+import { BLEND_OPTIONS, SITS_OPTIONS, SITS_NOTES, depthReach } from '../dock-tools.js';
 import {
   findLayerEntry, layerMineEntries, pickLayerPattern, drawLayerEntry, readoutOf, densityText, softenText, slantText, wholeText, densityLimits, setDensityFace,
   openEditor, editableEntry, savableEntry, saveEntry, pickSavedPattern, targetKey, savedSpacingMm, drawsWith,
@@ -162,6 +162,14 @@ const section = {
       onCommit: commit,
     });
 
+    // ---- Sits: the plain wall on the Pattern's middle, outside or inside (D78) ----
+    const sits = segmented({
+      label: 'Sits', options: SITS_OPTIONS, value: 'centre',
+      onChange: (v) => store.apply('Pattern sits', (d) => { if (d.pattern) d.pattern.sits = v; }),
+    });
+    const sitsNote = h('p', { class: 'panel-note' });
+    const sitsBox = h('div', { class: 'slot-settings' }, [sits.el, sitsNote]);
+
     // ---- Density: spacing in mm or points per layer (D40) ----
     const face = segmented({
       label: 'Density as',
@@ -255,12 +263,13 @@ const section = {
     // The Pattern step's parts (ui/steps.js).
     for (const e of [strip, saveForm.el, confirm.el, mineMsg, editorMsg, about]) e.dataset.part = 'drawing';
     depth.el.dataset.part = 'depth';
+    sitsBox.dataset.part = 'depth';
     densityBox.dataset.part = 'density';
     rangeBox.dataset.part = 'range';
     fadeBox.dataset.part = 'fade';
     soften.el.dataset.part = 'soften';
     slantBox.dataset.part = 'slant';
-    el.append(strip, saveForm.el, confirm.el, mineMsg, editorMsg, about, depth.el, densityBox, rangeBox, fadeBox, soften.el, slantBox);
+    el.append(strip, saveForm.el, confirm.el, mineMsg, editorMsg, about, depth.el, sitsBox, densityBox, rangeBox, fadeBox, soften.el, slantBox);
 
     // A saved Pattern: its tile applies it in one tap (D48), and × on its corner deletes it.
     function mineTile(e) {
@@ -318,7 +327,10 @@ const section = {
       const w = d.layers.beadWidthMm;
       depth.setLimits({ max: Math.max(deepest(d), p.depthMm) });
       depth.set(p.depthMm);
-      depth.setInfo(p.depthMm > 0 ? `Out +${fmt(p.depthMm)} mm, in −${fmt(p.depthMm)} mm · up to ⅔ of a bead (${fmt(deepest(d))} mm)` : 'Flat: the drawing doesn’t print');
+      depth.setInfo(p.depthMm > 0 ? `${depthReach(p)} · up to ⅔ of a bead (${fmt(deepest(d))} mm)` : 'Flat: the drawing doesn’t print');
+
+      sits.set(p.sits);
+      sitsNote.textContent = SITS_NOTES[p.sits] ?? '';
 
       const by = p.density.by;
       face.set(by);
