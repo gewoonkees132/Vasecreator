@@ -204,7 +204,7 @@ Warning = { id: string, severity: 'ok' | 'info' | 'warning' | 'error', bit: numb
 
 ## Renderer
 
-`render/beads.js`: one instanced bead per path segment, built in the vertex shader straight from `positions`. Rings are mitred onto the plane that bisects each turn, so beads join without gaps or bulges. Kind-0 segments collapse to nothing. It renders on demand only.
+`render/beads.js`: one instanced bead per path segment, built in the vertex shader straight from `positions` (no per-segment JavaScript, so `setToolpath` stays under a millisecond at 100k points). The bead follows a centripetal Catmull-Rom curve through the segment and its two neighbours: rings stand square to the curve, and neighbours agree on its direction at the point they share, so beads flow round the toolpath points and join without gaps, bulges or creases. Turns up to about 165° are rounded (a sharp zigzag becomes a row of round bumps, as a round nozzle leaves it); hairpins get open ends. Kind-0 segments collapse to nothing. The detail (sides around the bead, ring steps along it) is the richest that keeps the pot within a triangle budget, smaller on phones and tablets; at one step a bead is straight and mitred at the joints. Display only: the toolpath and the G-code never change. Light: a studio rig (key light raking in from the upper left, fill, rim, a dim environment) that turns with the view like a turntable, on a matte warm white; the fragment shader darkens the grooves between layers and the inside of tight turns from the bead's cross-section and the curve's bend (analytic ambient occlusion, no extra pass). It renders on demand only.
 
 ```js
 export class BeadRenderer {
