@@ -1,7 +1,7 @@
 # Vasecreator v2: recreating two vases (Facets and Slant)
 
 - **Date:** 2026-11-26
-- **Status:** Owner decisions D69–D72 (2026-11-26, after the first round of renders). Being built on `t3/recreate-vases` (§6). The preview's light and bead shape went to a separate agent at the owner's request (§5.4).
+- **Status:** Owner decisions D69–D72 (2026-11-26, after the first round of renders). Built on `t3/recreate-vases` (§6). The preview's light and bead shape were built by a separate agent at the owner's request and merged in (§5.4, §6.3). Not pushed.
 - **Builds on:** [`v2-pattern-studio.md`](v2-pattern-studio.md) (the Pattern, D35–D68) and [`v2-design-brainstorm.md`](v2-design-brainstorm.md) (the Morph, §9.6, D23).
 - **Code:** everything lives in `v2/`, and paths below are relative to it.
 
@@ -101,7 +101,7 @@ The vases were built in the running app through the same store edits the control
 1. **Rounder flutes** (§2.1). Soften on a 2-column drawing erases it. The owner didn't ask for a change here.
 2. **A larger Morph image** (1024 px, 16-bit). This is not needed once Facets and Slant exist.
 3. **Hatching finer than 12 mm at 8 × 5.** That is clay physics. A finer bead is a Layers setting.
-4. **The preview's light and bead shape.** The light follows the camera, so relief looks flat from the front, and the beads look like stacked bumps. A separate agent is working on a studio light and rounder, flowing beads, in its own worktree (owner, 2026-11-26).
+4. **The preview's light and bead shape.** The light followed the camera, so relief looked flat from the front, and the beads looked like stacked bumps. Fixed by a studio light and round, flowing beads (§6.3). Still open: lights fixed to the room instead of turning with the view, real cast shadows on desktop, and a check on a real Android phone.
 
 ## 6. Build notes
 
@@ -124,3 +124,11 @@ The vases were built in the running app through the same store edits the control
   - That is clay physics at 8 × 5, not a tool limit: a finer bead allows deeper and closer hatching.
 - **Ribbed bottle.** Unchanged from round 1 (§2.1): it needed nothing new.
 - **Printer.** Both pots are taller or wider than the generic gantry (300 × 300 × 400): set your printer in Print.
+
+### 6.3 The new preview (merged 2026-11-26)
+
+- **What it is.** Branch `t3/preview-studio-light-round-beads` (`81d31d8`), merged into `t3/recreate-vases`. It changes only `v2/render/beads.js` and the Renderer paragraph in ARCHITECTURE.md.
+- **The light.** A key light from the upper left, about 60° to the side and 35° up, plus a weak fill and a rim light. The lights turn with the camera.
+- **The beads.** Each bead follows a smooth curve through the toolpath points, with a rounder cross-section. Sharp zigzags join into round bumps, and the grooves are shaded in the shader.
+- **What it showed.** With it, the bottle's ribs and the planter's facets and per-facet hatching read at the normal 3/4 view. So does the 1.6 mm hatching, which stays within the rules.
+- **Speed.** Frames take up to about 2.8× more GPU time on desktop, still under 2 ms. It hasn't been checked on a phone yet.
