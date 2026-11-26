@@ -375,7 +375,7 @@ The core evaluates f exactly at every toolpath point (research §6.3 mapping, wi
 | Setting | Default | Notes |
 |---|---|---|
 | **Base layers** | 3 | 0 makes a sleeve with no floor (research §3.6, item 5). |
-| **Infill** | Spiral | Spiral, Rings or Lines (D73–D75, [`v2-base-infill.md`](v2-base-infill.md)). Phase 1 had the spiral only. |
+| **Infill** | Spiral | Spiral or Lines, in pairs of layers (D73–D77, [`v2-base-infill.md`](v2-base-infill.md)). Phase 1 had the spiral only. |
 | **Hole** | 0 mm (none) | A drainage hole diameter. A warning appears if it is under 2 × bead width (research §7, V13). |
 
 Fixed behaviour, from research §5.4 stage 6: the infill alternates direction per layer, adds an outline ring, and **finishes at the seam**, so the wall starts cleanly. Line spacing is 0.9 × bead width. Patterns never apply to the base (research §11.3, Q5, option a).

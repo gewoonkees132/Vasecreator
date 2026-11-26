@@ -4,7 +4,7 @@ Read these first: `docs/design/v2-design-brainstorm.md` (the approved design, ca
 
 ## Status
 
-**Phase 0 (§15.1) is built.** The `core/` engine runs in a worker. It covers the profile, footprint, twist, the layer grid with a seam ramp, the base infill (spiral, rings or lines: `core/base-infill.js`, `docs/design/v2-base-infill.md`), 1 or 2 walls, the generic gantry profile and G-code emission. It comes with deterministic maths, golden G-code and property tests. There is no separate bare test page: `/v2/` is the full app.
+**Phase 0 (§15.1) is built.** The `core/` engine runs in a worker. It covers the profile, footprint, twist, the layer grid with a seam ramp, the base infill (spiral or lines, in pairs of layers: `core/base-infill.js`, `docs/design/v2-base-infill.md`), 1 or 2 walls, the generic gantry profile and G-code emission. It comes with deterministic maths, golden G-code and property tests. There is no separate bare test page: `/v2/` is the full app.
 
 **Phase 1 (§15.2), items 1–8, is built in code:** the Designs screen (1); dragging, adding and removing profile points in the view, plus height, width, depth, footprint, corner rounding and twist (2); 12 swatches in slots A and B with blending (3); layers, seam and base (4); the Advanced sections for curve, points and footprint (5); live white beads, with warnings that colour them (6); history, undo, redo, and saving as tiles or files (7); Prepare print with walls, inner wall, printer, checks, and the G-code and design-file downloads (8).
 

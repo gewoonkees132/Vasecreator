@@ -1,7 +1,8 @@
-# Vasecreator v2: a base that holds water (three infills)
+# Vasecreator v2: a base that holds water (two infills, in pairs of layers)
 
 - **Date:** 2026-11-26
 - **Status:** Approved by the owner as a short design on 2026-11-26 and built on `t3/recreate-vases`. Not printed yet (D4): the numbers below come from sources and geometry, not from a clay test.
+- **Changed the same day by D76–D77 (§5):** base layers come in pairs and Rings is gone. The research behind that is in [`v2-base-infill-in-and-out.md`](v2-base-infill-in-and-out.md). Where the text below says three infills or Rings, read it as history.
 - **Builds on:** [`v2-design-brainstorm.md`](v2-design-brainstorm.md) §9.4 (the base) and research §5.4 stage 6. Covers most of GitHub issue #4 (base design review) and the later item "More base infills" (§15.4).
 - **Code:** everything lives in `v2/`, and paths below are relative to it.
 
@@ -69,6 +70,21 @@ Sunburst was left out: it piles clay up in the middle and opens gaps at the edge
 
 **D75: Extra flow in the base infill, a print setting.** `extrusion.baseFlow` in the printer profile, 1.1 by default (the 5–10 % of [B2], and the owner's note in issue #4), 1 to 1.5. It applies to the base infill beads only, not to the ring, the walls or the skirt, and shows as *Base flow* in the Print step, so the design view stays free of material talk (D7). The refill planning counts it.
 
+**D76: Base layers come in pairs.** The first layer of a pair runs from the seam on the ring inward; the second starts where the first ended, comes back out and ends at the seam on the ring. Every pair therefore starts and stops at the same point, the print never starts in the middle of the floor, and the wall starts where the base ended. This is what the one clay source that explains itself does [R1 in the research record]: one layer is too thin once the clay shrinks, and coming back from the middle on the same layer leaves extra clay there.
+
+- `base.layers` is 0 (a sleeve), 2, 4, … 20. An odd count in an older design is rounded up, so a floor never gets thinner (`basePairs`).
+- A pot too low for its base prints whole pairs only (`wholePairs`).
+- The fields step by two, and say so.
+- A pair is one infill: Lines print when both layers of the pair have room for them, otherwise both are the spiral. Before, a small floor could get lines on one layer and a spiral on the next, with a move of 1.4 bead widths without clay between them.
+- The second layer of a Lines pair starts over the nearest spot of its curve to where the first ended, not the nearest point of it, so the step up between the two is the stagger and no more.
+
+**D77: Two infills, the two that clay practice backs.** `BASE_PATTERNS` is `'spiral'` and `'lines'`. Rings is removed: no source supports it, and the owner asked for the in-and-out spiral and the crossed lines only. A design saved with Rings opens as the spiral.
+
+| Infill | A pair of layers | Backed by |
+|---|---|---|
+| **Spiral** | In to the middle on one layer, back out to the seam on the next, half a spacing staggered. | The Potterbot tutorial (clay). |
+| **Lines** | Across the floor on one layer, back on the next, turned 90°. | The porcelain vase on a WASP [B1] (clay). |
+
 ## 6. What it measures now
 
 The same script, over round, oval, rectangular, twisted, morphed and two-walled floors, with and without a hole, on four base layers:
@@ -104,7 +120,7 @@ Half a bead width is where two beads just meet. The spots between 0.50 and 0.54 
 - `core/design.js`: `base.pattern` is normalised against `BASE_PATTERNS`.
 - `core/gcode.js`, `core/printer.js`, `ui/print.js`: the base flow.
 - `ui/sections/base.js`: the toggle.
-- `test/base-infill.test.js`: every infill on ten floors (covered, flat, out of the hole, no jump), the stagger, the 90° turn, the flow. `test/golden/plain-cylinder-rings.gcode` and `-lines.gcode`.
+- `test/base-infill.test.js`: every infill on ten floors (covered, flat, out of the hole, no jump), every pair starting and stopping at the seam, odd counts rounded up, the stagger, the 90° turn, the flow. `test/golden/plain-cylinder-lines.gcode`.
 
 ## Sources
 

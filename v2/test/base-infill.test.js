@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normaliseDesign } from '../core/design.js';
-import { BASE_PATTERNS } from '../core/base-infill.js';
+import { BASE_PATTERNS, basePairs, wholePairs } from '../core/base-infill.js';
 import { KIND, buildToolpath } from '../core/toolpath.js';
 import { emitGcode } from '../core/engine.js';
 import { defaultPrinter, normalisePrinter } from '../core/printer.js';
@@ -32,7 +32,7 @@ const floors = [
   ['a square with a hole', shaped(rectangle(1, 0), 15)],
   ['two walls', shaped(null, 0, { walls: 2 }), 2],
   ['a twisted rounded rectangle', { ...shaped(rectangle(0.8, 0.2)), form: { ...shaped(rectangle(0.8, 0.2)).form, twist: { degrees: 90 } } }],
-  ['a small floor', cylinder({ baseLayers: 3, radius: 8 })],
+  ['a small floor', cylinder({ baseLayers: 4, radius: 8 })],
   ['a hole nearly as wide as the floor', shaped(null, 70)],
   ['a morphed outline', { ...structuredClone(drape), base: { ...drape.base, layers: 4 } }],
 ];
@@ -122,9 +122,52 @@ test('the infill is a design setting; anything unknown is the spiral', () => {
   assert.equal(normaliseDesign(d).base.pattern, 'spiral');
   for (const pattern of BASE_PATTERNS) assert.equal(normaliseDesign({ ...d, base: { ...d.base, pattern } }).base.pattern, pattern);
   assert.equal(normaliseDesign({ ...d, base: { ...d.base, pattern: 'sunburst' } }).base.pattern, 'spiral');
+  // Rings went with D77: a design saved with them opens as the spiral.
+  assert.equal(normaliseDesign({ ...d, base: { ...d.base, pattern: 'rings' } }).base.pattern, 'spiral');
 });
 
-test('the three infills are different paths over the same floor', () => {
+test('base layers come in pairs: an odd count is rounded up, and a low pot keeps whole pairs', () => {
+  assert.deepEqual([0, 1, 2, 3, 4, 19, 20].map(basePairs), [0, 2, 2, 4, 4, 20, 20]);
+  for (const [asked, got] of [[0, 0], [1, 2], [2, 2], [3, 4], [5, 6], [20, 20], [21, 20]]) {
+    const d = cylinder();
+    d.base.layers = asked;
+    assert.equal(normaliseDesign(d).base.layers, got, `${asked} layers`);
+  }
+  // Four base layers asked of a pot three layers high: two print.
+  assert.equal(wholePairs(4, 3), 2);
+  assert.equal(wholePairs(4, 1), 0);
+  const low = cylinder({ baseLayers: 4, height: 4.5 });
+  assert.equal(build(low, 'spiral').tp.layerStarts.length > 2, true);
+});
+
+for (const pattern of BASE_PATTERNS) {
+  for (const [name, raw, walls = 1] of floors) {
+    test(`${pattern}: ${name}: every pair of layers starts and stops at the seam`, () => {
+      const { design, tp } = build(raw, pattern, walls);
+      const w = design.layers.beadWidthMm;
+      const nb = design.base.layers;
+      assert.equal(nb % 2, 0);
+      const fixed = design.layers.seam.position === 'fixed' && design.form.twist.degrees === 0;
+      for (let k = 0; k < nb; k += 2) {
+        const first = tp.layerStarts[k];
+        const last = tp.layerStarts[k + 2] - 1;
+        // In from the ring at the seam, back out onto the ring at the seam.
+        assert.equal(tp.kinds[first + 1], KIND.outer, `pair ${k / 2} starts on the ring`);
+        assert.equal(tp.kinds[last], KIND.outer, `pair ${k / 2} ends on the ring`);
+        const apart = Math.hypot(tp.path[3 * first] - tp.path[3 * last], tp.path[3 * first + 1] - tp.path[3 * last + 1]);
+        // A seam that moves with the twist or hides along the wall moves a little from layer to layer.
+        assert.ok(apart < (fixed ? 1e-6 : 2 * w), `pair ${k / 2} ends ${apart.toFixed(3)} mm from where it started`);
+        // The first layer of the pair ends where the second one starts: a step up, no travel.
+        const mid = tp.layerStarts[k + 1];
+        const step = Math.hypot(tp.path[3 * mid] - tp.path[3 * mid - 3], tp.path[3 * mid + 1] - tp.path[3 * mid - 2]);
+        // A twist turns the floor between the two layers, so its corners move.
+        assert.ok(step < (fixed ? w : 1.5 * w), `pair ${k / 2}: ${step.toFixed(2)} mm between its two layers`);
+      }
+    });
+  }
+}
+
+test('the infills are different paths over the same floor', () => {
   const paths = BASE_PATTERNS.map((pattern) => {
     const { tp } = build(cylinder({ baseLayers: 2 }), pattern);
     return Array.from(tp.path.subarray(0, 3 * tp.layerStarts[2])).map((v) => v.toFixed(3)).join(' ');
@@ -133,9 +176,9 @@ test('the three infills are different paths over the same floor', () => {
 });
 
 test('a layer does not lie on the grooves of the one below', () => {
-  // Spiral and rings: where the tracks cross the +Y axis, the two layers'
+  // The spiral: where the tracks cross the +Y axis, the two layers'
   // crossings are half a spacing apart, not on top of each other.
-  for (const pattern of ['spiral', 'rings']) {
+  for (const pattern of ['spiral']) {
     const { design, tp } = build(cylinder({ baseLayers: 2, radius: 40 }), pattern);
     const step = design.base.spacingRatio * design.layers.beadWidthMm;
     const crossings = (k) => {

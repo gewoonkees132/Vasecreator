@@ -114,7 +114,7 @@ const cases = [
   ['two smooth walls', (() => { const d = normaliseDesign(presets[0]); d.finish.walls = 2; return d; })()],
   ['two walls that follow', (() => { const d = normaliseDesign(presets[2]); d.finish.walls = 2; d.finish.innerWall = 'followPattern'; return d; })()],
   ['a sleeve (no base)', normaliseDesign(cylinder({ baseLayers: 0 }))],
-  ['a base with a hole', (() => { const d = normaliseDesign(cylinder({ baseLayers: 3 })); d.base.hole = { diameter: 20 }; return d; })()],
+  ['a base with a hole', (() => { const d = normaliseDesign(cylinder({ baseLayers: 4 })); d.base.hole = { diameter: 20 }; return d; })()],
   ['a Pattern, two walls', (() => { const d = normaliseDesign(withPattern(structuredClone(presets[0]), TILES.knit, { fromMm: 10, toMm: 150 })); d.finish.walls = 2; return d; })()],
 ];
 
@@ -167,7 +167,7 @@ test('solid: a plain cylinder has the volume of its wall and base', () => {
 });
 
 test('solid: the wall is one bead wide around the toolpath centreline', () => {
-  const d = normaliseDesign(cylinder({ height: 30, radius: 30, baseLayers: 1 }));
+  const d = normaliseDesign(cylinder({ height: 30, radius: 30, baseLayers: 2 }));
   const mesh = buildSolid(d, library);
   const w = d.layers.beadWidthMm;
   let lo = Infinity, hi = 0;

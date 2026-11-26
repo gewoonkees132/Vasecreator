@@ -41,7 +41,7 @@ import { createProfile } from './profile.js';
 import { createPlan } from './plan.js';
 import { ISSUE } from './checks.js';
 import { createMorph } from './morph.js';
-import { baseInfill } from './base-infill.js';
+import { baseInfill, wholePairs } from './base-infill.js';
 
 /** What the move ending at a point is (ARCHITECTURE.md, PreviewResult.kinds). */
 export const KIND = Object.freeze({ none: 0, outer: 1, inner: 2, base: 3, connector: 4 });
@@ -80,7 +80,8 @@ export function createWallModel(design, library, { images } = {}) {
   const w = layers.beadWidthMm;
   const H = form.height;
   const layerCount = Math.max(1, Math.round(H / h));
-  const baseLayers = Math.min(base.layers, layerCount);
+  // Whole pairs only (D76): in on one layer, back out to the seam on the next.
+  const baseLayers = wholePairs(base.layers, layerCount);
   const baseTop = baseLayers * h;
   const profile = createProfile(form.profile);
   const plan = createPlan(form.plan);

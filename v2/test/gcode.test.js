@@ -221,8 +221,8 @@ test('the profile hash is FNV-1a and ignores key order', () => {
 // well as the first three's features.
 const goldens = [
   ['plain-cylinder', cylinder()],
-  // One per infill other than the spiral, with a hole in the floor.
-  ...['rings', 'lines'].map((pattern) => [`plain-cylinder-${pattern}`, { ...cylinder(), base: { ...cylinder().base, pattern, hole: { diameter: 12 } } }]),
+  // The infill other than the spiral, with a hole in the floor.
+  ['plain-cylinder-lines', { ...cylinder(), base: { ...cylinder().base, pattern: 'lines', hole: { diameter: 12 } } }],
   ...presets.map((p) => [p.meta.id.replace(/^preset:|@\d+$/g, ''), p]),
 ];
 for (const [name, design] of goldens) {

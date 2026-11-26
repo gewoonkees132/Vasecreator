@@ -1,14 +1,13 @@
 // Base section (design §9.4, docs/design/v2-base-infill.md): floor thickness
-// in layers, the infill (spiral, rings or crossed lines) and a drainage hole:
+// in pairs of layers, the infill (spiral or crossed lines) and a drainage hole:
 // the parts Base and Hole of the Base step.
 
 import { numberField, segmented, h } from '../controls.js';
 import { limit } from './shape.js';
 
 const INFILLS = [
-  { value: 'spiral', label: 'Spiral', note: 'One bead from the wall to the middle' },
-  { value: 'rings', label: 'Rings', note: 'Closed rings, one inside the other' },
-  { value: 'lines', label: 'Lines', note: 'Straight lines, crossed on every layer' },
+  { value: 'spiral', label: 'Spiral', note: 'In to the middle on one layer, back out to the seam on the next' },
+  { value: 'lines', label: 'Lines', note: 'Straight lines across the floor, turned 90° on every layer' },
 ];
 const infillOf = (b) => INFILLS.find((i) => i.value === b.pattern) || INFILLS[0];
 
@@ -28,9 +27,9 @@ const section = {
     const b0 = store.state.design.base;
 
     const layers = numberField({
-      label: 'Base layers', ...limit(['baseLayers', 'base.layers'], { min: 0, max: 20, step: 1 }), decimals: 0,
+      label: 'Base layers', ...limit(['baseLayers', 'base.layers'], { min: 0, max: 20, step: 2 }), decimals: 0,
       value: b0.layers, info: '',
-      onInput: (v) => store.change('Base layers', (d) => { d.base.layers = Math.round(v); }),
+      onInput: (v) => store.change('Base layers', (d) => { d.base.layers = 2 * Math.round(v / 2); }),
       onCommit: () => store.commit(),
     });
     const infill = segmented({
@@ -55,7 +54,7 @@ const section = {
     const update = (state) => {
       const b = state.design.base;
       layers.set(b.layers);
-      layers.setInfo(b.layers > 0 ? '' : 'No floor: the pot prints as a sleeve');
+      layers.setInfo(b.layers > 0 ? 'In pairs: one layer in, one back out' : 'No floor: the pot prints as a sleeve');
       infill.set(infillOf(b).value);
       infill.setDisabled?.(!(b.layers > 0));
       hint.textContent = infillOf(b).note;

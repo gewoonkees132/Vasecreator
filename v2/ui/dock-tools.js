@@ -344,10 +344,10 @@ export const DOCK_TOOLS = {
       id: 'floor', name: 'Floor', kind: 'dial',
       value: (s) => `${s.design.base.layers} layers`,
       dial: (s) => ({
-        label: 'Base layers', unit: 'layers', ...L('baseLayers', {}), step: 1, decimals: 0, value: s.design.base.layers,
-        note: s.design.base.layers > 0 ? 'A solid floor' : 'No floor: the pot prints as a sleeve',
+        label: 'Base layers', unit: 'layers', ...L('baseLayers', {}), step: 2, decimals: 0, value: s.design.base.layers,
+        note: s.design.base.layers > 0 ? 'A solid floor, in pairs: one layer in, one back out' : 'No floor: the pot prints as a sleeve',
       }),
-      set: (d, v) => { d.base.layers = Math.round(v); },
+      set: (d, v) => { d.base.layers = 2 * Math.round(v / 2); },
     },
     {
       id: 'hole', name: 'Hole', kind: 'dial',

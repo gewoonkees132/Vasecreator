@@ -18,7 +18,7 @@ const variants = [
   ...presets.map((p) => [p.meta.name, p]),
   ['plain cylinder', cylinder()],
   ['sleeve', cylinder({ baseLayers: 0 })],
-  ['one base layer', cylinder({ baseLayers: 1 })],
+  ['two base layers', cylinder({ baseLayers: 2 })],
   ['four base layers with a hole', { ...cylinder({ baseLayers: 4 }), base: { layers: 4, pattern: 'spiral', spacingRatio: 0.9, outline: true, hole: { diameter: 20 } } }],
   ['two walls', { ...presets[0], finish: { walls: 2, wallSpacingMm: 2.7, innerWall: 'smooth' } }, 2],
   ['two walls following the pattern', { ...presets[2], finish: { walls: 2, wallSpacingMm: 2.7, innerWall: 'followPattern' } }, 2],
@@ -129,7 +129,7 @@ function outerGaps(tp, w) {
 }
 
 const gapCases = [
-  ['three base layers', cylinder({ baseLayers: 3 })],
+  ['four base layers', cylinder({ baseLayers: 4 })],
   ['a sleeve', cylinder({ baseLayers: 0 })],
   ['the Classic vase (hidden seam moving back)', presets[0]],
   ['a fixed seam on a full twist', twistedFixed(360)],
@@ -173,7 +173,7 @@ test('a sleeve starts flat on the bed', () => {
   assert.ok(tp.kinds.every((k) => k !== KIND.base));
 });
 
-for (const layers of [1, 2, 3, 4]) {
+for (const layers of [2, 4, 6]) {
   test(`${layers} base layers: the last ends at the seam on the ring, and directions alternate`, () => {
     const { design, tp } = build(cylinder({ baseLayers: layers, radius: 35 }));
     const h = design.layers.layerHeightMm;
@@ -203,7 +203,7 @@ for (const layers of [1, 2, 3, 4]) {
 }
 
 test('a hole stops the base spiral short of the hole', () => {
-  const d = cylinder({ baseLayers: 1, radius: 40 });
+  const d = cylinder({ baseLayers: 2, radius: 40 });
   d.base.hole.diameter = 20;
   const { design, tp } = build(d);
   const w = design.layers.beadWidthMm;

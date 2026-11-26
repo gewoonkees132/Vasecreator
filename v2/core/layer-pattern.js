@@ -39,6 +39,7 @@ import { BLEND_SHAPES, blendShape } from './surface.js';
 import { blurGrid } from './raster.js';
 import { createProfile } from './profile.js';
 import { createPlan } from './plan.js';
+import { wholePairs } from './base-infill.js';
 import { FACETS_MAP, facetShare } from './morph.js';
 
 /** The Fade's shapes (D42, D54). */
@@ -203,7 +204,7 @@ export function patternReadout(design, library) {
     profile: createProfile(design.form.profile),
     unitPerimeter: createPlan(design.form.plan).unitPerimeter,
     layerCount,
-    baseLayers: Math.min(design.base.layers, layerCount),
+    baseLayers: wholePairs(design.base.layers, layerCount),
     maxNodes: MAX_NODES,
   });
   return {

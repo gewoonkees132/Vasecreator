@@ -12,7 +12,7 @@
 
 import { DENSITY_FACES, DEFAULT_POINTS, DEPTH_BEADS, FADE_SHAPES, SPACING_BEADS, defaultPatternRange, defaultSpacingMm } from './layer-pattern.js';
 import { createProfile } from './profile.js';
-import { BASE_PATTERNS } from './base-infill.js';
+import { BASE_PATTERNS, basePairs } from './base-infill.js';
 import { validateRecipe } from './patterns.js';
 import { FACETS_DEFAULTS, FACETS_MAP, FACETS_MIN_AROUND, MORPH_DEFAULTS, isMorphMap } from './morph.js';
 
@@ -58,7 +58,7 @@ export const LIMITS = Object.freeze({
   curveRatio: { min: 0.1, max: 1.5, step: 0.05 },     // rules.curveRatio, the tightest curve's radius, of a bead width
   rampPoints: { min: 1, max: 40, step: 1 },           // layers.seam.rampPoints (D67)
   angleDeg: { min: 0, max: 359, step: 1 },            // layers.seam.angleDeg (wraps)
-  baseLayers: { min: 0, max: 20, step: 1 },           // base.layers
+  baseLayers: { min: 0, max: 20, step: 2 },           // base.layers, in pairs (D76)
   spacingRatio: { min: 0.5, max: 1.5, step: 0.01 },   // base.spacingRatio
   holeDiameter: { min: 0, max: 500, step: 0.5 },      // base.hole.diameter
   wallSpacingMm: { min: 0.5, max: 20, step: 0.1 },    // finish.wallSpacingMm
@@ -383,7 +383,7 @@ export function normaliseDesign(json) {
       curveRatio: num(rules.curveRatio, D.rules.curveRatio, LIMITS.curveRatio),
     },
     base: {
-      layers: num(base.layers, D.base.layers, LIMITS.baseLayers, true),
+      layers: basePairs(num(base.layers, D.base.layers, LIMITS.baseLayers, true)),
       pattern: pick(base.pattern, BASE_PATTERNS, 'spiral'),
       spacingRatio: num(base.spacingRatio, D.base.spacingRatio, LIMITS.spacingRatio),
       outline: base.outline !== false,

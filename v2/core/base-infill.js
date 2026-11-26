@@ -1,6 +1,9 @@
 // The floor inside the base ring (design §9.4, docs/design/v2-base-infill.md):
 // one path per base layer that covers the floor once and leaves no way
-// through for water. Three infills share the same sealing rules:
+// through for water. Base layers come in pairs (D76): the first of a pair
+// runs from the seam inward, the second comes back out and ends at the seam,
+// so every pair starts and stops at the same point. Two infills (D77), the
+// two layouts clay practice backs, share the same sealing rules:
 //
 //   Overlap   the infill starts with a closed lap beside the ring, on average
 //             a quarter bead into it, so the floor is welded to the wall.
@@ -17,7 +20,16 @@
 import { TAU, datan2, dcos, dsin, frac } from './math.js';
 
 /** The infills of base.pattern. */
-export const BASE_PATTERNS = Object.freeze(['spiral', 'rings', 'lines']);
+export const BASE_PATTERNS = Object.freeze(['spiral', 'lines']);
+
+/** Base layers come in pairs: in on one, back out on the next (D76). */
+export const BASE_PAIR = 2;
+
+/** A base layer count as whole pairs, rounding an odd count up (a floor is never made thinner). */
+export const basePairs = (layers) => BASE_PAIR * Math.ceil(Math.max(layers, 0) / BASE_PAIR);
+
+/** The base layers that print: whole pairs, and no more than the pot has layers. */
+export const wholePairs = (layers, layerCount) => BASE_PAIR * Math.floor(Math.min(layers, layerCount) / BASE_PAIR);
 
 /** How far the lap beside the ring overlaps it, as a share of a bead, averaged over two layers. */
 export const RING_OVERLAP = 0.25;
@@ -30,7 +42,7 @@ const hypot = (x, y) => Math.sqrt(x * x + y * y);
 /**
  * The infill of one base layer.
  * @param {object} o
- * @param {'spiral' | 'rings' | 'lines'} o.pattern
+ * @param {'spiral' | 'lines'} o.pattern
  * @param {number} o.layer the base layer's index (the stagger and the lines' direction go by it)
  * @param {number} o.uS the seam's outline position
  * @param {number} o.w bead width
@@ -68,9 +80,9 @@ export function baseInfill(o) {
     const laps = closing(o.uS, o.endU);
     trace(t, 0, laps, () => inner);
     endU = o.uS + laps;
-  } else if (o.pattern === 'rings') {
-    endU = rings(t);
-  } else if (o.pattern === 'lines' && inner - first >= 1.5 * step) {
+  } else if (o.pattern === 'lines' && inner - far >= 1.5 * step) {
+    // Room for lines on both layers of the pair, or on neither: a pair is
+    // one infill, so its second layer starts where its first one ended.
     endU = lines(t);
   } else {
     endU = spiral(t);
@@ -128,29 +140,6 @@ function spiral(t) {
   trace(t, 1, arrive, (p) => first + step * (p - 1));
   trace(t, arrive, arrive + laps, () => inner);
   return aroundHole(t, uS + arrive + laps);
-}
-
-// Rings: closed laps one spacing apart, each joined to the next by a short
-// slanting bead, so no groove runs from the wall to the middle. The slant
-// differs between layers, so the joins don't stack.
-function rings(t) {
-  const { first, inner, step, perimeter, w } = t;
-  const deltas = [];
-  for (let d = first; d < inner - 1e-9; d += step) deltas.push(d);
-  // A last lap close to the closing one moves halfway, sharing the overlap.
-  const n = deltas.length;
-  if (n > 1 && inner - deltas[n - 1] < step / 2) deltas[n - 1] = (deltas[n - 2] + inner) / 2;
-  deltas.push(inner);
-  const drift = (t.layer % 2 === 1 ? 3 : 1) * step;
-  let p = 0;
-  for (let j = 0; j < deltas.length; j++) {
-    const last = j === deltas.length - 1;
-    const laps = last ? closing(t.uS + p, t.endU) : 1;
-    trace(t, p, p + laps, () => deltas[j]);
-    p += laps;
-    if (!last) p += Math.min(drift / Math.max(perimeter(deltas[j]), w), 0.25);
-  }
-  return aroundHole(t, t.uS + p);
 }
 
 // A round hole in a floor that isn't round: the laps stop where they first
@@ -460,13 +449,24 @@ function lines(t) {
 
   // End over the end of the layer below.
   if (t.endXY && cur.poly === outer) {
-    let best = 0;
+    // The nearest spot of the curve, between its points too: the step up
+    // to this layer is then no more than the stagger between the two.
+    let best = null;
     let bestD = Infinity;
     for (let j = 0; j < outer.M; j++) {
-      const d = hypot(outer.pts[2 * j] - t.endXY[0], outer.pts[2 * j + 1] - t.endXY[1]);
-      if (d < bestD) { bestD = d; best = j; }
+      const k = (j + 1) % outer.M;
+      const ax = outer.pts[2 * j];
+      const ay = outer.pts[2 * j + 1];
+      const bx = outer.pts[2 * k] - ax;
+      const by = outer.pts[2 * k + 1] - ay;
+      const l2 = bx * bx + by * by;
+      const f = l2 > 0 ? Math.min(Math.max(((t.endXY[0] - ax) * bx + (t.endXY[1] - ay) * by) / l2, 0), 1) : 0;
+      const x = ax + f * bx;
+      const y = ay + f * by;
+      const d = hypot(x - t.endXY[0], y - t.endXY[1]);
+      if (d < bestD) { bestD = d; best = { poly: outer, pos: j + f, x, y }; }
     }
-    go({ poly: outer, pos: best, x: outer.pts[2 * best], y: outer.pts[2 * best + 1] });
+    go(best);
   }
   return cur.poly === outer ? t.uS + cur.pos / outer.M : t.uS;
 }
