@@ -1,4 +1,4 @@
-// The toolpath: layer grid, seam and ramp, wall evaluation, base spiral and
+// The toolpath: layer grid, seam and ramp, wall evaluation, base infill and
 // walls (research §5.1, §5.4 stages 2–6 and 5b; design §9.3, §9.4, §10).
 //
 // The path is one continuous line of beads. Layer i has its top at
@@ -41,6 +41,7 @@ import { createProfile } from './profile.js';
 import { createPlan } from './plan.js';
 import { ISSUE } from './checks.js';
 import { createMorph } from './morph.js';
+import { baseInfill } from './base-infill.js';
 
 /** What the move ending at a point is (ARCHITECTURE.md, PreviewResult.kinds). */
 export const KIND = Object.freeze({ none: 0, outer: 1, inner: 2, base: 3, connector: 4 });
@@ -101,7 +102,7 @@ export function createWallModel(design, library, { images } = {}) {
   const morphAmp = morphOn ? morph.amplitude : 0;
   /** The morph's radial push in mm at height z, position u (0 without a morph). */
   const morphAt = morphOn ? morph.at : () => 0;
-  // Least and most push around at height z, for the base spiral and the skirt.
+  // Least and most push around at height z, for the base infill and the skirt.
   function morphRange(z) {
     if (!morphOn) return { lo: 0, hi: 0 };
     let lo = Infinity;
@@ -409,7 +410,7 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   const seams = seamPositions(m);
 
   // The point budget (MAX_TOOLPATH_POINTS): a cap on points per wall layer,
-  // and a spacing along the base spiral, both untouched for any usual pot.
+  // and a spacing along the base infill, both untouched for any usual pot.
   const layerCap = Math.min(MAX_POINTS_PER_LAYER,
     Math.max(MIN_POINTS_PER_LAYER, Math.floor((0.75 * maxPoints) / (Math.max(L - nb, 1) * walls))));
   let basePoints = 0;
@@ -434,7 +435,6 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
   const cappedLayers = new Uint8Array(L);
   const seamLine = new Float32Array(3 * (L - nb));
   const unit = new Float64Array(2);
-  const xy = new Float64Array(2);
   let maxGapMm = 0;
   let minD = 0;
   let maxD = 0;
@@ -560,80 +560,86 @@ export function buildToolpath(design, library, { walls = 1, maxPoints = MAX_TOOL
     }
   }
 
-  // Base spiral parameters for base layer k: offset δ(p) = inset + spacing·(1 + p)
-  // grows by one spacing per turn p, and every turn starts at the seam u. The
-  // spiral runs `endTurns` turns, by default as far in as the layer allows.
-  function spiralTurns(k, inset, endTurns) {
+  // The infill of base layer k (core/base-infill.js), in the footprint's own
+  // frame: the curves it follows are the ring's centreline moved inward.
+  function infillOf(k, inset, below) {
     const zTop = (k + 1) * h;
     const r = profile.at(zTop);
-    const a = r;
-    const b = r * plan.ratio;
-    const step = design.base.spacingRatio * w;
-    const hole = design.base.hole.diameter;
-    const stop = hole > 0 ? hole / 2 + w / 2 : step / 2;
-    // A morph that pulls in narrows the base: the spiral stops short of the
-    // narrowest part and follows the morphed outline (spiralPoint).
-    const pull = morphed ? Math.min(Math.max(r + m.morphRange(zTop).lo, rMin) - r, 0) : 0;
-    const own = (Math.min(a + pull, b + pull * plan.ratio) - stop - inset) / step - 1;
-    const end = endTurns >= 0 ? endTurns : own;
-    const ps = [];
-    if (own < 0) return { ps, a, b, step, zTop, end: own };
-    let p = 0;
-    ps.push(0);
-    for (;;) {
-      const perimeter = plan.perimeter(a, b, inset + step * (1 + p));
-      p += baseStep / Math.max(perimeter, w);
-      if (p >= end - 1e-9) { if (end > 0) ps.push(end); break; }
-      ps.push(p);
-    }
-    return { ps, a, b, step, zTop, end };
+    // With a morph the curves start as the morphed outline and lose the
+    // morph evenly on the way in, so they close on the middle as the plain
+    // outline does. Counted from the morph's furthest push out, every curve
+    // is at most one spacing from the next.
+    const top = morphed ? Math.max(r + m.morphRange(zTop).hi, rMin) : r;
+    const a = top;
+    const b = top * plan.ratio;
+    const depth = Math.min(a, b) - inset;
+    const curve = morphed
+      ? (u, delta, out) => {
+        const dent = Math.max(r + m.morphAt(zTop, u - Math.floor(u)), rMin) - top;
+        const rr = top + dent * Math.max(1 - delta / depth, 0);
+        plan.point(u, rr, rr * plan.ratio, inset + delta, out);
+      }
+      : (u, delta, out) => plan.point(u, a, b, inset + delta, out);
+    const { c, s } = m.twistAt(zTop);
+    return baseInfill({
+      pattern: design.base.pattern,
+      layer: k,
+      uS: seams[k],
+      w,
+      step: design.base.spacingRatio * w,
+      pointStep: baseStep,
+      curve,
+      perimeter: (delta) => plan.perimeter(a, b, inset + delta),
+      centre: depth,
+      holeMm: design.base.hole.diameter,
+      corners: (delta) => plan.cornersOf(a, b, inset + delta),
+      endU: below ? below.u : NaN,
+      // Where the layer below ended, turned back into this layer's frame.
+      endXY: below ? [below.x * c + below.y * s, below.y * c - below.x * s] : null,
+    });
   }
 
-  function spiralPoint(spiral, inset, uS, p, kind, layer) {
-    if (morphed) {
-      const u = uS + p;
-      const r = Math.max(spiral.a + m.morphAt(spiral.zTop, u - Math.floor(u)), rMin);
-      plan.point(u, r, r * plan.ratio, inset + spiral.step * (1 + p), xy);
-    } else {
-      plan.point(uS + p, spiral.a, spiral.b, inset + spiral.step * (1 + p), xy);
-    }
-    const t = m.twistAt(spiral.zTop);
-    buf.push(xy[0] * t.c - xy[1] * t.s, xy[0] * t.s + xy[1] * t.c, spiral.zTop, kind, 0, layer);
-  }
-
-  // Base layers (design §9.4, research §5.4 stage 6): the ring(s) plus a
-  // spiral inside, alternating direction so the last base layer ends at the
+  // Base layers (design §9.4, research §5.4 stage 6): the ring(s) plus the
+  // infill inside, alternating direction so the last base layer ends at the
   // seam on the outer ring and the wall starts in place.
-  //   outward: centre → spiral out → step to the ring → ring loop to the seam
-  //   inward:  step up at the seam → ring loop → step in → spiral in to the centre
+  //   outward: middle → infill out → step to the ring → ring loop to the seam
+  //   inward:  step up at the seam → ring loop → step in → infill in to the middle
   // Every base layer is flat at its top, rings included, so each ring sits
   // exactly one layer height on the ring below; the climb from one to the
-  // next is a short step up with no bead (at the seam, or at the centre).
-  // An outward spiral turns as far as the inward one below it, so the step up
-  // at the centre stays short on a narrow ellipse as well.
+  // next is a short step up with no bead (at the seam, or in the middle).
+  // An outward infill starts right over the end of the inward one below it,
+  // so that step up stays short.
   const inset = walls === 2 ? spacing : 0;
+  let below = null;
   for (let k = 0; k < nb; k++) {
     layerStarts[k] = buf.n;
     layerZ[k] = (k + 1) * h;
     const uS = seams[k];
     const { n } = pointsAround(m, k * h, (k + 1) * h, layerCap);
     const outward = (nb - 1 - k) % 2 === 0;
-    const below = outward && k > 0 ? spiralTurns(k - 1, inset).end : -1;
-    const spiral = spiralTurns(k, inset, below);
+    const fill = infillOf(k, inset, outward ? below : null);
+    const count = fill.xy.length / 2;
+    const zTop = (k + 1) * h;
+    const { c, s } = m.twistAt(zTop);
+    const bead = (q, kind) => {
+      const x = fill.xy[2 * q];
+      const y = fill.xy[2 * q + 1];
+      buf.push(x * c - y * s, x * s + y * c, zTop, kind, 0, k);
+    };
     if (outward) {
-      for (let q = spiral.ps.length - 1; q >= 0; q--) {
-        spiralPoint(spiral, inset, uS, spiral.ps[q], q === spiral.ps.length - 1 ? KIND.none : KIND.base, k);
-      }
+      for (let q = count - 1; q >= 0; q--) bead(q, q === count - 1 ? KIND.none : KIND.base);
       if (walls === 2) {
-        innerLoop(k, uS, n, 0, spiral.ps.length ? KIND.base : KIND.none);
+        innerLoop(k, uS, n, 0, count ? KIND.base : KIND.none);
         outerLoop(k, uS, uS + 1, n, 0, KIND.outer, KIND.connector, false);
       } else {
-        outerLoop(k, uS, uS + 1, n, 0, KIND.outer, spiral.ps.length ? KIND.base : KIND.none, false);
+        outerLoop(k, uS, uS + 1, n, 0, KIND.outer, count ? KIND.base : KIND.none, false);
       }
+      below = null;
     } else {
       outerLoop(k, uS, uS + 1, n, 0, KIND.outer, KIND.none, false);
       if (walls === 2) innerLoop(k, uS, n, 0, KIND.connector);
-      for (let q = 0; q < spiral.ps.length; q++) spiralPoint(spiral, inset, uS, spiral.ps[q], KIND.base, k);
+      for (let q = 0; q < count; q++) bead(q, KIND.base);
+      below = count ? { u: fill.endU, x: buf.xyz[3 * (buf.n - 1)], y: buf.xyz[3 * (buf.n - 1) + 1] } : null;
     }
   }
 

@@ -39,6 +39,8 @@ export const PRINTER_LIMITS = Object.freeze({
   maxHeightMm: { min: 20, max: 3000, step: 1 },
   feedDiameterMm: { min: 0.5, max: 50, step: 0.01 },
   eScale: { min: 0.05, max: 20, step: 0.01 },
+  // Extra clay in the base infill, so the floor seals; 1 is none.
+  baseFlow: { min: 1, max: 1.5, step: 0.01 },
   volumeMm3: { min: 0, max: 100000, step: 10 },
   parkX: { min: -3000, max: 3000, step: 1 },
   parkY: { min: -3000, max: 3000, step: 1 },
@@ -65,7 +67,7 @@ const DEFAULT = {
   name: 'Generic gantry',
   status: 'draft',
   machine: { bedWidthMm: 300, bedDepthMm: 300, origin: 'frontLeft', maxHeightMm: 400, firmware: 'marlin' },
-  extrusion: { eMode: 'relative', feedDiameterMm: 3.1, eScale: 1 },
+  extrusion: { eMode: 'relative', feedDiameterMm: 3.1, eScale: 1, baseFlow: 1.1 },
   prime: { volumeMm3: 300, parkX: 0, parkY: -130, parkZ: 20, liftMm: 50 },
   skirt: { offsetMm: 15, loops: 1 },
   end: { liftMm: 10, wipeMm: 10 },
@@ -127,6 +129,7 @@ export function normalisePrinter(json) {
       eMode: pick(extrusion.eMode, E_MODES, D.extrusion.eMode),
       feedDiameterMm: num(extrusion.feedDiameterMm, D.extrusion.feedDiameterMm, L.feedDiameterMm),
       eScale: num(extrusion.eScale, D.extrusion.eScale, L.eScale),
+      baseFlow: num(extrusion.baseFlow, D.extrusion.baseFlow, L.baseFlow),
     },
     prime: {
       volumeMm3: num(prime.volumeMm3, D.prime.volumeMm3, L.volumeMm3),

@@ -129,6 +129,8 @@ Design D11, §9.5, §15.4; research §5.1.
 
 ## 4. More base infills
 
+> **Built 2026-11-26** as Spiral, Rings and Lines, with the sealing rules of [`v2-base-infill.md`](v2-base-infill.md) (D73–D75). Sunburst was left out. The text below is the original draft.
+
 **Title:** More base infills
 **Labels:** `enhancement`, `core`, `ui`
 

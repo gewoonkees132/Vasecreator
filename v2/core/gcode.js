@@ -4,7 +4,10 @@
 // start template, prime, skirt, the layers with Cura/Prusa-style comments,
 // refill pauses, end moves. Extrusion is tracked as volume: each segment's 3D
 // length × the stadium bead area, converted to virtual filament length with the
-// printer's feed diameter and flow scale.
+// printer's feed diameter and flow scale. The base infill gets the profile's
+// base flow on top (extrusion.baseFlow): a little extra clay that closes the
+// grooves between its beads and presses it into the ring, so the floor holds
+// water.
 //
 // Output is deterministic to the byte: numbers are rounded through integers
 // (xyz 3 decimals, E 5, F 0), so there is never a "-0.000" and no engine's
@@ -94,8 +97,8 @@ export function validateTemplates(printer) {
   }
 }
 
-/** Volume (mm³) laid down in each layer of a toolpath. */
-export function layerVolumes(tp, areaMm2) {
+/** Volume (mm³) laid down in each layer of a toolpath; base infill beads count `baseFlow` times. */
+export function layerVolumes(tp, areaMm2, baseFlow = 1) {
   const { path, kinds, layerStarts } = tp;
   const L = layerStarts.length - 1;
   const volumes = new Float64Array(L);
@@ -106,7 +109,7 @@ export function layerVolumes(tp, areaMm2) {
       const dx = path[3 * p] - path[3 * p - 3];
       const dy = path[3 * p + 1] - path[3 * p - 2];
       const dz = path[3 * p + 2] - path[3 * p - 1];
-      length += Math.sqrt(dx * dx + dy * dy + dz * dz);
+      length += Math.sqrt(dx * dx + dy * dy + dz * dz) * (kinds[p] === KIND.base ? baseFlow : 1);
     }
     volumes[k] = length * areaMm2;
   }
@@ -137,7 +140,7 @@ export function planRefills(tp, design, printer, skirt) {
   if (!(printer.reservoirMl > 0)) return [];
   const area = beadAreaMm2(design.layers.beadWidthMm, design.layers.layerHeightMm);
   const usable = printer.reservoirMl * 1000 * printer.usableFraction;
-  const volumes = layerVolumes(tp, area);
+  const volumes = layerVolumes(tp, area, printer.extrusion.baseFlow);
   const prime = printer.prime.volumeMm3;
   let used = prime + loopsVolume(skirt, area);
   const pauses = [];
@@ -190,6 +193,7 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
   const area = beadAreaMm2(w, h);
   const feedArea = (PI * extrusion.feedDiameterMm * extrusion.feedDiameterMm) / 4;
   const ePerMm3 = extrusion.eScale / feedArea;
+  const baseFlow = extrusion.baseFlow;
   const relative = extrusion.eMode === 'relative';
   const ox = machine.origin === 'frontLeft' ? machine.bedWidthMm / 2 : 0;
   const oy = machine.origin === 'frontLeft' ? machine.bedDepthMm / 2 : 0;
@@ -226,7 +230,7 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
     return word;
   };
 
-  function move(x, y, z, kind, speedMmS, partCoords = true) {
+  function move(x, y, z, kind, speedMmS, partCoords = true, flow = 1) {
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) throw new GcodeError('The toolpath has a point that is not a number');
     const f = speedMmS * 60;
     if (!(f > 0) || !Number.isFinite(f)) throw new GcodeError('A move has no feed rate');
@@ -246,7 +250,7 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
     if (z < printZ - 1e-9) throw new GcodeError(`The print goes down to ${zs} mm after reaching ${f3(printZ)} mm`);
     if (kind !== KIND.none) {
       printZ = Math.max(printZ, z);
-      eTotal += length * area * ePerMm3;
+      eTotal += length * area * ePerMm3 * flow;
       line += ` ${eWord()}`;
     }
     const fs = fF(f);
@@ -469,7 +473,7 @@ export function writeGcode(tp, design, printer, { skirt, refills, onProgress }) 
         const nominal = feed[kind];
         speed = Math.max(nominal * slow, Math.min(nominal, speeds.minSpeedMmS));
       }
-      slowedTime += move(path[3 * p], path[3 * p + 1], path[3 * p + 2], kind, speed) / speed;
+      slowedTime += move(path[3 * p], path[3 * p + 1], path[3 * p + 2], kind, speed, true, kind === KIND.base ? baseFlow : 1) / speed;
     }
     if (speeds.minLayerTimeS > 0 && slowedTime > 0 && slowedTime < speeds.minLayerTimeS - 1e-6) {
       lines.push(`G4 P${fF((speeds.minLayerTimeS - slowedTime) * 1000)}`);

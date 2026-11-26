@@ -1,8 +1,16 @@
-// Base section (design §9.4): floor thickness in layers, the infill (spiral
-// only in phase 1) and a drainage hole: the parts Base and Hole of the Base step.
+// Base section (design §9.4, docs/design/v2-base-infill.md): floor thickness
+// in layers, the infill (spiral, rings or crossed lines) and a drainage hole:
+// the parts Base and Hole of the Base step.
 
 import { numberField, segmented, h } from '../controls.js';
 import { limit } from './shape.js';
+
+const INFILLS = [
+  { value: 'spiral', label: 'Spiral', note: 'One bead from the wall to the middle' },
+  { value: 'rings', label: 'Rings', note: 'Closed rings, one inside the other' },
+  { value: 'lines', label: 'Lines', note: 'Straight lines, crossed on every layer' },
+];
+const infillOf = (b) => INFILLS.find((i) => i.value === b.pattern) || INFILLS[0];
 
 const section = {
   id: 'base',
@@ -12,7 +20,7 @@ const section = {
     const b = design.base;
     if (!(b.layers > 0)) return 'no floor (sleeve)';
     const hole = b.hole?.diameter > 0 ? `hole ${b.hole.diameter} mm` : 'no hole';
-    return `${b.layers} base layers · spiral · ${hole}`;
+    return `${b.layers} base layers · ${infillOf(b).label.toLowerCase()} · ${hole}`;
   },
 
   mount(el, ctx) {
@@ -27,10 +35,11 @@ const section = {
     });
     const infill = segmented({
       label: 'Infill',
-      options: [{ value: 'spiral', label: 'Spiral' }],
-      value: 'spiral',
+      options: INFILLS.map(({ value, label }) => ({ value, label })),
+      value: infillOf(b0).value,
+      onChange: (v) => store.apply('Infill', (d) => { d.base.pattern = v; }),
     });
-    const hint = h('p', { class: 'panel-note', text: 'More infills later.' });
+    const hint = h('p', { class: 'panel-note', text: infillOf(b0).note });
     const hole = numberField({
       label: 'Hole', unit: 'mm', ...limit(['holeDiameter', 'base.hole.diameter', 'holeMm'], { min: 0, max: 200, step: 1 }), decimals: 1,
       value: b0.hole?.diameter ?? 0, info: '',
@@ -47,7 +56,9 @@ const section = {
       const b = state.design.base;
       layers.set(b.layers);
       layers.setInfo(b.layers > 0 ? '' : 'No floor: the pot prints as a sleeve');
-      infill.set(b.pattern || 'spiral');
+      infill.set(infillOf(b).value);
+      infill.setDisabled?.(!(b.layers > 0));
+      hint.textContent = infillOf(b).note;
       const dia = b.hole?.diameter ?? 0;
       hole.set(dia);
       // Design §9.4: under two bead widths the hole may close up (checked again in Prepare print).

@@ -32,6 +32,7 @@ const PRINTER_GROUPS = [
     { label: 'E mode', kind: 'segmented', path: 'extrusion.eMode', options: [{ value: 'relative', label: 'Relative' }, { value: 'absolute', label: 'Absolute' }] },
     { label: 'Feed diameter', unit: 'mm', path: 'extrusion.feedDiameterMm', lim: L.feedDiameterMm, decimals: 2 },
     { label: 'Flow (E scale)', unit: '×', path: 'extrusion.eScale', lim: L.eScale, decimals: 2 },
+    { label: 'Base flow', unit: '×', path: 'extrusion.baseFlow', lim: L.baseFlow, decimals: 2, info: 'Extra clay in the base infill, so the floor holds water. 1 = none' },
   ] },
   { title: 'Prime and moves', fields: [
     { label: 'Prime volume', unit: 'mm³', path: 'prime.volumeMm3', lim: L.volumeMm3, decimals: 0 },

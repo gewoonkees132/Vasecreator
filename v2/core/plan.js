@@ -152,19 +152,33 @@ export function createPlan(plan) {
     return (lo + hi) / 2;
   }
 
-  // u at the middle of each rectangle corner, for the hidden seam.
-  const cornerUs = [];
-  if (rectangle) {
-    const c = cornerOf(1, ratio, 0);
-    const ex = 1 - c;
-    const ey = ratio - c;
+  // u at the middle of each corner of a rounded rectangle with half extents
+  // A, B and corner radius c.
+  function cornersAt(A, B, c) {
+    const ex = A - c;
+    const ey = B - c;
     const quarter = (PI * c) / 2;
     const total = 4 * ex + 4 * ey + 2 * PI * c;
+    const us = [];
+    if (!(total > 0)) return us;
     let s = ey + quarter / 2;
     for (const edge of [2 * ex, 2 * ey, 2 * ex, 0]) {
-      cornerUs.push(s / total);
+      us.push(s / total);
       s += quarter + edge;
     }
+    return us;
+  }
+  // u at the middle of each rectangle corner, for the hidden seam.
+  const cornerUs = rectangle ? cornersAt(1, ratio, cornerOf(1, ratio, 0)) : [];
+  /**
+   * u at the middle of each corner of the outline with half extents a, b,
+   * offset inward by delta (none for a round footprint). Offset far enough
+   * the corners are sharp, and a path sampled by u has to stop on them.
+   */
+  function cornersOf(a, b, delta) {
+    if (!rectangle) return [];
+    const c = cornerOf(a, b, delta);
+    return cornersAt(Math.max(a - delta, c), Math.max(b - delta, c), c);
   }
 
   return {
@@ -179,5 +193,6 @@ export function createPlan(plan) {
     uAtAngle,
     angleAt,
     cornerUs,
+    cornersOf,
   };
 }

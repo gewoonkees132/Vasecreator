@@ -12,6 +12,7 @@
 
 import { DENSITY_FACES, DEFAULT_POINTS, DEPTH_BEADS, FADE_SHAPES, SPACING_BEADS, defaultPatternRange, defaultSpacingMm } from './layer-pattern.js';
 import { createProfile } from './profile.js';
+import { BASE_PATTERNS } from './base-infill.js';
 import { validateRecipe } from './patterns.js';
 import { FACETS_DEFAULTS, FACETS_MAP, FACETS_MIN_AROUND, MORPH_DEFAULTS, isMorphMap } from './morph.js';
 
@@ -383,7 +384,7 @@ export function normaliseDesign(json) {
     },
     base: {
       layers: num(base.layers, D.base.layers, LIMITS.baseLayers, true),
-      pattern: 'spiral',
+      pattern: pick(base.pattern, BASE_PATTERNS, 'spiral'),
       spacingRatio: num(base.spacingRatio, D.base.spacingRatio, LIMITS.spacingRatio),
       outline: base.outline !== false,
       hole: { diameter: num(hole.diameter, 0, LIMITS.holeDiameter) },

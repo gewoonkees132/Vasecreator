@@ -345,7 +345,7 @@ export const DOCK_TOOLS = {
       value: (s) => `${s.design.base.layers} layers`,
       dial: (s) => ({
         label: 'Base layers', unit: 'layers', ...L('baseLayers', {}), step: 1, decimals: 0, value: s.design.base.layers,
-        note: s.design.base.layers > 0 ? 'A spiral floor' : 'No floor: the pot prints as a sleeve',
+        note: s.design.base.layers > 0 ? 'A solid floor' : 'No floor: the pot prints as a sleeve',
       }),
       set: (d, v) => { d.base.layers = Math.round(v); },
     },
