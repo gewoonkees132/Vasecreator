@@ -167,8 +167,8 @@ test('solid: the wall is one bead wide around the toolpath centreline', () => {
 test('solid: the triangle budget lowers the points per ring', () => {
   const d = normaliseDesign(presets[2]);
   const full = buildSolid(d, library);
-  const small = buildSolid(d, library, { maxTriangles: 40_000 });
-  assert.ok(small.triangleCount <= 40_000 + 2 * 256 + 2 * full.ringPoints, `${small.triangleCount} triangles`);
+  const small = buildSolid(d, library, { maxTriangles: 5_000 });
+  assert.ok(small.triangleCount <= 5_000 + 2 * 256 + 2 * full.ringPoints, `${small.triangleCount} triangles`);
   assert.ok(small.ringPoints < full.ringPoints);
   assertClosed(small, 'budget');
 });

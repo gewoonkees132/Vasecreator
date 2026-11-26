@@ -87,7 +87,7 @@ export function setWidth(d, mm), setDepth(d, mm)   // scale knot r to the widest
 ```jsonc
 "pattern": {
   "drawing": "user:…" | "lib:…@1",   // a bitmap recipe: design.assets, or library.layerPatterns (core/layer-pattern.js findDrawing)
-  "depthMm": 0.75,                    // out = +depth, in = −depth; 0 to ½ bead width, default ¼ (D38)
+  "depthMm": 5.33,                    // out = +depth, in = −depth; 0 to ⅔ bead width, and ⅔ is where every drawing starts (D38, D61)
   "density": { "by": "spacing" | "points", "spacingMm": 3, "points": 96 },   // the face set last is the one used (D40)
   "fromMm": 16, "toMm": 144,          // its own range (D41); defaults to the Detailed morph's inside its soft edges, or 8 mm to 10 mm below the rim
   "fade": { "shape": "even" | "fadesUp" | "fadesDown" | "middle" | "diagonal", "amount": 1 },

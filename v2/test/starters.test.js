@@ -45,7 +45,7 @@ test('the starter library: the eight Patterns of D47, in order, each a valid bit
     assert.equal(p.recipe.kind, 'bitmap');
     validateRecipe(p.recipe);
     assert.equal(p.recipe.edges, undefined, 'a Pattern is always crisp (D53)');
-    assert.ok(p.defaults.depthBeads > 0 && p.defaults.depthBeads <= DEPTH_BEADS.max, p.name);
+    assert.equal(p.defaults.depthBeads, undefined, `${p.name}: every drawing starts at the standard depth (D61)`);
     assert.ok(p.defaults.spacingBeads >= SPACING_BEADS.min && p.defaults.spacingBeads <= SPACING_BEADS.max, p.name);
     assert.ok(typeof p.description === 'string' && p.description.length > 10, p.name);
     assert.ok(!/clay|slicer|material/i.test(`${p.name} ${p.description}`), `${p.name}: plain design words (D7)`);
@@ -65,16 +65,20 @@ test('no starter cell flips straight from out to in between rows, so a step is a
   }
 });
 
-test('every starter\'s default depth and density pass bead support on the default pot (§3.8), and on every preset', () => {
+test('every starter starts two thirds of a bead deep (D61): fine on a straight wall, and on a leaning one only bead support and the curve speak up', () => {
   assert.deepEqual(warningsOf(defaultPot()), [], 'the default pot warns about nothing on its own');
+  assert.equal(DEPTH_BEADS.default, 2 / 3);
+  assert.equal(DEPTH_BEADS.max, 2 / 3);
   for (const p of STARTERS) {
-    // The default pot adds no warning of any kind.
-    assert.deepEqual(warningsOf(withStarter(defaultPot(), p.id)), [], `${p.name} on the Classic vase`);
-    for (const preset of presets.slice(1)) {
+    // A straight wall at the standard support rule (70 % of a bead): no row steps more than one depth.
+    const can = withStarter(cylinder({ height: 60, radius: 40 }), p.id);
+    assert.equal(can.pattern.depthMm, 2, `${p.name}: two thirds of the 3 mm bead`);
+    assert.ok(!warningsOf(can).includes('support'), `${p.name} on a straight wall`);
+    // On the presets the wall's own lean adds to the step, so bead support (and the curve check) may warn; nothing else does.
+    for (const preset of presets) {
       const before = warningsOf(shapeOnly(normaliseDesign(preset)));
       const after = warningsOf(withStarter(shapeOnly(normaliseDesign(preset)), p.id));
-      assert.ok(!after.includes('support'), `${p.name} on the ${preset.meta.name}`);
-      assert.deepEqual(after, before, `${p.name} adds no warning on the ${preset.meta.name}`);
+      assert.deepEqual(after.filter((id) => id !== 'support' && id !== 'finePattern'), before, `${p.name} on the ${preset.meta.name}`);
     }
   }
   // defaultDesign() is the same pot.
@@ -88,14 +92,13 @@ test('one tap puts Knit on the pot, as one history step', () => {
   const d = store.state.design;
   assert.equal(d.pattern.drawing, 'lib:knit@1');
   assert.deepEqual(store.history().map((s) => s.label), ['Pattern: Knit', 'Opened: Classic vase']);
-  // Its own default (§3.8): 0.14 bead, under the D38 quarter, so it passes bead support.
-  assert.equal(d.pattern.depthMm, 0.42);
-  assert.deepEqual(d.pattern.density, { by: 'spacing', spacingMm: 3, points: 96 });
+  // The standard depth (D61): two thirds of the 8 mm bead, a bead apart.
+  assert.equal(d.pattern.depthMm, 5.33);
+  assert.deepEqual(d.pattern.density, { by: 'spacing', spacingMm: 8, points: 96 });
   // Over the flutes, inside their soft start and end.
-  assert.deepEqual([d.pattern.fromMm, d.pattern.toMm], [16, 144]);
+  assert.ok(d.pattern.fromMm > d.form.detail.fromMm && d.pattern.toMm < d.form.detail.toMm);
   const r = computePreview(d, { library, printer });
   assert.ok(r.pattern && r.pattern.nodes > 0 && r.pattern.columns === 4);
-  assert.deepEqual(r.warnings, []);
   // Tapping it again changes nothing; None takes it off.
   pickLayerPattern(ctx, 'lib:knit@1');
   assert.equal(store.history().length, 2);
@@ -111,7 +114,7 @@ test('switching drawings keeps From / To, Fade and Soften and takes the starter\
   setLayerPattern(d, findLayerEntry(library, 'lib:rib-1x1@1'));
   assert.deepEqual(
     { ...d.pattern },
-    { drawing: 'lib:rib-1x1@1', depthMm: 0.6, density: { by: 'spacing', spacingMm: 3, points: 96 }, fromMm: 30, toMm: 90, fade: { shape: 'middle', amount: 0.5 }, softenCells: 0.5 },
+    { drawing: 'lib:rib-1x1@1', depthMm: 5.33, density: { by: 'spacing', spacingMm: 8, points: 96 }, fromMm: 30, toMm: 90, fade: { shape: 'middle', amount: 0.5 }, softenCells: 0.5 },
   );
 });
 

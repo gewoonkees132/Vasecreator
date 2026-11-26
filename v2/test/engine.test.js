@@ -14,13 +14,14 @@ test('computePreview returns the PreviewResult contract', () => {
   assert.equal(r.positions.length, 3 * r.pointCount);
   assert.equal(r.kinds.length, r.pointCount);
   assert.equal(r.issues.length, r.pointCount);
-  assert.equal(r.seamLine.length, 3 * (113 - 3));
-  assert.equal(r.beadWidthMm, 3);
-  assert.equal(r.layerHeightMm, 1.5);
+  // The standard layer (D62): 170 mm in 34 layers of 5 mm, 2 of them the base.
+  assert.equal(r.seamLine.length, 3 * (34 - 2));
+  assert.equal(r.beadWidthMm, 8);
+  assert.equal(r.layerHeightMm, 5);
   assert.ok(Array.isArray(r.warnings));
-  assert.equal(r.size.heightMm, 169.5);
-  assert.ok(Math.abs(r.size.widthMm - (r.bounds.max[0] - r.bounds.min[0] + 3)) < 1e-9);
-  assert.ok(r.size.widthMm > 2 * 62 && r.size.widthMm < 2 * 66 + 3);
+  assert.equal(r.size.heightMm, 170);
+  assert.ok(Math.abs(r.size.widthMm - (r.bounds.max[0] - r.bounds.min[0] + 8)) < 1e-9);
+  assert.ok(r.size.widthMm > 2 * 62 && r.size.widthMm < 2 * 66 + 8);
   assert.equal(typeof r.computeMs, 'number');
   assert.ok(r.kinds.every((k) => k <= 3), 'one wall in the design view');
   // Every array has its own buffer, so all can be transferred.

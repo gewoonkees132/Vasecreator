@@ -62,7 +62,7 @@ for (const design of presets) {
     assert.ok(detail.blend.amount >= 0 && detail.blend.amount <= 1);
 
     assert.ok(['fixed', 'followTwist', 'hidden'].includes(layers.seam.position));
-    assert.ok(layers.layerHeightMm >= 0.3 * layers.beadWidthMm && layers.layerHeightMm <= 0.6 * layers.beadWidthMm);
+    assert.ok(layers.layerHeightMm >= 0.3 * layers.beadWidthMm && layers.layerHeightMm <= 0.65 * layers.beadWidthMm);
     assert.equal(base.pattern, 'spiral');
     assert.ok(base.hole.diameter === 0 || base.hole.diameter >= 2 * layers.beadWidthMm);
     assert.ok([1, 2].includes(finish.walls));

@@ -184,7 +184,7 @@ export function morphMode(state) {
 
 const hasPattern = (s) => !!s.design.pattern;
 const pat = (s) => s.design.pattern;
-const halfBead = (d) => Math.floor(DEPTH_BEADS.max * d.layers.beadWidthMm * 100) / 100;
+const deepest = (d) => Math.floor(DEPTH_BEADS.max * d.layers.beadWidthMm * 100) / 100;
 
 const PATTERN_TOOLS = [
   { id: 'drawing', name: 'Pattern', kind: 'drawings' },
@@ -195,11 +195,11 @@ const PATTERN_TOOLS = [
     dial: (s) => {
       const v = pat(s).depthMm;
       return {
-        label: 'Pattern depth', unit: 'mm', min: 0, max: Math.max(halfBead(s.design), v), step: 0.05, decimals: 2, value: v,
-        note: v > 0 ? `Out +${fmt(v, 2)} mm, in −${fmt(v, 2)} mm · up to half a bead` : 'Flat: the drawing doesn’t print',
+        label: 'Pattern depth', unit: 'mm', min: 0, max: Math.max(deepest(s.design), v), step: 0.05, decimals: 2, value: v,
+        note: v > 0 ? `Out +${fmt(v, 2)} mm, in −${fmt(v, 2)} mm · up to ⅔ of a bead` : 'Flat: the drawing doesn’t print',
       };
     },
-    set: (d, v) => { if (d.pattern) d.pattern.depthMm = Math.min(Math.max(0, v), halfBead(d)); },
+    set: (d, v) => { if (d.pattern) d.pattern.depthMm = Math.min(Math.max(0, v), deepest(d)); },
   },
   {
     id: 'density', name: 'Density', kind: 'dial', face: true,

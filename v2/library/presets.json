@@ -28,19 +28,19 @@
         "detail": {
           "fromMm": 10,
           "toMm": 150,
-          "a": { "pattern": "lib:flutes@1", "depthMm": 2, "repeats": 20, "tileHeightMm": 19.5 },
-          "b": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 19.5 },
+          "a": { "pattern": "lib:flutes@1", "depthMm": 2, "repeats": 12, "tileHeightMm": 20 },
+          "b": { "pattern": "plain", "depthMm": 0, "repeats": 1, "tileHeightMm": 20 },
           "blend": { "shape": "fadesUp", "amount": 1 }
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
         "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.7, "curveRatio": 0.5, "layersPerBump": 2 },
+      "base": { "layers": 2, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
+      "finish": { "walls": 1, "wallSpacingMm": 7.2, "innerWall": "smooth" }
     },
     {
       "schema": "vasecreator/design",
@@ -65,21 +65,21 @@
         "plan": { "footprint": "rectangle", "depthRatio": 1, "cornerRounding": 0.3 },
         "twist": { "degrees": 60 },
         "detail": {
-          "fromMm": 6,
-          "toMm": 144,
-          "a": { "pattern": "lib:pleats@1", "depthMm": 1.5, "repeats": 16, "tileHeightMm": 19.5 },
+          "fromMm": 5,
+          "toMm": 145,
+          "a": { "pattern": "lib:pleats@1", "depthMm": 2, "repeats": 8, "tileHeightMm": 20 },
           "b": null,
           "blend": { "shape": "fadesUp", "amount": 1 }
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
         "seam": { "rampLengthMm": 15, "position": "followTwist", "angleDeg": 0 }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 3, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.7, "curveRatio": 0.5, "layersPerBump": 2 },
+      "base": { "layers": 2, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 0 } },
+      "finish": { "walls": 1, "wallSpacingMm": 7.2, "innerWall": "smooth" }
     },
     {
       "schema": "vasecreator/design",
@@ -103,21 +103,21 @@
         "plan": { "footprint": "rectangle", "depthRatio": 1, "cornerRounding": 0.3 },
         "twist": { "degrees": 0 },
         "detail": {
-          "fromMm": 8,
-          "toMm": 102,
-          "a": { "pattern": "lib:basket@1", "depthMm": 1, "repeats": 8, "tileHeightMm": 40.5 },
+          "fromMm": 10,
+          "toMm": 100,
+          "a": { "pattern": "lib:basket@1", "depthMm": 2, "repeats": 4, "tileHeightMm": 40 },
           "b": null,
           "blend": { "shape": "fadesUp", "amount": 1 }
         }
       },
       "layers": {
-        "beadWidthMm": 3,
-        "layerHeightMm": 1.5,
+        "beadWidthMm": 8,
+        "layerHeightMm": 5,
         "seam": { "rampLengthMm": 15, "position": "hidden", "angleDeg": 0 }
       },
-      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.5, "curveRatio": 0.5, "layersPerBump": 2 },
-      "base": { "layers": 4, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 14 } },
-      "finish": { "walls": 1, "wallSpacingMm": 2.7, "innerWall": "smooth" }
+      "rules": { "overhangLimitDeg": 45, "supportRatio": 0.7, "curveRatio": 0.5, "layersPerBump": 2 },
+      "base": { "layers": 2, "pattern": "spiral", "spacingRatio": 0.9, "outline": true, "hole": { "diameter": 20 } },
+      "finish": { "walls": 1, "wallSpacingMm": 7.2, "innerWall": "smooth" }
     }
   ]
 }

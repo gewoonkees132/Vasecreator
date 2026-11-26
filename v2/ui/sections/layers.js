@@ -10,7 +10,7 @@ const SEAM_LABELS = { fixed: 'fixed angle', followTwist: 'follows twist', hidden
 
 function layerInfo(layers) {
   const ratio = layers.layerHeightMm / layers.beadWidthMm;
-  return ratio < 0.3 || ratio > 0.6 ? 'Unusual for this bead (0.3–0.6 × bead width)' : '';
+  return ratio < 0.3 || ratio > 0.65 ? 'Unusual for this bead (0.3–0.65 × bead width)' : '';
 }
 
 const section = {

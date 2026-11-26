@@ -478,9 +478,9 @@ export const EDITOR_MAX = Object.freeze({ pattern: 24, detail: 16 });
 export const NEW_GRID = Object.freeze({ pattern: { columns: 6, rows: 6 }, detail: { columns: 6, rows: 4 } });
 /**
  * A first Pattern drawn in the editor starts as deep and as dense as the
- * starters (§11.2): 0.14 bead passes bead support on every preset.
+ * starters: the standard depth (D61) and nodes one bead apart.
  */
-export const OWN_PATTERN_DEFAULTS = Object.freeze({ depthBeads: 0.14, spacingBeads: 1 });
+export const OWN_PATTERN_DEFAULTS = Object.freeze({ spacingBeads: 1 });
 
 const copyName = (name) => `${name} (mine)`.slice(0, 80);
 const sessionLabel = (target) => (target.kind === 'pattern' ? 'Edited pattern' : `Edited Detailed morph ${target.slot.toUpperCase()}`);

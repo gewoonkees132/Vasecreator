@@ -1,7 +1,7 @@
 # Vasecreator v2: Pattern and Detailed morph (the pattern studio)
 
 - **Date:** 2026-11-25
-- **Status:** Owner decisions D35–D60 (D58–D60 on 2026-11-26, after the owner saw the seam in Rhino; built, §11.7, not yet pushed). D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`), 5 (the *Next* and icon sweep, `2391041`) and 6 (saved patterns) are built on `t3/pattern-studio` (all pushed for the owner's review, up to slice 6, `e056938`). All six slices are built (§11, notes in §11.1–§11.6).
+- **Status:** Owner decisions D35–D62 (D58–D62 on 2026-11-26, after the owner saw the seam in Rhino; built, §11.7 and §11.8; D58–D60 pushed as `fdeec4a`). D52–D54 settled §13's open questions on 2026-11-25, and D55–D57 the questions slice 3 raised. Slices 1 (the engine, commit `a916a65`), 2 (the Pattern and Shape steps, `1164054`), 3 (the 2D editor, `e357d5b` and `d67d7ff`), 4 (the warnings card rules, `19d943e`), 5 (the *Next* and icon sweep, `2391041`) and 6 (saved patterns) are built on `t3/pattern-studio` (all pushed for the owner's review, up to slice 6, `e056938`). All six slices are built (§11, notes in §11.1–§11.6).
 - **Replaces:** the scope of GitHub issue #3 ("Pattern design: turn Surface into a pattern studio pop-up, with drawing your own pattern"). #3 is still open on GitHub and nothing has been posted about this session.
 - **Builds on:**
   - [`v2-design-brainstorm.md`](v2-design-brainstorm.md), "the design". It revises §9.2 and §9.6 and decisions D16, D17, D24, D28 and D29.
@@ -105,6 +105,8 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 | D58 | **Crisp, a layer has only its cell points.** With Soften at 0 a layer in the Pattern's range has exactly `columns × repeats` points, one a cell, so the points stand one above the other from layer to layer. The outline, the Morph and the Detailed morph are followed at those points only; rectangle corners and fine relief get coarser there, and nothing is added to make up for it. | Owner (2026-11-26) |
 | D59 | **Soften adds points, and the readout counts them.** With Soften on, every gap between two cells gets the same number of extra points (the same on every layer, so they still line up), on a smooth curve through the softened cells. The Density readout shows the points per layer and the total over the Pattern's layers, and the whole pot's points under it; Soften says how many it adds. | Owner (2026-11-26); the smooth curve, "about half a bead apart" and the wording are the builder's |
 | D60 | **The seam never steps sideways, and is spread over whole points.** A layer starts on the point where the layer below ended. Its climb of one layer height is shared out evenly over a whole number of cells (the seam ramp length, rounded to cells: 15 mm at 3 mm cells is 5 points), and over the same points it changes from the row below to its own. | Owner (2026-11-26): "spread over multiple points, e.g. Z-height distributed over 4 points"; changing rows over the same points is the builder's |
+| D61 | **The standard depth is two thirds of a layer width.** Every drawing starts with Depth at ⅔ of the bead width (5.33 mm on the standard bead), whatever the starter; the most is ⅔ too (D38 had ½). No starter flips from out to in between rows, so a layer sits at most ⅔ of a bead off the one below. | Owner (2026-11-26). The bead-support rule's default going from 50 % to 70 %, so a straight wall passes, is the builder's |
+| D62 | **The standard layer is 8 mm wide and 5 mm high,** for a new design and for the three presets. | Owner (2026-11-26). The presets' retuned relief, base and hole (§11.8) and the wider layer-ratio band are the builder's |
 
 **What this revises:**
 - D16 (swatches from a bitmap generator) is now carried by D45 and D47.
@@ -721,6 +723,18 @@ The owner exported a softened Pattern to Rhino and saw a sideways step at the se
   - The rows change over across the ramp's points, so the first cells of a layer are a mix of two rows.
   - Crisp, beads run from node to node, up to 3 bead widths apart on a wide belly (the bead-jump test allows the Pattern's own spacing).
 - **Tests.** 368 pass. `test/layer-pattern.test.js` gains the seam test and the Soften points test; the zigzag, taper, Fade and Soften tests look past the ramp.
+
+### 11.8 The standard depth and the standard layer (D61, D62)
+
+- **Depth (D61).** `DEPTH_BEADS` is `{ max: 2/3, default: 2/3 }`. `drawingDefaults` no longer reads a drawing's own depth: `depthBeads` is gone from `library/layer-patterns.json` and from `OWN_PATTERN_DEFAULTS`. `LIMITS.patternDepthMm` goes up to 8 mm. The Depth notes say "up to ⅔ of a bead".
+- **Bead support.** `rules.supportRatio` starts at 0.7 (was 0.5), so the standard depth passes on a straight wall. On a leaning wall the lean adds to the step, so **every starter warns "Bead not supported" on all three presets** at the standard depth, and Knit and the ribs also trip the curve check at the top of the Classic vase. The owner chose the depth knowing the warning would show; lowering the Depth or raising the rule in the warnings card clears it.
+- **Layer (D62).** `defaultDesign` and the presets: bead 8 mm, layer 5 mm, wall spacing 7.2 mm (0.9 bead), tile heights in whole layers (20 and 40 mm).
+- **The presets, retuned for the 8 mm bead** so each still opens without a warning:
+  - Classic vase (and `defaultDesign`): flutes 20 → 12 repeats; base 3 → 2 layers.
+  - Twisted column: pleats 16 × 1.5 mm → 8 × 2 mm; relief from 5 to 145 mm; base 3 → 2 layers.
+  - Square planter: basket 8 × 1 mm → 4 × 2 mm; relief from 10 to 100 mm; base 4 → 2 layers; drain hole 14 → 20 mm (two beads at least).
+- **Layer ratio.** "Layer height is unusual for this bead" now starts above 0.65 × the bead width (was 0.6), since 5 / 8 is 0.625.
+- **Tests.** The `cylinder` fixture pins its own 3 mm by 1.5 mm layer, so the engine tests keep their numbers; tests on the presets and the defaults moved to the new values, and the golden G-code files were regenerated (the presets are now 34, 30 and 22 layers).
 
 ---
 

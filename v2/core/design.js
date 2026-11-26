@@ -51,7 +51,7 @@ export const LIMITS = Object.freeze({
   fromMm: { min: 0, max: 1000, step: 0.5 },           // form.detail.fromMm, pattern.fromMm
   toMm: { min: 0, max: 1000, step: 0.5 },             // form.detail.toMm, pattern.toMm
   amount: { min: 0, max: 1, step: 0.01 },             // form.detail.blend.amount, pattern.fade.amount
-  patternDepthMm: { min: 0, max: 6, step: 0.05 },     // pattern.depthMm; the real most is ½ bead width
+  patternDepthMm: { min: 0, max: 8, step: 0.05 },     // pattern.depthMm; the real most is ⅔ bead width
   spacingMm: { min: 0.25, max: 36, step: 0.1 },       // pattern.density.spacingMm; really ½ to 3 bead widths
   points: { min: 1, max: 1600, step: 1 },             // pattern.density.points
   softenCells: { min: 0, max: 2, step: 0.05 },        // pattern.softenCells
@@ -99,20 +99,21 @@ const DEFAULT = {
     detail: {
       fromMm: 10,
       toMm: 150,
-      a: { pattern: 'lib:flutes@1', depthMm: 2, repeats: 20, tileHeightMm: 19.5 },
-      b: { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 19.5 },
+      a: { pattern: 'lib:flutes@1', depthMm: 2, repeats: 12, tileHeightMm: 20 },
+      b: { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 20 },
       blend: { shape: 'fadesUp', amount: 1 },
     },
   },
   pattern: null,
   layers: {
-    beadWidthMm: 3,
-    layerHeightMm: 1.5,
+    // The standard layer: 8 mm wide, 5 mm high (D62).
+    beadWidthMm: 8,
+    layerHeightMm: 5,
     seam: { rampLengthMm: 15, position: 'hidden', angleDeg: 0 },
   },
-  rules: { overhangLimitDeg: 45, supportRatio: 0.5, curveRatio: 0.5, layersPerBump: 2 },
-  base: { layers: 3, pattern: 'spiral', spacingRatio: 0.9, outline: true, hole: { diameter: 0 } },
-  finish: { walls: 1, wallSpacingMm: 2.7, innerWall: 'smooth' },
+  rules: { overhangLimitDeg: 45, supportRatio: 0.7, curveRatio: 0.5, layersPerBump: 2 },
+  base: { layers: 2, pattern: 'spiral', spacingRatio: 0.9, outline: true, hole: { diameter: 0 } },
+  finish: { walls: 1, wallSpacingMm: 7.2, innerWall: 'smooth' },
   assets: {},
 };
 
@@ -241,7 +242,7 @@ function normaliseRange(input, fallback, height, h) {
 }
 
 // design.pattern (D38–D42): null, or a drawing id with every setting clamped.
-// Depth is at most half a bead and the spacing half a bead to three beads,
+// Depth is at most two thirds of a bead and the spacing half a bead to three beads,
 // for the bead width the design has now. A drawing that can't be found is
 // kept; the toolpath reports it.
 function normalisePattern(input, d) {

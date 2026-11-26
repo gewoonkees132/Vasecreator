@@ -25,7 +25,7 @@ test('every rule field edits a rule of the design, and every rule has a field', 
 test('ratios of a bead show as percentages, within the design limits', () => {
   const d = defaultDesign();
   assert.equal(shownRule(d, field('overhangLimitDeg')), 45);
-  assert.equal(shownRule(d, field('supportRatio')), 50);
+  assert.equal(shownRule(d, field('supportRatio')), 70);
   assert.equal(shownRule(d, field('curveRatio')), 50);
   assert.equal(shownRule(d, field('layersPerBump')), 2);
   assert.deepEqual(ruleLimits(field('supportRatio')), { min: 10, max: 100, step: 5 });

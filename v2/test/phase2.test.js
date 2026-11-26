@@ -122,7 +122,7 @@ test('an image of 8 stripes at 2 repeats prints like 16 flutes, seamless at u = 
   // White (stripe 0 starts white) pushes out, black pulls in.
   assert.ok(m.displacement(z, 0.25 / 16) > 0 && m.displacement(z, 0.75 / 16) < 0);
   const tp = buildToolpath(d, library, { images });
-  const layer = 60;
+  const layer = 12;
   const count = tp.layerStarts[layer + 1] - tp.layerStarts[layer];
   assert.ok(count >= 8 * 16, `points per layer ${count}`);
 });

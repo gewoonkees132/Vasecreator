@@ -189,13 +189,13 @@ test('dock: tools edit the design like the sheet does', () => {
   detailTool('to').set(r, 0, s);
   assert.equal(r.form.detail.toMm, r.form.detail.fromMm + 1);
 
-  // The Pattern's From and To stay a layer apart; its depth stays under half a bead.
+  // The Pattern's From and To stay a layer apart; its depth stays under two thirds of a bead (D61).
   const pr = cloneDesign(d);
   setLayerPattern(pr, findLayerEntry(library, 'lib:seed@1'));
   tool('pattern', 'from').set(pr, 1000, s);
   assert.equal(pr.pattern.fromMm, pr.pattern.toMm - pr.layers.layerHeightMm);
   tool('pattern', 'depth').set(pr, 9, s);
-  assert.equal(pr.pattern.depthMm, 1.5);
+  assert.equal(pr.pattern.depthMm, 5.33);
 
   // The seam angle wraps.
   const a = cloneDesign(d);

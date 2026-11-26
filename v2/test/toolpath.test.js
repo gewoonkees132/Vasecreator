@@ -202,9 +202,9 @@ test('two walls: outer, connector in, inner flat at the top, connector out', () 
   // A round footprint, so a smooth inner wall keeps one radius all round (the
   // Twisted column became a rounded square in issue #1, D34).
   const round = { footprint: 'circle', depthRatio: 1, cornerRounding: 0 };
-  const d = { ...presets[1], form: { ...presets[1].form, plan: round }, finish: { walls: 2, wallSpacingMm: 2.7, innerWall: 'smooth' } };
+  const d = { ...presets[1], form: { ...presets[1].form, plan: round }, finish: { walls: 2, wallSpacingMm: 7.2, innerWall: 'smooth' } };
   const { design, tp } = build(d, 2);
-  const i = 40;
+  const i = 12;
   const first = tp.layerStarts[i];
   const last = tp.layerStarts[i + 1];
   const kinds = Array.from(tp.kinds.subarray(first, last));
@@ -218,7 +218,8 @@ test('two walls: outer, connector in, inner flat at the top, connector out', () 
   for (let p = first + inStart + 1; p < last; p++) radii.push(Math.hypot(tp.path[3 * p], tp.path[3 * p + 1]));
   const spread = Math.max(...radii) - Math.min(...radii);
   assert.ok(spread < 0.05, `inner wall radius varies ${spread}`);
-  assert.ok(tp.maxGapMm > 2.5 && tp.maxGapMm <= 3 + 1e-9);
+  // The pleats are 2 mm deep: out and in are up to 4 mm apart.
+  assert.ok(tp.maxGapMm > 3 && tp.maxGapMm <= 4 + 1e-9);
   assert.equal(design.finish.walls, 2);
 });
 
@@ -257,9 +258,9 @@ test('a hidden seam on a rectangle sits in a corner', () => {
   }
 });
 
-test('a typical pot is about 30 k points', () => {
+test('a typical pot at the standard 8 mm bead is a few thousand points', () => {
   const { tp } = build(presets[0]);
-  assert.ok(tp.pointCount > 15000 && tp.pointCount < 45000, `${tp.pointCount} points`);
+  assert.ok(tp.pointCount > 2000 && tp.pointCount < 10000, `${tp.pointCount} points`);
 });
 
 test('patterns follow the twist', () => {

@@ -203,7 +203,7 @@ export function designChecks(tp, design, printer) {
   if (offBed) warnings.push({ id: 'bed', severity: 'error', bit: ISSUE.bed, message: "Doesn't fit the printer bed" });
 
   const ratio = h / w;
-  if (ratio < 0.3 - 1e-9 || ratio > 0.6 + 1e-9) {
+  if (ratio < 0.3 - 1e-9 || ratio > 0.65 + 1e-9) {
     warnings.push({ id: 'layerRatio', severity: 'warning', bit: 0, message: 'Layer height is unusual for this bead' });
   }
 

@@ -179,10 +179,11 @@ test('a first drawn Pattern starts as deep and dense as the starters, and prints
   assert.deepEqual(out.pattern.density, want.density);
   assert.equal(out.assets[id].recipe.cells, recipeOf(g).cells);
   assert.equal(targetDrawingId(out, PATTERN), id);
-  // It previews, with a readout, and without warnings on the default pot.
+  // It previews, with a readout. At the standard two thirds of a bead (D61)
+  // only bead support has something to say on the default pot's leaning wall.
   const preview = computePreview(out, { library });
   assert.equal(preview.pattern.columns, 6);
-  assert.deepEqual(preview.warnings.filter((w) => w.severity !== 'ok').map((w) => w.id), []);
+  assert.deepEqual(preview.warnings.filter((w) => w.severity !== 'ok' && w.id !== 'support').map((w) => w.id), []);
 });
 
 test('drawing over a Pattern keeps its depth, density, range, Fade and Soften', () => {
@@ -244,7 +245,7 @@ test('a grid on an empty slot B brings in B with your own defaults and a blend',
   const d = classic();
   d.form.detail.b = null;
   const s = editorStart(d, library, slotB, 'make');
-  assert.deepEqual([s.base.repeats, s.base.tileHeightMm], [8, 19.5]);
+  assert.deepEqual([s.base.repeats, s.base.tileHeightMm], [8, 20]);
   const g = paintCell(gridOf(s.recipe), 0, 0, -1);
   const out = written(d, s, g, 'soft');
   const id = drawingId(recipeOf(g, 'soft'));

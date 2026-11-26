@@ -58,7 +58,7 @@ test('normalise clamps, sorts and spaces the knots', () => {
 });
 
 test('normalise fills the warning rules and holds them in their limits', () => {
-  assert.deepEqual(normaliseDesign({}).rules, { overhangLimitDeg: 45, supportRatio: 0.5, curveRatio: 0.5, layersPerBump: 2 });
+  assert.deepEqual(normaliseDesign({}).rules, { overhangLimitDeg: 45, supportRatio: 0.7, curveRatio: 0.5, layersPerBump: 2 });
   assert.deepEqual(normaliseDesign({ rules: 'x' }).rules, defaultDesign().rules);
   const low = normaliseDesign({ rules: { overhangLimitDeg: 1, supportRatio: 0, curveRatio: 0, layersPerBump: 0 } }).rules;
   assert.deepEqual(low, { overhangLimitDeg: 5, supportRatio: 0.1, curveRatio: 0.1, layersPerBump: 1 });
@@ -118,7 +118,7 @@ test('moveKnot keeps the profile rules', () => {
   assert.equal(d.form.profile.knots[1].z, 128 - h, 'cannot pass the next point');
   moveKnot(d, 1, { z: -5, r: 1 });
   assert.equal(d.form.profile.knots[1].z, h);
-  assert.equal(d.form.profile.knots[1].r, 6, 'radius stays at two beads');
+  assert.equal(d.form.profile.knots[1].r, 2 * d.layers.beadWidthMm, 'radius stays at two beads');
   moveKnot(d, 3, { z: 140 });
   assert.equal(d.form.height, 140, 'the top point sets the height');
   assert.ok(d.form.detail.toMm <= 140);
@@ -145,6 +145,8 @@ test('insertKnot and deleteKnot', () => {
 
 test('setHeight and setWidth scale in proportion', () => {
   const d = defaultDesign();
+  // A 3 mm bead, so half the width stays clear of the two-bead minimum radius.
+  d.layers.beadWidthMm = 3;
   setHeight(d, 85);
   assert.deepEqual(d.form.profile.knots.map((k) => k.z), [0, 27.5, 64, 85]);
   assert.equal(d.form.height, 85);

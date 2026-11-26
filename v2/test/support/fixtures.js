@@ -20,6 +20,10 @@ export function cylinder({ height = 30, radius = 30, baseLayers = 2, walls = 1, 
     a: { pattern: 'plain', depthMm: 0, repeats: 1, tileHeightMm: 19.5 }, b: null,
     blend: { shape: 'fadesUp', amount: 1 },
   };
+  // The tests' own layer: 3 mm wide, 1.5 mm high, whatever the standard is (D62).
+  d.layers.beadWidthMm = 3;
+  d.layers.layerHeightMm = 1.5;
+  d.finish.wallSpacingMm = 2.7;
   d.layers.seam.position = 'fixed';
   d.base.layers = baseLayers;
   d.finish.walls = walls;

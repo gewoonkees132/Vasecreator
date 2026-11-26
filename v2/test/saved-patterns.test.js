@@ -77,7 +77,7 @@ test('Save pattern writes the drawing, depth, density, Fade and Soften, never Fr
   assert.equal(e.name, 'My pattern');
   assert.deepEqual(e.drawing, { kind: 'bitmap', columns: 4, rows: 2, cells: ZIGZAG.cells });
   assert.deepEqual(e.settings, {
-    depthMm: 0.5, density: { by: 'points', spacingMm: 3.1, points: 120 }, fade: { shape: 'middle', amount: 0.6 }, softenCells: 0.75,
+    depthMm: 0.5, density: { by: 'points', spacingMm: 4, points: 120 }, fade: { shape: 'middle', amount: 0.6 }, softenCells: 0.75,
   });
   assert.ok(!('fromMm' in e.settings) && !('toMm' in e.settings));
   // A starter saves too, as a drawing of its own; no Pattern, nothing to save.
@@ -93,7 +93,7 @@ test('Save on a Detailed morph slot writes the grid with its depth, repeats and 
   assert.equal(e.kind, 'detail');
   assert.equal(e.name, 'My swatch');
   assert.deepEqual(e.drawing, GRID);
-  assert.deepEqual(e.settings, { depthMm: 2.5, repeats: 10, tileHeightMm: 24 });
+  assert.deepEqual(e.settings, { depthMm: 2.5, repeats: 10, tileHeightMm: 25 });
   // An analytic shape, an empty slot and Plain stay library-only (D45).
   assert.equal(savableEntry(classic(), library, slotA), null);
   assert.equal(savableEntry(classic(), library, slotB), null);
@@ -109,7 +109,7 @@ test('an entry from storage is checked and clamped; anything else is ignored', (
   });
   assert.equal(e.name, 'Zigzag');
   assert.deepEqual(e.drawing, ZIGZAG);                                  // a Pattern is crisp
-  assert.equal(e.settings.depthMm, 6);
+  assert.equal(e.settings.depthMm, 8);
   assert.deepEqual(e.settings.density, { by: 'spacing', spacingMm: 0.25, points: 8 });
   assert.deepEqual(e.settings.fade, { shape: 'even', amount: 1 });
   assert.equal(e.settings.softenCells, 2);
@@ -269,7 +269,7 @@ test('a saved swatch shows at its own grid, a saved Pattern at its own spacing',
   assert.deepEqual(tile.defaults, swatch.settings);
   const pattern = stored(savableEntry(withOwnPattern(), library, PATTERN), 'Zigzag');
   const d = classic();
-  assert.equal(savedSpacingMm(d, pattern), 3);                     // set in points: a bead apart
+  assert.equal(savedSpacingMm(d, pattern), 8);                     // set in points: a bead apart
   pattern.settings.density = { by: 'spacing', spacingMm: 4.2, points: 96 };
   assert.equal(savedSpacingMm(d, pattern), 4.2);
 });

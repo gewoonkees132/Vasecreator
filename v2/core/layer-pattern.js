@@ -39,8 +39,11 @@ export const FADE_SHAPES = BLEND_SHAPES;
 export const DENSITY_FACES = ['spacing', 'points'];
 /** Node spacing around, in bead widths (D40). */
 export const SPACING_BEADS = Object.freeze({ min: 0.5, max: 3, default: 1 });
-/** Depth as a share of a bead width: the most, and the default (D38, §3.3). */
-export const DEPTH_BEADS = Object.freeze({ max: 0.5, default: 0.25 });
+/**
+ * Depth as a share of a bead width: the most, and the standard every drawing
+ * starts with, both two thirds of a bead (D61; D38 had half a bead at most).
+ */
+export const DEPTH_BEADS = Object.freeze({ max: 2 / 3, default: 2 / 3 });
 export const DEFAULT_POINTS = 96;
 /** The most nodes a layer may have: the toolpath's MAX_POINTS_PER_LAYER (a test keeps them equal). */
 export const MAX_NODES = 1600;
@@ -301,19 +304,18 @@ export function createLayerPattern(design, library, wall) {
 
 /**
  * The depth and density a drawing starts with, in mm for this design's bead:
- * the drawing's own defaults (in bead widths, as the starter library gives
- * them) or else a quarter bead deep and nodes one bead apart (D38, D40).
+ * always two thirds of a bead deep (D61), and the drawing's own spacing (in
+ * bead widths, as the starter library gives it) or else nodes one bead apart (D40).
  * @param {object} design normalised
- * @param {{ depthBeads?: number, spacingBeads?: number }} [defaults]
+ * @param {{ spacingBeads?: number }} [defaults]
  * @returns {{ depthMm: number, density: { by: 'spacing', spacingMm: number, points: number } }}
  */
 export function drawingDefaults(design, defaults = {}) {
   const w = design.layers.beadWidthMm;
-  const depth = Math.min(Math.max(defaults.depthBeads ?? DEPTH_BEADS.default, 0), DEPTH_BEADS.max);
   const spacing = Math.min(Math.max(defaults.spacingBeads ?? SPACING_BEADS.default, SPACING_BEADS.min), SPACING_BEADS.max);
   return {
-    // A whole hundredth of a mm, never past half a bead.
-    depthMm: Math.min(Math.round(depth * w * 100) / 100, Math.floor(DEPTH_BEADS.max * w * 100) / 100),
+    // A whole hundredth of a mm, never past the most.
+    depthMm: Math.min(Math.round(DEPTH_BEADS.default * w * 100) / 100, Math.floor(DEPTH_BEADS.max * w * 100) / 100),
     density: { by: 'spacing', spacingMm: Math.round(spacing * w * 100) / 100, points: DEFAULT_POINTS },
   };
 }
@@ -323,7 +325,7 @@ export function drawingDefaults(design, defaults = {}) {
  * (drawingDefaults), crisp, no fade, over defaultPatternRange.
  * @param {object} design normalised
  * @param {string} drawing
- * @param {{ depthBeads?: number, spacingBeads?: number }} [defaults]
+ * @param {{ spacingBeads?: number }} [defaults]
  */
 export function newPattern(design, drawing, defaults) {
   return {

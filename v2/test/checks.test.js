@@ -157,7 +157,7 @@ test('print checks: fits the bed, refills, wall gaps and the hole', () => {
   assert.deepEqual(byId.bed, { id: 'bed', severity: 'ok', bit: 0, message: 'Fits the bed' });
   assert.match(byId.refill.message, /^\d refill pauses?, at [\d, and]+ mm$/);
   assert.equal(byId.refill.severity, 'info');
-  assert.match(byId.wallGap.message, /^Walls fuse in the grooves; gaps up to 4\.0 mm behind raised parts$/);
+  assert.match(byId.wallGap.message, /^Walls fuse in the grooves; gaps up to 3\.9 mm behind raised parts$/);
   assert.equal(print.canExport, true);
 
   const small = cylinder();

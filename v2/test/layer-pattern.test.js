@@ -190,7 +190,8 @@ test('bead support warns over half a bead and not at it; the Pattern is exempt f
   // Rows of out over in: each layer steps 2 × depth off the one below.
   const at = (depthMm, rules) => {
     const d = withPattern(cylinder({ height: 30, radius: 30 }), TILES.rows, { depthMm });
-    if (rules) d.rules = rules;
+    // Half a bead here, unless the test sets the rule (the standard is 70 %, D61).
+    d.rules = rules ?? { ...d.rules, supportRatio: 0.5 };
     const { design, tp } = build(d);
     return warningsOf(design, tp).map((w) => w.id);
   };
@@ -208,11 +209,13 @@ test('bead support counts the sharp start and stop of the range and every other 
   // A single row of out cells starts a full half bead out from the plain layer below.
   const flat = { kind: 'bitmap', columns: 1, rows: 1, cells: '+' };
   const d = withPattern(cylinder({ height: 30, radius: 30 }), flat, { depthMm: 1.5 });
+  d.rules.supportRatio = 0.5;
   const { design, tp } = build(d);
   const w = warningsOf(design, tp).find((x) => x.id === 'support');
   assert.equal(w, undefined, 'exactly half a bead at the start and the stop');
   // A leaning profile adds to the step.
   const cone = withPattern(linearDesign([[0, 30], [30, 31.5]]), flat, { depthMm: 1.5 });
+  cone.rules.supportRatio = 0.5;
   const built = build(cone);
   const warning = warningsOf(built.design, built.tp).find((x) => x.id === 'support');
   assert.ok(warning, 'the start of the range steps out past half a bead on a flaring wall');
@@ -315,15 +318,16 @@ test('normalising a Pattern clamps it to the bead and the pot', () => {
     },
   });
   assert.deepEqual(n.pattern, {
-    drawing: 'lib:knit@1', depthMm: 1.5, density: { by: 'spacing', spacingMm: 1.5, points: 1600 },
+    // The standard 8 mm bead (D62): two thirds of it deep at most (D61), half of it apart at least.
+    drawing: 'lib:knit@1', depthMm: (2 / 3) * 8, density: { by: 'spacing', spacingMm: 4, points: 1600 },
     fromMm: 0, toMm: 170, fade: { shape: 'even', amount: 1 }, softenCells: 0,
   });
-  // Missing fields get the defaults: a quarter bead deep, one bead apart, over
-  // the Detailed morph (10–150 mm) inside its 6 mm soft start and end.
+  // Missing fields get the defaults: two thirds of a bead deep (D61), one bead
+  // apart, over the Detailed morph (10–150 mm) inside its 10 mm soft start and end.
   const bare = normaliseDesign({ ...d, pattern: { drawing: 'lib:knit@1' } }).pattern;
   assert.deepEqual(bare, {
-    drawing: 'lib:knit@1', depthMm: 0.75, density: { by: 'spacing', spacingMm: 3, points: 96 },
-    fromMm: 16, toMm: 144, fade: { shape: 'even', amount: 1 }, softenCells: 0,
+    drawing: 'lib:knit@1', depthMm: (2 / 3) * 8, density: { by: 'spacing', spacingMm: 8, points: 96 },
+    fromMm: 20, toMm: 140, fade: { shape: 'even', amount: 1 }, softenCells: 0,
   });
   // Without a Detailed morph: from 8 mm to 10 mm below the rim.
   const plain = normaliseDesign(cylinder({ height: 80 }));
@@ -367,11 +371,11 @@ test('the curve check runs node to node, so the points between nodes never make 
   const lp = tp.model.pattern;
   assert.ok(tp.model.patternPoints / lp.nodes >= 2);
   assert.ok(!warningsOf(design, tp).some((w) => w.id === 'finePattern'));
-  // Every layer in the range marks its N nodes (the seam's node once).
+  // Every layer in the range marks its N nodes (one more where the hidden seam moved back a node).
   for (const i of [lp.first + 1, lp.last]) {
     let count = 0;
     for (let p = tp.layerStarts[i]; p < tp.layerStarts[i + 1]; p++) count += tp.nodes[p];
-    assert.equal(count, lp.nodes, `layer ${i}`);
+    assert.ok(count === lp.nodes || count === lp.nodes + 1, `layer ${i}: ${count}`);
   }
   // A Detailed morph finer than the bead is still caught on the Pattern's layers.
   d.form.detail.a = { pattern: 'lib:flutes@1', depthMm: 3, repeats: 40, tileHeightMm: 20 };
