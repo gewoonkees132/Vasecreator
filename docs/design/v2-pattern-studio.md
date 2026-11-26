@@ -109,6 +109,10 @@ The order of terms is unchanged for what exists today: profile radius, then Morp
 | D62 | **The standard layer is 8 mm wide and 5 mm high,** for a new design and for the three presets. | Owner (2026-11-26). The presets' retuned relief, base and hole (§11.8) and the wider layer-ratio band are the builder's |
 | D63 | **The Detailed morph is removed completely.** "It's no longer required." The mm-scale relief, its slots A and B, their blend, its swatch library, image swatches on the wall, its saved swatches and its mode in the 2D editor all go. The Pattern is the only surface detail; the Morph stays. No backwards compatibility: an older design opens without its relief. | Owner (2026-11-26) |
 | D64 | **The standard pattern width is 2 mm.** Every drawing starts with its points 2 mm apart around the pot (the Density spacing), whatever the starter. | Owner (2026-11-26): "set the default pattern width to 2mm". Reading "pattern width" as the cell width, and lowering the least spacing from half a bead to a quarter so 2 mm fits the 8 mm bead, are the builder's |
+| D65 | **Around the pot, every lap ends on the same column of the drawing.** In the Pattern's range every layer's seam sits on one column of the drawing, the *seam column*, so each lap starts and ends at the same place in the drawing and the seam is one straight line that turns with the columns. Up the pot nothing changes: the range stays in mm and may stop partway through the drawing. | Owner (2026-11-26): "around the pot, so it ends consistently at the seam. not up the pot" |
+| D66 | **Hidden picks the quietest column.** A hidden seam takes the column where the rows change least across the seam ramp, all the way up the drawing, preferring grooves; *fixed angle* and *follows twist* take the drawing's left edge (column 0). | Builder's proposal, agreed by the owner (2026-11-26) |
+| D67 | **The seam ramp is a number of points, not a distance.** The climb of one layer height and the change of row (D60) are shared out over *n* points, 4 by default. In the Pattern's range a point is a cell, so the climb ends on a node; outside it a point is one of the layer's own points, about half a bead apart. | Owner (2026-11-26): "spread the Z over number of points, vs distance" |
+| D68 | **The rim is level.** The last wall layers shrink their climb to nothing, as the first wall layers grow it (`RAMP_IN_LAYERS`), so the top layer is flat and the rim has no notch at the seam. | Builder's proposal (2026-11-26), part of the approach the owner agreed |
 
 **What this revises:**
 - D16 (swatches from a bitmap generator) is now carried by D45 and D47.
@@ -750,6 +754,52 @@ The owner exported a softened Pattern to Rhino and saw a sideways step at the se
 - **Known, and told to the owner.** At 2 mm apart and 5.33 mm deep on an 8 mm bead, every starter warns on the presets: "Bead not supported" where the wall leans, and "Pattern finer than the bead can print" where a single out or in cell makes a corner tighter than half a bead (4 mm).
 - **Tests.** 298 pass. The tests of the Detailed morph went with it (the shape library, slots, blend weights, the dock's group, the saved swatches); the fine-pattern and narrow-wall checks are now driven by a Pattern.
 
+### 11.10 The seam: column, points and a level rim (D65–D68; designed, not built)
+
+**Why.** The owner's render (2026-11-26) showed three marks at the seam:
+- a chevron line down the Pattern;
+- a mark where the Pattern starts;
+- a notch in the rim.
+
+The look of a seam comes from two things on top of each other: the XY push, where the row below and the new row don't line up, and the Z climb. At d92ad7e both are spread over the 15 mm ramp. At 2 mm cells that is about 7 cells where *in* and *out* are averaged, so each layer starts with a sloped, smeared patch. The hidden seam lands on whatever node is nearest the deepest groove, often mid-drawing, and drifts. The top layer starts one layer height below where it ends.
+
+**Goal.** A seam that reads as part of the drawing: each lap is whole drawings from seam to seam, and the climb and the change of row are one short mark in a quiet place. **Non-goals:** snapping the range to whole tiles up the pot (the owner said no); a continuous spiral (D10 stands). **Anti-goal:** a seam that drifts or jumps across the wall.
+
+**Approaches considered.**
+1. *Smarter Hidden only*: a matched or groove column, a level rim, a clean start. No new controls.
+2. *Smarter Hidden plus a seam strip*: everything in 1, plus a plain, channel or rib strip down the seam where the climb and the change of row happen, like a garment's side seam.
+3. *Reopen D10 and spiral*: the climb spread over the whole turn.
+
+The owner wants both hiding and designing the seam: 2, built as 1 first (this section), with the strip later (§12, item 20). The owner then reshaped 1 into D65–D67. 3 stays out.
+
+**The design.**
+- **Seam column (D65, D66).** `seamPositions` puts every layer in the range on a node of the seam column `c`: u = (t·columns + c) / N for a whole tile t. It keeps the same t up the range, so the line follows the columns (and the twist).
+  - *Hidden:* `c` is chosen once per Pattern. Its score is the sum, over every row r against the row below (wrapping from the top row to row 0), of |cell(r) − cell(r − 1)| over the ramp's cells `c … c + n − 1`. Ties go to a groove (both rows *in*), then the lowest c.
+  - *Fixed angle / follows twist:* `c` = 0, and t is the tile whose column-0 node is nearest the angle on the range's first layer.
+  - Below the range the seam walks towards that node by at most a bead width a layer (as Hidden does today), so it doesn't jump where the Pattern starts. Above the range it holds.
+- **Ramp in points (D67).** `layers.seam.rampPoints` (whole, 1–40, default 4) replaces `rampLengthMm`.
+  - *In the range:* the climb and the change of row run over `n` nodes; with Soften, the extra points between them come along.
+  - *Outside the range:* over `n` of the layer's own points.
+  - As today, the ramp is capped at half a lap.
+  - The Layers & seam control and the dock's *Ramp* read in points.
+  - The design version goes to 5. An older design gets 4 points without a word (D50).
+- **Level rim (D68).** `RAMP_IN_LAYERS` gets a mirror. The last 4 wall layers climb ¾, ½, ¼ and 0 of a layer, with the rest as a step up at the seam with no bead, so the top layer is flat. The gap to the bead below stays between h and 1.25 h, the mirror of the ramp-in's 0.75 h.
+- **The start and end of the range** keep D60's blend from the plain wall, and to it at the top, now over `n` points on the seam column, so their mark shrinks with the ramp.
+
+**Left to the builder.**
+- *Fixed angle on a twisting pot:* in the range the seam follows the columns (D65 wins over the angle), and outside the range it keeps the angle.
+- *Rectangle footprint:* in the range the seam column wins over the corner, and outside the range the corner stays.
+- There is no control to pick the seam column by hand for now.
+- Whether the ramp-out takes 4 layers or follows `RAMP_IN_LAYERS` (one constant for both).
+
+**Tests to add.**
+- Every lap in the range starts and ends on the seam column.
+- Hidden's column choice on a drawing with an obvious quiet column.
+- The ramp spans exactly `n` nodes in the range and `n` points outside it.
+- The top layer is flat.
+- Gaps stay within 0.75 h – 1.25 h.
+- The golden G-code files are regenerated.
+
 ---
 
 ## 12. Later (parked; drafted in [`v2-later-issues.md`](v2-later-issues.md), issues 17–19)
@@ -757,6 +807,7 @@ The owner exported a softened Pattern to Rhino and saw a sideways step at the se
 - **17. Pattern mask:** apply the Pattern *everywhere*, *only on raised parts* or *only on sunken parts* of the Detailed morph (Q12).
 - **18. One-off edits on the whole wall:** a layer of single edits over the repeating tile, such as a band, a signature or a single motif (Q10 c).
 - **19. Image to Pattern:** turn an uploaded image into an in / flat / out drawing at node scale (Q21 b).
+- **20. Seam strip (§11.10, approach 2):** a designed seam, a narrow vertical strip on the seam column (plain, a channel or a raised rib) where the climb and the change of row happen.
 
 ---
 
